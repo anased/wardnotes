@@ -1,0 +1,26 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply text-gray-900 bg-gray-50 dark:text-gray-100 dark:bg-gray-900;
+  }
+
+  h1 {
+    @apply text-2xl font-bold md:text-3xl;
+  }
+
+  h2 {
+    @apply text-xl font-semibold md:text-2xl;
+  }
+
+  h3 {
+    @apply text-lg font-medium md:text-xl;
+  }
+}
+
+@layer components {
+  /* Your component styles here */
+}
