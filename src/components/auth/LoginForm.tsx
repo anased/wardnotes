@@ -2,6 +2,7 @@ import { useState } from 'react';
 import useAuth from '@/lib/hooks/useAuth';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
+import Link from 'next/link';
 
 export default function LoginForm() {
   const { signIn } = useAuth();
@@ -59,7 +60,11 @@ export default function LoginForm() {
         autoComplete="current-password"
         required
       />
-      
+      <div className="flex justify-end mt-1 mb-4">
+        <Link href="/auth/forgot-password" className="text-sm text-primary-600 hover:underline dark:text-primary-400">
+          Forgot password?
+        </Link>
+      </div>
       <Button
         type="submit"
         fullWidth
