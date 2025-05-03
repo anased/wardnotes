@@ -43,8 +43,8 @@ export default function PasswordResetRequestForm() {
       <div className="p-4 text-green-700 bg-green-100 rounded-lg dark:bg-green-900 dark:text-green-200">
         <h3 className="text-lg font-medium">Check your email</h3>
         <p className="mt-2">
-          We`&apos;`ve sent you an email with a link to reset your password.
-          Please check your inbox and click the link to continue.
+            We&apos;ve sent you an email with a link to reset your password.
+            Please check your inbox and click the link to continue.
         </p>
       </div>
     );
@@ -59,7 +59,7 @@ export default function PasswordResetRequestForm() {
       )}
       
       <p className="text-gray-600 dark:text-gray-400">
-        Enter your email address and we'll send you a link to reset your password.
+        Enter your email address and we&apos;ll send you a link to reset your password.
       </p>
       
       <Input
