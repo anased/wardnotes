@@ -1,6 +1,8 @@
 import './globals.css'
 import { Inter } from 'next/font/google'
 import { Metadata } from 'next';
+import { GoogleAnalytics } from '@next/third-parties/google'
+import { WebVitals } from '@/components/WebVitals'
 
 // Initialize the Inter font
 const inter = Inter({ 
@@ -80,16 +82,21 @@ export const metadata: Metadata = {
   },
 };
 
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const gaId = process.env.NEXT_PUBLIC_GA_ID;
+
   return (
     <html lang="en" className={inter.variable}>
       <body>
+        <WebVitals />
         {children}
       </body>
+      {gaId && <GoogleAnalytics gaId={gaId} />}
     </html>
   );
 }
