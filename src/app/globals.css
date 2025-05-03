@@ -66,3 +66,78 @@
     @apply text-primary-600 dark:text-primary-400;
   }
 }
+
+/* Rich text editor styles */
+.ProseMirror {
+  @apply outline-none;
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  @apply text-gray-400 float-left h-0 pointer-events-none;
+  content: attr(data-placeholder);
+}
+
+/* Table styles */
+.ProseMirror table {
+  @apply border-collapse w-full my-4;
+}
+
+.ProseMirror table td,
+.ProseMirror table th {
+  @apply border border-gray-300 dark:border-gray-700 p-2;
+  position: relative;
+}
+
+.ProseMirror table th {
+  @apply bg-gray-100 dark:bg-gray-800 font-bold;
+}
+
+/* Code block styles */
+.ProseMirror pre {
+  @apply bg-gray-100 dark:bg-gray-800 p-4 rounded-md overflow-x-auto;
+}
+
+.ProseMirror code {
+  @apply font-mono text-sm bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded;
+}
+
+/* Blockquote styles */
+.ProseMirror blockquote {
+  @apply border-l-4 border-gray-300 dark:border-gray-600 pl-4 italic;
+}
+
+/* Image styles */
+.ProseMirror img {
+  @apply max-w-full h-auto rounded;
+  &.ProseMirror-selectednode {
+    @apply ring-2 ring-primary-500;
+  }
+}
+
+/* Placeholder text */
+.ProseMirror p.is-editor-empty:first-child::before {
+  @apply text-gray-400 float-left h-0 pointer-events-none;
+  content: attr(data-placeholder);
+}
+
+/* Highlight styles */
+.ProseMirror mark {
+  @apply bg-yellow-200 dark:bg-yellow-700;
+}
+
+/* List styles for TipTap editor */
+.ProseMirror ul {
+  @apply list-disc pl-6 my-2;
+}
+
+.ProseMirror ol {
+  @apply list-decimal pl-6 my-2;
+}
+
+.ProseMirror li {
+  @apply my-1;
+}
+
+.ProseMirror li p {
+  @apply inline;
+}
