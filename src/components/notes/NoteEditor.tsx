@@ -3,8 +3,8 @@ import StarterKit from '@tiptap/starter-kit';
 import { useCallback } from 'react';
 
 interface NoteEditorProps {
-  content: any;
-  onChange: (content: any) => void;
+  content: Record<string, unknown>;
+  onChange: (content: Record<string, unknown>) => void;
   editable?: boolean;
 }
 

@@ -35,10 +35,10 @@ export default function SignupForm() {
       setError('');
       await signUp(email, password);
       setSuccess(true);
-    } catch (err: any) {
-      console.error('Signup error:', err);
-      setError(err.message || 'Failed to create account');
-      setSuccess(false);
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error('Login error:', error);
+      setError(error.message || 'Failed to sign in');
     } finally {
       setIsLoading(false);
     }

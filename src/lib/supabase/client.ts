@@ -15,7 +15,7 @@ export type Note = {
   id: string;
   user_id: string;
   title: string;
-  content: any; // TipTap JSON content
+  content: Record<string, unknown>; // TipTap JSON content
   tags: string[];
   category: 'Neurology' | 'Cardiology' | 'General' | 'Procedures';
   created_at: string;

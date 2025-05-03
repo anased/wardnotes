@@ -1,11 +1,9 @@
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import useAuth from '@/lib/hooks/useAuth';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 
 export default function LoginForm() {
-  const router = useRouter();
   const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -25,9 +23,10 @@ export default function LoginForm() {
       setError('');
       await signIn(email, password);
       // Navigation is handled in the useAuth hook
-    } catch (err: any) {
-      console.error('Login error:', err);
-      setError(err.message || 'Failed to sign in. Please check your credentials.');
+    } catch (err: unknown) {
+      const error = err as Error;
+      console.error('Login error:', error);
+      setError(error.message || 'Failed to sign in');
     } finally {
       setIsLoading(false);
     }
