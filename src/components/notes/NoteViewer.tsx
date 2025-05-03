@@ -50,12 +50,10 @@ export default function NoteViewer({ note }: NoteViewerProps) {
         </div>
         
         <div className="flex space-x-3">
-          <Link href={`/notes/${note.id}/edit`} passHref>
-            <a>
-              <Button variant="outline">
-                Edit
-              </Button>
-            </a>
+          <Link href={`/notes/${note.id}/edit`}>
+            <Button variant="outline">
+              Edit
+            </Button>
           </Link>
           <Button 
             variant="outline" 

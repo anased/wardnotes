@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { 
   getNotes, 
   getNoteById, 
@@ -16,13 +16,8 @@ export default function useNotes() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  // Load all notes on component mount
-  useEffect(() => {
-    fetchNotes();
-  }, []);
-
-  // Fetch all notes
-  const fetchNotes = async () => {
+  // Use useCallback to memoize the fetchNotes function
+  const fetchNotes = useCallback(async () => {
     try {
       setLoading(true);
       const data = await getNotes();
@@ -34,10 +29,15 @@ export default function useNotes() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []); // Empty dependency array means this function reference will be stable
+
+  // Load all notes on component mount
+  useEffect(() => {
+    fetchNotes();
+  }, [fetchNotes]); // Now safe to include in dependencies
 
   // Fetch a single note by ID
-  const fetchNoteById = async (id: string) => {
+  const fetchNoteById = useCallback(async (id: string) => {
     try {
       setLoading(true);
       const data = await getNoteById(id);
@@ -49,10 +49,10 @@ export default function useNotes() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Create a new note
-  const addNote = async (note: Omit<Note, 'id' | 'user_id' | 'created_at'>) => {
+  const addNote = useCallback(async (note: Omit<Note, 'id' | 'user_id' | 'created_at'>) => {
     try {
       setLoading(true);
       const newNote = await createNote(note);
@@ -65,10 +65,10 @@ export default function useNotes() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Update an existing note
-  const editNote = async (id: string, note: Partial<Omit<Note, 'id' | 'user_id' | 'created_at'>>) => {
+  const editNote = useCallback(async (id: string, note: Partial<Omit<Note, 'id' | 'user_id' | 'created_at'>>) => {
     try {
       setLoading(true);
       const updatedNote = await updateNote(id, note);
@@ -83,10 +83,10 @@ export default function useNotes() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Delete a note
-  const removeNote = async (id: string) => {
+  const removeNote = useCallback(async (id: string) => {
     try {
       setLoading(true);
       await deleteNote(id);
@@ -98,10 +98,10 @@ export default function useNotes() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Search notes by text
-  const search = async (query: string) => {
+  const search = useCallback(async (query: string) => {
     try {
       setLoading(true);
       if (!query.trim()) {
@@ -115,10 +115,10 @@ export default function useNotes() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchNotes]);
 
   // Filter notes by category
-  const filterByCategory = async (category: string) => {
+  const filterByCategory = useCallback(async (category: string) => {
     try {
       setLoading(true);
       if (!category || category === 'All') {
@@ -132,10 +132,10 @@ export default function useNotes() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchNotes]);
 
   // Filter notes by tag
-  const filterByTag = async (tag: string) => {
+  const filterByTag = useCallback(async (tag: string) => {
     try {
       setLoading(true);
       if (!tag.trim()) {
@@ -149,7 +149,7 @@ export default function useNotes() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [fetchNotes]);
 
   return {
     notes,

@@ -10,24 +10,21 @@ import NoteCard from '@/components/notes/NoteCard';
 import Button from '@/components/ui/Button';
 
 export default function DashboardPage() {
-  const { user, loading } = useAuth();
-  const { notes, loading: notesLoading, error, fetchNotes } = useNotes();
+  const { user, loading: authLoading } = useAuth();
+  const { notes, loading: notesLoading, error } = useNotes();
   const router = useRouter();
 
   useEffect(() => {
     // If not logged in, redirect to login page
-    if (!loading && !user) {
+    if (!authLoading && !user) {
       router.push('/auth');
     }
-  }, [user, loading, router]);
+  }, [user, authLoading, router]);
 
-  useEffect(() => {
-    if (user) {
-      fetchNotes();
-    }
-  }, [user, fetchNotes]);
+  // We've removed the second useEffect that was calling fetchNotes
+  // since useNotes now handles fetching notes in its own useEffect
 
-  if (loading || notesLoading) {
+  if (authLoading || notesLoading) {
     return (
       <PageContainer title="Dashboard">
         <div className="flex items-center justify-center h-64">
@@ -47,8 +44,8 @@ export default function DashboardPage() {
               Organize your clinical learning points
             </p>
           </div>
-          <Link href="/notes/new" passHref>
-            <Button as="a">
+          <Link href="/notes/new">
+            <Button>
               Create New Note
             </Button>
           </Link>
@@ -68,8 +65,8 @@ export default function DashboardPage() {
               <p className="mb-4 text-gray-600 dark:text-gray-400">
                 You haven&apos;t created any notes yet.
               </p>
-              <Link href="/notes/new" passHref>
-                <Button as="a" variant="primary">
+              <Link href="/notes/new">
+                <Button variant="primary">
                   Create Your First Note
                 </Button>
               </Link>
