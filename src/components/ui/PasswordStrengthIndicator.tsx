@@ -6,7 +6,7 @@ interface PasswordStrengthIndicatorProps {
 }
 
 export default function PasswordStrengthIndicator({ password }: PasswordStrengthIndicatorProps) {
-  const { isValid, errors, strength } = validatePassword(password);
+  const { errors, strength } = validatePassword(password);
   
   const getColorClass = () => {
     switch (strength) {
