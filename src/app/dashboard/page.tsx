@@ -8,6 +8,7 @@ import useNotes from '@/lib/hooks/useNotes';
 import PageContainer from '@/components/layout/PageContainer';
 import NoteCard from '@/components/notes/NoteCard';
 import Button from '@/components/ui/Button';
+import Spinner from '@/components/ui/Spinner';
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
@@ -21,14 +22,11 @@ export default function DashboardPage() {
     }
   }, [user, authLoading, router]);
 
-  // We've removed the second useEffect that was calling fetchNotes
-  // since useNotes now handles fetching notes in its own useEffect
-
   if (authLoading || notesLoading) {
     return (
       <PageContainer title="Dashboard">
         <div className="flex items-center justify-center h-64">
-          <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
+          <Spinner size="md" color="primary" />
         </div>
       </PageContainer>
     );
@@ -44,7 +42,7 @@ export default function DashboardPage() {
               Organize your clinical learning points
             </p>
           </div>
-          <Link href="/notes/new">
+          <Link href="/notes/new" passHref>
             <Button>
               Create New Note
             </Button>
@@ -65,7 +63,7 @@ export default function DashboardPage() {
               <p className="mb-4 text-gray-600 dark:text-gray-400">
                 You haven&apos;t created any notes yet.
               </p>
-              <Link href="/notes/new">
+              <Link href="/notes/new" passHref>
                 <Button variant="primary">
                   Create Your First Note
                 </Button>

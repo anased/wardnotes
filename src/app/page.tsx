@@ -4,8 +4,19 @@ import { createClient } from '@/lib/supabase/client';
 
 export default async function Home() {
   // Check if user is already logged in
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  
+  // Handle missing environment variables
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error('Missing Supabase environment variables');
+    return (
+      <div className="p-4 text-red-700 bg-red-100 rounded-lg">
+        Error: Missing environment variables. Please check your setup.
+      </div>
+    );
+  }
+  
   const supabase = createClient(supabaseUrl, supabaseAnonKey);
   const { data: { session } } = await supabase.auth.getSession();
 
@@ -88,4 +99,3 @@ export default async function Home() {
     </div>
   );
 }
-

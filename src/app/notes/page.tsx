@@ -10,6 +10,7 @@ import NoteCard from '@/components/notes/NoteCard';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import Button from '@/components/ui/Button';
+import Spinner from '@/components/ui/Spinner';
 
 const CATEGORY_OPTIONS = [
   { value: 'All', label: 'All Categories' },
@@ -127,7 +128,7 @@ export default function NotesPage() {
         <div>
           {loading ? (
             <div className="flex items-center justify-center h-64">
-              <div className="w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
+              <Spinner size="md" color="primary" />
             </div>
           ) : error ? (
             <div className="p-4 text-red-700 bg-red-100 rounded-lg dark:bg-red-900 dark:text-red-200">
@@ -147,11 +148,9 @@ export default function NotesPage() {
                 </Button>
               ) : (
                 <Link href="/notes/new" passHref>
-                  <Link href="/notes/new" passHref>
-                    <Button variant="primary">
-                      Create Your First Note
-                    </Button>
-                  </Link>
+                  <Button variant="primary">
+                    Create Your First Note
+                  </Button>
                 </Link>
               )}
             </div>
@@ -168,11 +167,9 @@ export default function NotesPage() {
         {notes.length > 0 && (
           <div className="flex justify-center mt-6">
             <Link href="/notes/new" passHref>
-              <Link href="/notes/new" passHref>
-                <Button>
-                  Create New Note
-                </Button>
-              </Link>
+              <Button>
+                Create New Note
+              </Button>
             </Link>
           </div>
         )}

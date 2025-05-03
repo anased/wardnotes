@@ -1,0 +1,14 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .logo { fill: #0ea5e9; }
+    @media (prefers-color-scheme: dark) {
+      .logo { fill: #38bdf8; }
+    }
+  </style>
+  <rect x="10" y="15" width="80" height="70" rx="5" class="logo" />
+  <rect x="20" y="5" width="60" height="20" rx="3" fill="white" />
+  <rect x="30" y="35" width="40" height="5" rx="1" fill="white" />
+  <rect x="30" y="45" width="40" height="5" rx="1" fill="white" />
+  <rect x="30" y="55" width="40" height="5" rx="1" fill="white" />
+  <rect x="30" y="65" width="25" height="5" rx="1" fill="white" />
+</svg>
