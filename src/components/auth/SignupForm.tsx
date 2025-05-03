@@ -45,6 +45,7 @@ export default function SignupForm() {
       const error = err as Error;
       console.error('Signup error:', error);
       setError(error.message || 'Failed to sign up');
+      setSuccess(false); // Make sure success is false in case of error
     } finally {
       setIsLoading(false);
     }

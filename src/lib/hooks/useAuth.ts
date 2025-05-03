@@ -49,8 +49,14 @@ export default function useAuth() {
         email,
         password,
       });
-
+  
       if (error) throw error;
+      
+      // Check if user already exists
+      if (data.user && data.user.identities && data.user.identities.length === 0) {
+        throw new Error('This email is already in use. Please use a different email or try signing in.');
+      }
+      
       return data;
     } catch (error) {
       console.error('Error signing up:', error);
