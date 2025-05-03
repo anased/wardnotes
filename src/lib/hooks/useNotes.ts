@@ -138,7 +138,7 @@ export default function useNotes() {
   const filterByTag = useCallback(async (tag: string) => {
     try {
       setLoading(true);
-      if (!tag.trim()) {
+      if (!tag.trim() || tag === 'All') {
         return fetchNotes();
       }
       const results = await filterNotesByTag(tag);

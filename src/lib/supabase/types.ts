@@ -1,5 +1,5 @@
-// Define category enum to match the database
-export type NoteCategory = 'Neurology' | 'Cardiology' | 'General' | 'Procedures';
+// src/lib/supabase/types.ts
+export type NoteCategory = string; // Changed from enum to string to support custom categories
 
 // Define the Database schema inline
 export interface Database {
@@ -32,7 +32,7 @@ export interface Database {
           title: string;
           content: Record<string, unknown>;
           tags: string[];
-          category: NoteCategory;
+          category: string; // Changed from enum to string
           created_at: string;
           updated_at?: string;
         };
@@ -42,7 +42,7 @@ export interface Database {
           title: string;
           content: Record<string, unknown>;
           tags?: string[];
-          category: NoteCategory;
+          category: string; // Changed from enum to string
           created_at?: string;
           updated_at?: string;
         };
@@ -52,9 +52,52 @@ export interface Database {
           title?: string;
           content?: Record<string, unknown>;
           tags?: string[];
-          category?: NoteCategory;
+          category?: string; // Changed from enum to string
           created_at?: string;
           updated_at?: string;
+        };
+      };
+      categories: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          color: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          color?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          name?: string;
+          color?: string;
+          created_at?: string;
+        };
+      };
+      tags: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          name?: string;
+          created_at?: string;
         };
       };
     };
@@ -82,6 +125,16 @@ export type NoteRow = Database['public']['Tables']['notes']['Row'];
 export type NoteInsert = Database['public']['Tables']['notes']['Insert'];
 export type NoteUpdate = Database['public']['Tables']['notes']['Update'];
 
+// Category types
+export type CategoryRow = Database['public']['Tables']['categories']['Row'];
+export type CategoryInsert = Database['public']['Tables']['categories']['Insert'];
+export type CategoryUpdate = Database['public']['Tables']['categories']['Update'];
+
+// Tag types
+export type TagRow = Database['public']['Tables']['tags']['Row'];
+export type TagInsert = Database['public']['Tables']['tags']['Insert'];
+export type TagUpdate = Database['public']['Tables']['tags']['Update'];
+
 // Extended Note type with joined data if needed
 export type NoteWithAuthor = NoteRow & {
   author: {
@@ -100,3 +153,8 @@ export type SignInCredentials = {
   email: string;
   password: string;
 };
+
+// Export simplified types for use in the application
+export type Note = NoteRow;
+export type Category = CategoryRow;
+export type Tag = TagRow;

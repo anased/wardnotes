@@ -1,82 +1,86 @@
-# WardNotes
+# Category and Tag Management Feature
 
-WardNotes is a specialized note-taking application designed for medical students and residents to capture and organize clinical learning points during their rotations.
+This new feature adds the ability for users to create, edit, and delete their own custom categories and tags for better organization of their medical notes.
 
-## Features
+## Overview
 
-- **User Authentication**: Secure login, signup, and password reset functionality
-- **Note Organization**: Categorize notes by medical specialty (Neurology, Cardiology, etc.)
-- **Tagging System**: Add custom tags to easily filter and find related notes
-- **Rich Text Editor**: Format your clinical notes with headings, lists, and more
-- **Search Functionality**: Quickly find notes based on title, content, or tags
-- **Responsive Design**: Works seamlessly on both desktop and mobile devices
-- **Dark Mode**: Easy on the eyes during night shifts
+The feature allows users to:
 
-## Tech Stack
+- Create custom categories with different colors
+- Edit existing categories
+- Delete unused categories
+- Create custom tags
+- Edit existing tags
+- Delete unused tags
+- Use these custom categories and tags when creating or editing notes
+- Get tag suggestions when typing in the tag input field
 
-- **Frontend**: Next.js 15, React 19, TypeScript
-- **Styling**: Tailwind CSS
-- **Authentication & Database**: Supabase
-- **Editor**: TipTap (based on ProseMirror)
-- **Forms**: React Hook Form with Zod validation
+## Database Changes
 
-## Getting Started
+The feature required adding two new tables to the Supabase database:
 
-### Prerequisites
+1. **categories** - Stores user-defined categories with name and color
+2. **tags** - Stores user-defined tags
 
-- Node.js 18.0 or later
-- Supabase account (for backend)
+The database schema includes proper row-level security to ensure users can only access their own categories and tags.
 
-### Environment Setup
+## User Interface
 
-Create a `.env.local` file in the root directory with the following variables:
+The feature adds several new UI components:
 
-```
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-```
+1. **Settings Page** - A new central location for app settings including categories and tags
+2. **Category Management** - A dedicated page for managing categories
+3. **Tag Management** - A dedicated page for managing tags
+4. **Enhanced Tag Input** - Tag input now supports suggestions from the user's existing tags
+5. **Dynamic Category Badges** - Category badges now use colors defined by the user
 
-### Installation
+## Navigation
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/yourusername/wardnotes.git
-   cd wardnotes
-   ```
+The mobile navigation has been updated to include a link to the new Settings page.
 
-2. Install dependencies:
-   ```bash
-   npm install
-   # or
-   yarn install
-   ```
+## Implementation Details
 
-3. Run the development server:
-   ```bash
-   npm run dev
-   # or
-   yarn dev
-   ```
+### New Components
 
-4. Open [http://localhost:3000](http://localhost:3000) with your browser to see the application.
+- `src/app/settings/page.tsx` - Main settings page
+- `src/app/settings/categories/page.tsx` - Category management page
+- `src/app/settings/tags/page.tsx` - Tag management page
 
-### Supabase Setup
+### Updated Components
 
-1. Create a new Supabase project
-2. Set up the following tables:
-   - `profiles`: User profiles
-   - `notes`: Clinical notes with categories and tags
-3. Set up authentication with email/password
-4. Configure row-level security policies for data protection
+- `src/components/layout/MobileNav.tsx` - Added link to settings
+- `src/components/ui/TagInput.tsx` - Added support for tag suggestions
+- `src/components/ui/CategoryBadge.tsx` - Updated to support dynamic colors
+- `src/components/notes/NoteForm.tsx` - Updated to use dynamic categories and tag suggestions
+- `src/app/globals.css` - Removed fixed category color classes
 
-## Deployment
+### New Hooks
 
-The easiest way to deploy your WardNotes application is to use the [Vercel Platform](https://vercel.com/new). Connect your GitHub repository and add your environment variables.
+- `src/lib/hooks/useCategories.ts` - Hook for managing categories
+- `src/lib/hooks/useTags.ts` - Hook for managing tags
 
-## License
+### API Changes
 
-[MIT](https://choosealicense.com/licenses/mit/)
+- `src/lib/supabase/client.ts` - Added new API functions for categories and tags
 
-## Contributing
+## How to Test
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+1. Start the application and navigate to Settings → Categories
+2. Create a new category with a custom name and color
+3. Edit an existing category to change its name or color
+4. Delete an unused category (categories in use cannot be deleted)
+5. Navigate to Settings → Tags
+6. Create a new tag
+7. Edit an existing tag
+8. Delete an unused tag (tags in use cannot be deleted)
+9. Create a new note and verify that your custom categories appear in the dropdown
+10. When adding tags to a note, verify that your custom tags appear as suggestions
+
+## Considerations and Future Improvements
+
+- **Batch Operations**: Future versions could add support for batch operations on tags and categories
+- **Category Archiving**: Instead of preventing deletion of in-use categories, we could add support for archiving
+- **Tag Merging**: Add ability to merge tags with similar meanings
+- **Tag Autocomplete**: Enhance tag suggestions with fuzzy matching
+- **Tag Analytics**: Show usage statistics for tags to help users organize better
+- **Category Icons**: Add support for custom icons for categories

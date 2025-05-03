@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Note } from '@/lib/supabase/client';
 import useNotes from '@/lib/hooks/useNotes';
+import useCategories from '@/lib/hooks/useCategories';
+import useTags from '@/lib/hooks/useTags';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
@@ -23,29 +25,45 @@ const EMPTY_CONTENT = {
   ],
 };
 
-const CATEGORY_OPTIONS = [
-  { value: 'Neurology', label: 'Neurology' },
-  { value: 'Cardiology', label: 'Cardiology' },
-  { value: 'General', label: 'General' },
-  { value: 'Procedures', label: 'Procedures' },
-];
-
 export default function NoteForm({ initialData = {}, isEditing = false }: NoteFormProps) {
   const router = useRouter();
   const { addNote, editNote } = useNotes();
+  const { categories } = useCategories();
+  const { tags } = useTags();
   
   const [title, setTitle] = useState(initialData.title || '');
   const [content, setContent] = useState(initialData.content || EMPTY_CONTENT);
-  const [tags, setTags] = useState<string[]>(initialData.tags || []);
-  const [category, setCategory] = useState<"Neurology" | "Cardiology" | "General" | "Procedures">(initialData.category as "Neurology" | "Cardiology" | "General" | "Procedures" || 'General');
+  const [selectedTags, setSelectedTags] = useState<string[]>(initialData.tags || []);
+  const [category, setCategory] = useState<string>(initialData.category || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  // Generate category options from the database
+  const categoryOptions = categories.map(cat => ({
+    value: cat.name,
+    label: cat.name
+  }));
+
+  // Extract all tag names for suggestions
+  const tagSuggestions = tags.map(tag => tag.name);
+
+  // Set a default category if none was selected and options are available
+  useEffect(() => {
+    if (!category && categoryOptions.length > 0) {
+      setCategory(categoryOptions[0].value);
+    }
+  }, [category, categoryOptions]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!title.trim()) {
       setError('Title is required');
+      return;
+    }
+    
+    if (!category) {
+      setError('Please select a category');
       return;
     }
     
@@ -57,7 +75,7 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
         await editNote(initialData.id, {
           title,
           content,
-          tags,
+          tags: selectedTags,
           category,
         });
         
@@ -67,7 +85,7 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
         const newNote = await addNote({
           title,
           content,
-          tags,
+          tags: selectedTags,
           category,
         });
         
@@ -101,14 +119,15 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
         <Select
           label="Category"
           value={category}
-          onChange={(e) => setCategory(e.target.value as "Neurology" | "Cardiology" | "General" | "Procedures")}
-          options={CATEGORY_OPTIONS}
+          onChange={(e) => setCategory(e.target.value)}
+          options={categoryOptions}
         />
         
         <TagInput
           label="Tags"
-          value={tags}
-          onChange={setTags}
+          value={selectedTags}
+          onChange={setSelectedTags}
+          suggestions={tagSuggestions}
         />
       </div>
       

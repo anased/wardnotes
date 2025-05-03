@@ -1,4 +1,3 @@
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -52,27 +51,6 @@
   /* Tag Components */
   .tag {
     @apply px-2.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-800 rounded-full dark:bg-gray-700 dark:text-gray-300;
-  }
-  
-  /* Category Badge Components */
-  .category-badge {
-    @apply px-2.5 py-0.5 rounded-full font-medium;
-  }
-  
-  .category-badge-neurology {
-    @apply bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300;
-  }
-  
-  .category-badge-cardiology {
-    @apply bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300;
-  }
-  
-  .category-badge-general {
-    @apply bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300;
-  }
-  
-  .category-badge-procedures {
-    @apply bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300;
   }
   
   /* Mobile Navigation Component */

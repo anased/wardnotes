@@ -5,20 +5,14 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import useAuth from '@/lib/hooks/useAuth';
 import useNotes from '@/lib/hooks/useNotes';
+import useCategories from '@/lib/hooks/useCategories';
+import useTags from '@/lib/hooks/useTags'; // Add this import
 import PageContainer from '@/components/layout/PageContainer';
 import NoteCard from '@/components/notes/NoteCard';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import Button from '@/components/ui/Button';
 import Spinner from '@/components/ui/Spinner';
-
-const CATEGORY_OPTIONS = [
-  { value: 'All', label: 'All Categories' },
-  { value: 'Neurology', label: 'Neurology' },
-  { value: 'Cardiology', label: 'Cardiology' },
-  { value: 'General', label: 'General' },
-  { value: 'Procedures', label: 'Procedures' },
-];
 
 export default function NotesPage() {
   const { user, loading: authLoading } = useAuth();
@@ -28,13 +22,35 @@ export default function NotesPage() {
     error, 
     fetchNotes,
     search,
-    filterByCategory 
+    filterByCategory,
+    filterByTag // Make sure this function exists in useNotes hook
   } = useNotes();
+  const { categories } = useCategories();
+  const { tags } = useTags(); // Get tags from the hook
   const router = useRouter();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [category, setCategory] = useState('All');
+  const [selectedTag, setSelectedTag] = useState('All'); // Add state for tag filtering
   const [isSearching, setIsSearching] = useState(false);
+
+  // Create dynamic category options including "All Categories" option
+  const categoryOptions = [
+    { value: 'All', label: 'All Categories' },
+    ...categories.map(cat => ({
+      value: cat.name,
+      label: cat.name
+    }))
+  ];
+
+  // Create dynamic tag options including "All Tags" option
+  const tagOptions = [
+    { value: 'All', label: 'All Tags' },
+    ...tags.map(tag => ({
+      value: tag.name,
+      label: tag.name
+    }))
+  ];
 
   useEffect(() => {
     // If not logged in, redirect to login page
@@ -55,6 +71,9 @@ export default function NotesPage() {
     try {
       setIsSearching(true);
       await search(searchQuery);
+      // Reset filters when searching
+      setCategory('All');
+      setSelectedTag('All');
     } catch (err) {
       console.error('Search error:', err);
     } finally {
@@ -65,6 +84,8 @@ export default function NotesPage() {
   const handleCategoryChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newCategory = e.target.value;
     setCategory(newCategory);
+    // Reset tag filter when changing category
+    setSelectedTag('All');
     
     try {
       await filterByCategory(newCategory);
@@ -73,9 +94,29 @@ export default function NotesPage() {
     }
   };
 
+  const handleTagChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newTag = e.target.value;
+    setSelectedTag(newTag);
+    // Reset category filter when changing tag
+    setCategory('All');
+    
+    try {
+      if (newTag === 'All') {
+        // Fetch all notes when "All Tags" is selected
+        await fetchNotes();
+      } else {
+        // Filter by selected tag
+        await filterByTag(newTag);
+      }
+    } catch (err) {
+      console.error('Tag filter error:', err);
+    }
+  };
+
   const handleClearFilters = () => {
     setSearchQuery('');
     setCategory('All');
+    setSelectedTag('All');
     fetchNotes();
   };
 
@@ -99,9 +140,19 @@ export default function NotesPage() {
               
               <div className="w-full md:w-48">
                 <Select
-                  options={CATEGORY_OPTIONS}
+                  options={categoryOptions}
                   value={category}
                   onChange={handleCategoryChange}
+                  fullWidth
+                />
+              </div>
+              
+              {/* Add Tag filter dropdown */}
+              <div className="w-full md:w-48">
+                <Select
+                  options={tagOptions}
+                  value={selectedTag}
+                  onChange={handleTagChange}
                   fullWidth
                 />
               </div>
@@ -124,6 +175,43 @@ export default function NotesPage() {
           </form>
         </div>
         
+        {/* Filter indicators */}
+        {(category !== 'All' || selectedTag !== 'All') && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-gray-600 dark:text-gray-400">
+              Filtering by:
+            </span>
+            {category !== 'All' && (
+              <div className="flex items-center px-3 py-1 text-sm bg-blue-100 rounded-full dark:bg-blue-900">
+                <span className="mr-1">Category: {category}</span>
+                <button
+                  onClick={() => setCategory('All')}
+                  className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                >
+                  &times;
+                </button>
+              </div>
+            )}
+            {selectedTag !== 'All' && (
+              <div className="flex items-center px-3 py-1 text-sm bg-green-100 rounded-full dark:bg-green-900">
+                <span className="mr-1">Tag: {selectedTag}</span>
+                <button
+                  onClick={() => setSelectedTag('All')}
+                  className="text-green-500 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
+                >
+                  &times;
+                </button>
+              </div>
+            )}
+            <button
+              onClick={handleClearFilters}
+              className="text-sm text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-300"
+            >
+              Clear all filters
+            </button>
+          </div>
+        )}
+        
         {/* Notes list */}
         <div>
           {loading ? (
@@ -137,12 +225,12 @@ export default function NotesPage() {
           ) : notes.length === 0 ? (
             <div className="p-8 text-center bg-white rounded-lg shadow dark:bg-gray-800">
               <p className="mb-4 text-gray-600 dark:text-gray-400">
-                {searchQuery || category !== 'All'
+                {searchQuery || category !== 'All' || selectedTag !== 'All'
                   ? 'No notes match your search criteria.'
                   : "You haven't created any notes yet."}
               </p>
               
-              {searchQuery || category !== 'All' ? (
+              {searchQuery || category !== 'All' || selectedTag !== 'All' ? (
                 <Button onClick={handleClearFilters} variant="outline">
                   Clear Filters
                 </Button>
