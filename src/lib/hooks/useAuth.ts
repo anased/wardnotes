@@ -29,17 +29,33 @@ export default function useAuth() {
 
     // Listen for auth state changes
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      (event, newSession) => {
+      async (event, newSession) => {
+        console.log('Auth state change event:', event);
         setSession(newSession);
         setUser(newSession?.user ?? null);
         setLoading(false);
+        
+        // On sign-in, redirect to dashboard
+        if (event === 'SIGNED_IN' && newSession) {
+          console.log('User signed in, redirecting to dashboard');
+          // Use a slight delay to ensure state is updated
+          setTimeout(() => {
+            router.push('/dashboard');
+          }, 100);
+        }
+        
+        // On sign-out, redirect to home
+        if (event === 'SIGNED_OUT') {
+          console.log('User signed out, redirecting to home');
+          router.push('/');
+        }
       }
     );
 
     return () => {
       authListener.subscription.unsubscribe();
     };
-  }, []);
+  }, [router]);
 
   // Sign up with email and password
   const signUp = async (email: string, password: string) => {
@@ -76,10 +92,37 @@ export default function useAuth() {
       });
 
       if (error) throw error;
-      router.push('/dashboard');
+      
+      // The onAuthStateChange listener will handle redirection
       return data;
     } catch (error) {
       console.error('Error signing in:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Sign in with Google
+  const signInWithGoogle = async () => {
+    try {
+      setLoading(true);
+      
+      // Get current origin for the redirectTo
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${origin}/auth/callback`,
+        },
+      });
+
+      if (error) throw error;
+      
+      // No need to redirect here - the OAuth flow will handle it
+    } catch (error) {
+      console.error('Error signing in with Google:', error);
       throw error;
     } finally {
       setLoading(false);
@@ -92,12 +135,32 @@ export default function useAuth() {
       setLoading(true);
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
-      router.push('/');
+      
+      // The onAuthStateChange listener will handle redirection
     } catch (error) {
       console.error('Error signing out:', error);
       throw error;
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Get user profile data
+  const getUserProfile = async () => {
+    if (!user) return null;
+    
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+        
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error getting user profile:', error);
+      return null;
     }
   };
 
@@ -107,6 +170,8 @@ export default function useAuth() {
     loading,
     signUp,
     signIn,
+    signInWithGoogle,
     signOut,
+    getUserProfile,
   };
 }

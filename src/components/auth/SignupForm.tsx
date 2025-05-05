@@ -5,6 +5,7 @@ import Button from '../ui/Button';
 import Input from '../ui/Input';
 import PasswordStrengthIndicator from '../ui/PasswordStrengthIndicator';
 import { validatePassword } from '@/lib/utils/passwordValidator';
+import GoogleLoginButton from './GoogleLoginButton';
 
 export default function SignupForm() {
   const { signUp } = useAuth();
@@ -64,55 +65,65 @@ export default function SignupForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
-        <div className="p-3 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-900 dark:text-red-200">
-          {error}
-        </div>
-      )}
-      
-      <Input
-        label="Email"
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder="you@example.com"
-        autoComplete="email"
-        required
-      />
-      
-      <div>
+    <div className="space-y-6">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {error && (
+          <div className="p-3 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-900 dark:text-red-200">
+            {error}
+          </div>
+        )}
+        
         <Input
-          label="Password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="••••••••"
-          autoComplete="new-password"
+          label="Email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          autoComplete="email"
           required
         />
-        <PasswordStrengthIndicator password={password} />
+        
+        <div>
+          <Input
+            label="Password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            autoComplete="new-password"
+            required
+          />
+          <PasswordStrengthIndicator password={password} />
+        </div>
+        
+        <Input
+          label="Confirm Password"
+          type="password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          placeholder="••••••••"
+          autoComplete="new-password"
+          error={confirmPassword && password !== confirmPassword ? "Passwords don't match" : ""}
+          required
+        />
+        
+        <Button
+          type="submit"
+          fullWidth
+          isLoading={isLoading}
+          disabled={!isFormValid}
+        >
+          Create Account
+        </Button>
+      </form>
+      
+      <div className="flex items-center justify-center">
+        <div className="w-full border-t border-gray-300 dark:border-gray-700"></div>
+        <span className="px-3 text-sm text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800">or</span>
+        <div className="w-full border-t border-gray-300 dark:border-gray-700"></div>
       </div>
       
-      <Input
-        label="Confirm Password"
-        type="password"
-        value={confirmPassword}
-        onChange={(e) => setConfirmPassword(e.target.value)}
-        placeholder="••••••••"
-        autoComplete="new-password"
-        error={confirmPassword && password !== confirmPassword ? "Passwords don't match" : ""}
-        required
-      />
-      
-      <Button
-        type="submit"
-        fullWidth
-        isLoading={isLoading}
-        disabled={!isFormValid}
-      >
-        Create Account
-      </Button>
-    </form>
+      <GoogleLoginButton />
+    </div>
   );
 }

@@ -3,6 +3,8 @@ import { Inter } from 'next/font/google'
 import { Metadata } from 'next';
 import { GoogleAnalytics } from '@next/third-parties/google'
 import { WebVitals } from '@/components/WebVitals'
+import { NotificationProvider } from '@/lib/context/NotificationContext';
+import AuthRedirectHandler from '@/components/auth/AuthRedirectHandler';
 
 // Initialize the Inter font
 const inter = Inter({ 
@@ -60,7 +62,7 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'en_US',
-    url: 'https://wardnotes.app',
+    url: 'https://wardnotes.vercel.app',
     title: 'WardNotes - Clinical Learning for Medical Students & Residents',
     description: 'Capture and organize clinical learning points during your medical rotations',
     siteName: 'WardNotes',
@@ -93,8 +95,11 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <body>
-        <WebVitals />
-        {children}
+        <NotificationProvider>
+          <AuthRedirectHandler />
+          <WebVitals />
+          {children}
+        </NotificationProvider>
       </body>
       {gaId && <GoogleAnalytics gaId={gaId} />}
     </html>

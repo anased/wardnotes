@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import useAuth from '@/lib/hooks/useAuth';
 import useNotes from '@/lib/hooks/useNotes';
@@ -9,18 +9,38 @@ import PageContainer from '@/components/layout/PageContainer';
 import NoteCard from '@/components/notes/NoteCard';
 import Button from '@/components/ui/Button';
 import Spinner from '@/components/ui/Spinner';
+import { useNotification } from '@/lib/context/NotificationContext';
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const { notes, loading: notesLoading, error } = useNotes();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { showNotification } = useNotification();
 
   useEffect(() => {
     // If not logged in, redirect to login page
     if (!authLoading && !user) {
       router.push('/auth');
     }
-  }, [user, authLoading, router]);
+    
+    // Check for auth success message
+    const authSuccess = searchParams?.get('auth_success');
+    if (authSuccess === 'true') {
+      // Check if it's a Google login (user has Google metadata)
+      const isGoogleLogin = user?.app_metadata?.provider === 'google';
+      const userName = user?.user_metadata?.full_name || user?.user_metadata?.name || 'User';
+      
+      if (isGoogleLogin) {
+        showNotification(`Welcome, ${userName}! You've successfully signed in with Google.`, 'success');
+      } else {
+        showNotification('You have successfully signed in!', 'success');
+      }
+      
+      // Remove the query parameter to prevent showing the notification on refresh
+      router.replace('/dashboard');
+    }
+  }, [user, authLoading, router, searchParams, showNotification]);
 
   if (authLoading || notesLoading) {
     return (

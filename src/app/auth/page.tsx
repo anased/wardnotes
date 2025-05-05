@@ -4,17 +4,17 @@ import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import useAuth from '@/lib/hooks/useAuth';
-import LoginForm from '@/components/auth/LoginForm';
-import SignupForm from '@/components/auth/SignupForm';
+import LoginForm from '@/components/auth/LoginForm'; // You'll need to update this import if you renamed the file
+import SignupForm from '@/components/auth/SignupForm'; // You'll need to update this import if you renamed the file
 import PageContainer from '@/components/layout/PageContainer';
 import { Suspense } from 'react';
-
 
 function AuthContent() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<'signin' | 'signup'>('signin');
+  const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
     // If user is logged in, redirect to dashboard
@@ -27,6 +27,21 @@ function AuthContent() {
     if (tab === 'signup') {
       setActiveTab('signup');
     }
+    
+    // Check for error parameter
+    const error = searchParams?.get('error');
+    if (error) {
+      switch (error) {
+        case 'auth_error':
+          setAuthError('Authentication failed. Please try again.');
+          break;
+        case 'configuration_error':
+          setAuthError('Server configuration error. Please contact support.');
+          break;
+        default:
+          setAuthError('An error occurred during authentication.');
+      }
+    }
   }, [user, loading, router, searchParams]);
 
   return (
@@ -37,6 +52,12 @@ function AuthContent() {
           Organize your clinical learning
         </p>
       </div>
+      
+      {authError && (
+        <div className="p-3 mb-4 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-900 dark:text-red-200">
+          {authError}
+        </div>
+      )}
       
       <div className="overflow-hidden bg-white rounded-lg shadow-sm dark:bg-gray-800">
         <div className="flex border-b border-gray-200 dark:border-gray-700">
