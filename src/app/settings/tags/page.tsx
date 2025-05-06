@@ -156,7 +156,7 @@ export default function TagsPage() {
           
           {tags.length === 0 ? (
             <div className="p-4 text-center text-gray-600 dark:text-gray-400">
-              You haven't created any custom tags yet.
+              You haven&apos;t created any custom tags yet.
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">

@@ -1,5 +1,5 @@
 // src/components/notes/FlashcardGeneratorModal.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Button from '@/components/ui/Button';
 import Spinner from '@/components/ui/Spinner';
 import { supabase } from '@/lib/supabase/client';
@@ -31,25 +31,8 @@ export default function FlashcardGeneratorModal({
   const [error, setError] = useState<string>('');
   const [debugInfo, setDebugInfo] = useState<string>('');
 
-  // When opened, generate a preview of the flashcards
-  useEffect(() => {
-    if (isOpen && status === 'idle') {
-      generatePreview();
-    }
-  }, [isOpen, status, noteId]);
-
-  // Reset state when closing
-  useEffect(() => {
-    if (!isOpen) {
-      setStatus('idle');
-      setPreviewCards([]);
-      setError('');
-      setDebugInfo('');
-    }
-  }, [isOpen]);
-
-  // Function to generate preview flashcards
-  const generatePreview = async () => {
+  // Create a memoized version of generatePreview to use in the dependency array
+  const generatePreview = useCallback(async () => {
     try {
       setStatus('loading');
       setDebugInfo(`Starting preview generation for note ID: ${noteId}`);
@@ -101,8 +84,8 @@ export default function FlashcardGeneratorModal({
       try {
         responseData = JSON.parse(responseText);
         setDebugInfo(prevDebug => prevDebug + `\nParsed response: ${JSON.stringify(responseData).substring(0, 200)}...`);
-      } catch (e) {
-        setDebugInfo(prevDebug => prevDebug + `\nResponse parsing error: ${e}\nResponse text: ${responseText.substring(0, 200)}...`);
+      } catch (_e) {
+        setDebugInfo(prevDebug => prevDebug + `\nResponse parsing error: ${_e}\nResponse text: ${responseText.substring(0, 200)}...`);
         throw new Error('Failed to parse API response');
       }
       
@@ -123,7 +106,24 @@ export default function FlashcardGeneratorModal({
       setError(err instanceof Error ? err.message : 'Failed to generate flashcards');
       setStatus('error');
     }
-  };
+  }, [noteId]); // Add noteId as a dependency
+
+  // When opened, generate a preview of the flashcards
+  useEffect(() => {
+    if (isOpen && status === 'idle') {
+      generatePreview();
+    }
+  }, [isOpen, status, noteId, generatePreview]); // Include generatePreview in the dependency array
+
+  // Reset state when closing
+  useEffect(() => {
+    if (!isOpen) {
+      setStatus('idle');
+      setPreviewCards([]);
+      setError('');
+      setDebugInfo('');
+    }
+  }, [isOpen]);
 
   // Function to download the Anki package
   const downloadAnkiPackage = async () => {
@@ -157,7 +157,7 @@ export default function FlashcardGeneratorModal({
         
         try {
           errorData = JSON.parse(responseText);
-        } catch (e) {
+        } catch (_e) {
           throw new Error(`Server error: ${response.status} ${response.statusText}`);
         }
         
@@ -236,7 +236,7 @@ export default function FlashcardGeneratorModal({
           <>
             <div className="mb-4">
               <p className="mb-2 text-gray-600 dark:text-gray-400">
-                Here's a preview of the flashcards that will be generated:
+                Here&apos;s a preview of the flashcards that will be generated:
               </p>
               <div className="p-4 border rounded-lg dark:border-gray-700">
                 {previewCards.map((card, index) => (

@@ -1,9 +1,16 @@
 // src/lib/utils/content-converter.ts
-export function convertTipTapToPlainText(content: any): string {
+export interface TipTapNode {
+  type?: string;
+  text?: string;
+  content?: TipTapNode[];
+  [key: string]: unknown;
+}
+
+export function convertTipTapToPlainText(content: TipTapNode): string {
     let plainText = '';
   
     // Process nodes recursively
-    const processNode = (node: any) => {
+    const processNode = (node: TipTapNode) => {
       if (node.text) {
         plainText += node.text;
       } else if (node.content) {

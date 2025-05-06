@@ -1,8 +1,15 @@
+# *
 User-agent: *
 Allow: /
 
-Sitemap: https://wardnotes.app/sitemap.xml
-
+# *
+User-agent: *
 Disallow: /api/
 Disallow: /auth/reset-password
 Disallow: /auth/verify
+
+# Host
+Host: https://wardnotes.app
+
+# Sitemaps
+Sitemap: https://wardnotes.app/sitemap.xml

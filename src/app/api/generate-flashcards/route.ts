@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/client';
 import OpenAI from 'openai';
+import { TipTapNode } from '@/types/content';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || '',
@@ -110,11 +111,11 @@ export async function GET(request: NextRequest) {
 }
 
 // Helper function to convert TipTap JSON to plain text
-function convertTipTapToPlainText(content: any): string {
+function convertTipTapToPlainText(content: TipTapNode): string {
   let plainText = '';
 
   // Process nodes recursively
-  const processNode = (node: any) => {
+  const processNode = (node: TipTapNode) => {
     if (node.text) {
       plainText += node.text;
     } else if (node.content) {
@@ -175,8 +176,8 @@ Return each card on a new line.
       max_tokens: 2000,
     });
     
-    const result = response.choices[0].message.content || '';
-    return result.split('\n').filter(line => line.trim().length > 0);
+    let responseContent: string = response.choices[0].message.content || '';
+    return responseContent.split('\n').filter(line => line.trim().length > 0);
   } catch (error) {
     console.log('Error with primary model, trying fallback model:', error);
     
@@ -224,7 +225,7 @@ function formatFlashcardsForAnki(cards: string[], deckName: string): string {
 }
 
 // Simple function to generate basic flashcards without OpenAI
-function generateSimpleFlashcards(noteContent: string, noteTitle: string): string[] {
+function generateSimpleFlashcards(noteContent: string, _noteTitle: string): string[] {
   // Split the content into sentences
   const sentences = noteContent
     .replace(/([.?!])\s*(?=[A-Z])/g, "$1|")

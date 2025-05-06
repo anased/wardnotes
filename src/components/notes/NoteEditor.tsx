@@ -1,4 +1,4 @@
-import { useEditor, EditorContent, Editor } from '@tiptap/react';
+import { useEditor, EditorContent, /* Editor */ } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import BulletList from '@tiptap/extension-bullet-list';
 import OrderedList from '@tiptap/extension-ordered-list';
@@ -15,7 +15,7 @@ import Link from '@tiptap/extension-link';
 import Typography from '@tiptap/extension-typography';
 import Placeholder from '@tiptap/extension-placeholder';
 import { useCallback, useState } from 'react';
-import { BoldIcon, ItalicIcon, UnderlineIcon, ListBulletIcon } from '@heroicons/react/24/outline';
+import { /* BoldIcon, ItalicIcon, UnderlineIcon, ListBulletIcon */ } from '@heroicons/react/24/outline';
 
 
 // Define menu button interface

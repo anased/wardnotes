@@ -210,7 +210,7 @@ export default function CategoriesPage() {
           
           {categories.length === 0 ? (
             <div className="p-4 text-center text-gray-600 dark:text-gray-400">
-              You haven't created any custom categories yet.
+              You haven&apos;t created any custom categories yet.
             </div>
           ) : (
             <div className="overflow-hidden border border-gray-200 rounded-lg dark:border-gray-700">

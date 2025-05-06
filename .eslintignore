@@ -1,0 +1,9 @@
+# Ignore debug files
+src/app/debug/
+src/components/debug/
+src/app/api/debug-*
+src/app/api/test-*
+src/app/api/fix-rls/
+src/app/api/check-schema/
+src/app/api/generate-flashcards/
+src/app/api/preview-flashcards/

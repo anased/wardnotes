@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/client';
 import OpenAI from 'openai';
+import { TipTapNode } from '@/types/content';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || '',
@@ -27,7 +28,8 @@ export async function GET(request: NextRequest) {
     }
     
     // Create the Supabase client
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    const _supabase = createClient(supabaseUrl, supabaseAnonKey);
+
     
     // Get the authorization header
     const authHeader = request.headers.get('Authorization');
@@ -105,7 +107,7 @@ export async function GET(request: NextRequest) {
 }
 
 // Helper function to convert TipTap JSON to plain text
-function convertTipTapToPlainText(content: any): string {
+function convertTipTapToPlainText(content: TipTapNode): string {
   let plainText = '';
 
   // Process nodes recursively

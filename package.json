@@ -2,6 +2,7 @@
   "name": "wardnotes",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -9,7 +10,7 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "preflight": "node scripts/preflight.mjs",
-    "postbuild": "next-sitemap",
+    "postbuild": "next-sitemap --config next-sitemap.config.cjs",
     "prepare": "husky install"
   },
   "dependencies": {
@@ -63,6 +64,8 @@
     "husky": "^9.0.6",
     "lint-staged": "^15.2.0",
     "postcss": "^8.5.3",
+    "postcss-import": "^16.1.0",
+    "postcss-nesting": "^13.0.1",
     "tailwindcss": "^3.3.0",
     "typescript": "^5"
   },

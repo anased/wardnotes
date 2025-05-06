@@ -94,7 +94,7 @@ export default function SettingsPage() {
               <h2 className="text-xl font-semibold">Theme & Appearance</h2>
             </div>
             <p className="text-gray-600 dark:text-gray-400">
-              Customize the app's appearance and theme preferences
+              Customize the app&apos;s appearance and theme preferences
             </p>
           </Link>
         </div>
