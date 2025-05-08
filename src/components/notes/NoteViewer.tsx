@@ -6,6 +6,11 @@ import useNotes from '@/lib/hooks/useNotes';
 import Button from '../ui/Button';
 import CategoryBadge from '../ui/CategoryBadge';
 import NoteEditor from './NoteEditor';
+// The FlashcardGeneratorModal import is removed or commented out
+import FlashcardGeneratorModal from './FlashcardGeneratorModal';
+
+// You could add a constant to control premium features
+const ENABLE_PREMIUM_FEATURES = false;
 
 interface NoteViewerProps {
   note: Note;
@@ -16,6 +21,8 @@ export default function NoteViewer({ note }: NoteViewerProps) {
   const { removeNote } = useNotes();
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // This state is kept but won't be used when premium features are disabled
+  const [showFlashcardModal, setShowFlashcardModal] = useState(false);
 
   // Format the date (e.g., "May 2, 2025")
   const formattedDate = new Date(note.created_at).toLocaleDateString('en-US', {
@@ -50,6 +57,15 @@ export default function NoteViewer({ note }: NoteViewerProps) {
         </div>
         
         <div className="flex space-x-3">
+          {/* Flashcard button only shows if premium features are enabled */}
+          {ENABLE_PREMIUM_FEATURES && (
+            <Button 
+              variant="outline"
+              onClick={() => setShowFlashcardModal(true)}
+            >
+              Generate Flashcards
+            </Button>
+          )}
           <Link href={`/notes/${note.id}/edit`}>
             <Button variant="outline">
               Edit
@@ -105,6 +121,16 @@ export default function NoteViewer({ note }: NoteViewerProps) {
             </div>
           </div>
         </div>
+      )}
+      
+      {/* Flashcard Generator Modal is conditionally included only if premium features are enabled */}
+      {ENABLE_PREMIUM_FEATURES && showFlashcardModal && (
+        <FlashcardGeneratorModal
+          isOpen={showFlashcardModal}
+          onClose={() => setShowFlashcardModal(false)}
+          noteId={note.id}
+          noteTitle={note.title}
+        />
       )}
     </div>
   );

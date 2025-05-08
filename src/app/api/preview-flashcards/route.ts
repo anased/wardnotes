@@ -1,4 +1,3 @@
-// src/app/api/preview-flashcards/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/client';
 import OpenAI from 'openai';
@@ -7,6 +6,9 @@ import { TipTapNode } from '@/types/content';
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || '',
 });
+
+// Define the maximum age for cached flashcards in minutes
+const MAX_CACHE_AGE_MINUTES = 60; // 1 hour TTL
 
 export async function GET(request: NextRequest) {
   try {
@@ -27,10 +29,6 @@ export async function GET(request: NextRequest) {
       throw new Error('Missing Supabase environment variables');
     }
     
-    // Create the Supabase client
-    const _supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-    
     // Get the authorization header
     const authHeader = request.headers.get('Authorization');
     
@@ -44,7 +42,6 @@ export async function GET(request: NextRequest) {
     console.log(`Token received (first 10 chars): ${token.substring(0, 10)}...`);
 
     // Create a new Supabase client with the auth token
-    // Instead of trying to set the session on an existing client
     const supabaseWithAuth = createClient(
       supabaseUrl,
       supabaseAnonKey,
@@ -67,8 +64,24 @@ export async function GET(request: NextRequest) {
     
     console.log(`Authenticated as user: ${user.id}`);
     
-    // Query for the note using the authenticated client
-    console.log(`Querying for note with ID: ${noteId}`);
+    // Step 1: Check for existing flashcards in the database
+    const cutoffTime = new Date();
+    cutoffTime.setMinutes(cutoffTime.getMinutes() - MAX_CACHE_AGE_MINUTES);
+    
+    const { data: existingGeneration, error: fetchError } = await supabaseWithAuth
+      .from('flashcard_generations')
+      .select('cards, created_at')
+      .eq('note_id', noteId)
+      .gte('created_at', cutoffTime.toISOString())
+      .single();
+    
+    // If we found a recent generation, return it
+    if (existingGeneration && !fetchError) {
+      console.log(`Found existing flashcard generation from ${existingGeneration.created_at}`);
+      return NextResponse.json({ cards: existingGeneration.cards });
+    }
+    
+    // Step 2: If no recent generation, fetch the note
     const { data: note, error: noteError } = await supabaseWithAuth
       .from('notes')
       .select('*')
@@ -87,15 +100,38 @@ export async function GET(request: NextRequest) {
     
     console.log(`Successfully retrieved note: ${note.title}`);
 
-    // Convert TipTap JSON content to plain text
+    // Step 3: Convert TipTap JSON content to plain text
     const plainText = convertTipTapToPlainText(note.content);
     console.log(`Converted note content to plain text (${plainText.length} characters)`);
 
-    // Generate cloze cards using OpenAI
+    // Step 4: Generate flashcards using OpenAI
     const clozeCards = await generateClozeCards(plainText, note.title);
-    console.log(`Generated ${clozeCards.length} flashcards for preview`);
+    console.log(`Generated ${clozeCards.length} flashcards`);
+    
+    // Step 5: Store the generated flashcards in the database
+    // First, delete any existing generations for this note
+    await supabaseWithAuth
+      .from('flashcard_generations')
+      .delete()
+      .eq('note_id', noteId);
+    
+    // Then insert the new generation
+    const { error: insertError } = await supabaseWithAuth
+      .from('flashcard_generations')
+      .insert({
+        note_id: noteId,
+        user_id: user.id,
+        cards: clozeCards
+      });
+    
+    if (insertError) {
+      console.error('Error saving flashcard generation:', insertError);
+      // Even if saving fails, we can still return the generated cards
+    } else {
+      console.log('Successfully saved flashcard generation to database');
+    }
 
-    // Return the preview of cloze cards
+    // Return the generated flashcards
     return NextResponse.json({ cards: clozeCards });
   } catch (error) {
     console.error('Error generating flashcard preview:', error);
@@ -137,7 +173,7 @@ function convertTipTapToPlainText(content: TipTapNode): string {
 // Generate cloze deletion cards using OpenAI
 async function generateClozeCards(noteContent: string, noteTitle: string): Promise<string[]> {
   const prompt = `
-Convert the following medical note into Anki flashcards using cloze deletion format.
+Generate comprehensive Anki flashcards for the following medical note using cloze deletion format.
 
 Guidelines:
 - Create ONLY 1-2 cards total 
@@ -149,7 +185,7 @@ Guidelines:
 - Use bidirectional phrasing where possible. 
 - Format clozes as: {{c1::concept::hint}} or {{c1::term}}  
 - Don't create back note
-- when the information has list of items that needs to be memorized, create one card with multiple clozes 
+- when the information has list of items that needs to be memorized, create one card with multiple clozes
 
 Medical Note Title: ${noteTitle}
 Content:
@@ -158,19 +194,45 @@ ${noteContent}
 Return each card on a new line.
 `;
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      { 
-        role: "system", 
-        content: "You are a medical education expert who creates high-quality Anki flashcards with cloze deletions following best practices."
-      },
-      { role: "user", content: prompt }
-    ],
-    temperature: 0.7,
-    max_tokens: 2000,
-  });
-  
-  const result = response.choices[0].message.content || '';
-  return result.split('\n').filter(line => line.trim().length > 0);
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { 
+          role: "system", 
+          content: "You are a medical education expert who creates high-quality Anki flashcards with cloze deletions following best practices."
+        },
+        { role: "user", content: prompt }
+      ],
+      temperature: 0.7,
+      max_tokens: 2000,
+    });
+    
+    const result = response.choices[0].message.content || '';
+    return result.split('\n').filter(line => line.trim().length > 0);
+  } catch (error) {
+    console.log('Error with primary model, trying fallback model:', error);
+    
+    // Try a cheaper model as fallback
+    try {
+      const fallbackResponse = await openai.chat.completions.create({
+        model: "gpt-3.5-turbo", // Cheaper model as fallback
+        messages: [
+          { 
+            role: "system", 
+            content: "You are a medical education expert who creates high-quality Anki flashcards with cloze deletions following best practices."
+          },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 2000,
+      });
+      
+      const fallbackResult = fallbackResponse.choices[0].message.content || '';
+      return fallbackResult.split('\n').filter(line => line.trim().length > 0);
+    } catch (fallbackError) {
+      console.error('All models failed:', fallbackError);
+      throw fallbackError;
+    }
+  }
 }

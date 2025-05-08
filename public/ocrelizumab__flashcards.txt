@@ -1,0 +1,29 @@
+# Anki Flashcards for "Ocrelizumab "
+# Import Instructions:
+# 1. In Anki, go to File > Import
+# 2. Select this text file
+# 3. Choose 'Cloze' as the note type
+# 4. Select 'Tab' as the field separator
+# 5. Map the field to 'Text'
+# 6. Click Import
+
+What is the mechanism of action of Ocrelizumab?  
+
+{{c1::Targeting CD20}}  
+
+Ocrelizumab targets which cell surface antigen?  
+
+{{c1::CD20}}  
+
+
+Guidelines:
+- Create ONLY 1-2 cards total 
+- Focus on the most clinically relevant information 
+- Create one cloze per fact (avoid multiple clozes in one card unless it is needed for reinforcing relationships between different elements) 
+- Provide contextual information (never isolated facts) 
+- Use hints with :: syntax only when needed (e.g., {{c1::term::hint}}) 
+- Prefer individual cards for each list item.
+- Use bidirectional phrasing where possible. 
+- Format clozes as: {{c1::concept::hint}} or {{c1::term}}  
+- Don't create back note
+- when the information has list of items that needs to be memorized, create one card with multiple clozes 

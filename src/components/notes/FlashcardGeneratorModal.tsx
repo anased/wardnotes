@@ -191,6 +191,21 @@ export default function FlashcardGeneratorModal({
     }
   };
 
+  // Styling for the flashcard in the preview
+  const renderFlashcard = (card: string, index: number) => {
+    // Highlight the cloze deletions but preserve the original format
+    const highlightedText = card.replace(
+      /(\{\{c\d+::.*?(?:::.*?)?\}\})/g, 
+      '<span class="bg-primary-100 dark:bg-primary-900 text-primary-800 dark:text-primary-200 px-1 rounded">$1</span>'
+    );
+    
+    return (
+      <div key={index} className="p-4 mb-4 bg-white border rounded-lg shadow-sm dark:bg-gray-800 dark:border-gray-700">
+        <div dangerouslySetInnerHTML={{ __html: highlightedText }} />
+      </div>
+    );
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -235,23 +250,33 @@ export default function FlashcardGeneratorModal({
         {status === 'preview' && (
           <>
             <div className="mb-4">
-              <p className="mb-2 text-gray-600 dark:text-gray-400">
-                Here&apos;s a preview of the flashcards that will be generated:
+              <p className="mb-4 text-gray-700 dark:text-gray-300">
+                Here is a preview of the flashcards that will be generated:
               </p>
-              <div className="p-4 border rounded-lg dark:border-gray-700">
-                {previewCards.map((card, index) => (
-                  <div key={index} className="p-3 mb-2 bg-gray-100 rounded dark:bg-gray-700">
-                    <pre className="font-mono text-sm whitespace-pre-wrap">{card}</pre>
-                  </div>
-                ))}
+              
+              <div className="mb-4 p-4 bg-blue-50 border border-blue-100 rounded-lg dark:bg-blue-900/20 dark:border-blue-800">
+                <h4 className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">About Anki Cloze Format</h4>
+                <p className="text-sm text-blue-700 dark:text-blue-400">
+                  Cards use Anki's cloze deletion format. The highlighted sections with double curly braces will be hidden in Anki and become what you need to recall.
+                </p>
               </div>
+              
+              {previewCards.length === 0 ? (
+                <div className="p-4 mb-4 text-yellow-700 bg-yellow-100 rounded-lg dark:bg-yellow-900 dark:text-yellow-200">
+                  No flashcards could be generated. Try with a note that has more medical content.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {previewCards.map((card, index) => renderFlashcard(card, index))}
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end space-x-3">
               <Button variant="outline" onClick={onClose}>
                 Cancel
               </Button>
-              <Button onClick={downloadAnkiPackage}>
+              <Button onClick={downloadAnkiPackage} disabled={previewCards.length === 0}>
                 Download Anki Flashcards (Text Format)
               </Button>
             </div>
