@@ -9,6 +9,7 @@ import Input from '../ui/Input';
 import Select from '../ui/Select';
 import TagInput from '../ui/TagInput';
 import NoteEditor from './NoteEditor';
+import CategoryCreationModal from '../ui/CategoryCreationModal';
 
 interface NoteFormProps {
   initialData?: Partial<Note>;
@@ -25,10 +26,13 @@ const EMPTY_CONTENT = {
   ],
 };
 
+// Special value to indicate "Add new category" option
+const ADD_NEW_CATEGORY = 'add_new_category';
+
 export default function NoteForm({ initialData = {}, isEditing = false }: NoteFormProps) {
   const router = useRouter();
   const { addNote, editNote } = useNotes();
-  const { categories } = useCategories();
+  const { categories, addCategory } = useCategories();
   const { tags } = useTags();
   
   const [title, setTitle] = useState(initialData.title || '');
@@ -37,22 +41,56 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
   const [category, setCategory] = useState<string>(initialData.category || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  
+  // State for the category creation modal
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
 
-  // Generate category options from the database
-  const categoryOptions = categories.map(cat => ({
-    value: cat.name,
-    label: cat.name
-  }));
+  // Generate category options from the database, adding the "Add new category" option
+  const categoryOptions = [
+    ...categories.map(cat => ({
+      value: cat.name,
+      label: cat.name
+    })),
+    {
+      value: ADD_NEW_CATEGORY,
+      label: '+ Add new category...'
+    }
+  ];
 
   // Extract all tag names for suggestions
   const tagSuggestions = tags.map(tag => tag.name);
 
   // Set a default category if none was selected and options are available
   useEffect(() => {
-    if (!category && categoryOptions.length > 0) {
-      setCategory(categoryOptions[0].value);
+    if (!category && categories.length > 0) {
+      setCategory(categories[0].name);
     }
-  }, [category, categoryOptions]);
+  }, [category, categories]);
+
+  // Handle category change with special handling for "Add new category" option
+  const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    
+    if (value === ADD_NEW_CATEGORY) {
+      setShowCategoryModal(true);
+    } else {
+      setCategory(value);
+    }
+  };
+
+  // Handle creating a new category from the modal
+  const handleCreateCategory = async (name: string, color: string) => {
+    try {
+      // Create the new category
+      const newCategory = await addCategory(name, color);
+      
+      // Set the new category as the selected one
+      setCategory(newCategory.name);
+    } catch (err) {
+      console.error('Error creating category:', err);
+      throw err; // Let the modal handle the error
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,7 +157,7 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
         <Select
           label="Category"
           value={category}
-          onChange={(e) => setCategory(e.target.value)}
+          onChange={handleCategoryChange}
           options={categoryOptions}
         />
         
@@ -156,6 +194,13 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
           {isEditing ? 'Update Note' : 'Save Note'}
         </Button>
       </div>
+
+      {/* Category Creation Modal */}
+      <CategoryCreationModal
+        isOpen={showCategoryModal}
+        onClose={() => setShowCategoryModal(false)}
+        onSave={handleCreateCategory}
+      />
     </form>
   );
 }
