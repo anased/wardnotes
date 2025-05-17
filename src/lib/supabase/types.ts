@@ -100,6 +100,35 @@ export interface Database {
           created_at?: string;
         };
       };
+      daily_activity: {
+        Row: {
+          id: string;
+          user_id: string;
+          date: string;
+          notes_count: number;
+          streak_days: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          date: string;
+          notes_count?: number;
+          streak_days?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          date?: string;
+          notes_count?: number;
+          streak_days?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
     Views: {
       [key: string]: {
@@ -135,6 +164,11 @@ export type TagRow = Database['public']['Tables']['tags']['Row'];
 export type TagInsert = Database['public']['Tables']['tags']['Insert'];
 export type TagUpdate = Database['public']['Tables']['tags']['Update'];
 
+// Daily Activity types
+export type DailyActivityRow = Database['public']['Tables']['daily_activity']['Row'];
+export type DailyActivityInsert = Database['public']['Tables']['daily_activity']['Insert'];
+export type DailyActivityUpdate = Database['public']['Tables']['daily_activity']['Update'];
+
 // Extended Note type with joined data if needed
 export type NoteWithAuthor = NoteRow & {
   author: {
@@ -158,3 +192,4 @@ export type SignInCredentials = {
 export type Note = NoteRow;
 export type Category = CategoryRow;
 export type Tag = TagRow;
+export type DailyActivity = DailyActivityRow;

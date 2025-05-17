@@ -397,4 +397,77 @@ export const deleteTag = async (id: string) => {
   return true;
 };
 
+
+// ======================
+// Daily Activity Operations
+// ======================
+
+export type DailyActivity = {
+  id: string;
+  user_id: string;
+  date: string;
+  notes_count: number;
+  streak_days: number;
+  created_at: string;
+  updated_at: string;
+};
+
+// Get current streak for a user
+export const getCurrentStreak = async (): Promise<number> => {
+  const today = new Date().toISOString().split('T')[0];
+  
+  const { data, error } = await supabase
+    .from('daily_activity')
+    .select('streak_days')
+    .eq('date', today)
+    .single();
+    
+  if (error && error.code !== 'PGRST116') { // PGRST116 is for "No rows found"
+    console.error('Error fetching current streak:', error);
+    throw error;
+  }
+  
+  return data?.streak_days || 0;
+};
+
+// Get activity for a date range
+export const getActivityForDateRange = async (startDate: string, endDate: string): Promise<DailyActivity[]> => {
+  const { data, error } = await supabase
+    .from('daily_activity')
+    .select('*')
+    .gte('date', startDate)
+    .lte('date', endDate)
+    .order('date', { ascending: true });
+    
+  if (error) {
+    console.error('Error fetching activity for date range:', error);
+    throw error;
+  }
+  
+  return data as DailyActivity[];
+};
+
+// Get weekly activity
+export const getWeeklyActivity = async (): Promise<DailyActivity[]> => {
+  const today = new Date();
+  const startOfWeek = new Date(today);
+  startOfWeek.setDate(today.getDate() - today.getDay()); // Sunday
+  
+  const startDate = startOfWeek.toISOString().split('T')[0];
+  const endDate = today.toISOString().split('T')[0];
+  
+  return getActivityForDateRange(startDate, endDate);
+};
+
+// Get monthly activity
+export const getMonthlyActivity = async (): Promise<DailyActivity[]> => {
+  const today = new Date();
+  const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  
+  const startDate = startOfMonth.toISOString().split('T')[0];
+  const endDate = today.toISOString().split('T')[0];
+  
+  return getActivityForDateRange(startDate, endDate);
+};
+
 export { createClient };
