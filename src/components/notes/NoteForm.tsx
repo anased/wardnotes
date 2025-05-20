@@ -1,3 +1,4 @@
+// src/components/notes/NoteForm.tsx
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Note } from '@/lib/supabase/client';
@@ -10,11 +11,13 @@ import Select from '../ui/Select';
 import TagInput from '../ui/TagInput';
 import NoteEditor from './NoteEditor';
 import CategoryCreationModal from '../ui/CategoryCreationModal';
+import NoteImprover from './NoteImprover'; // Add this import
 
 interface NoteFormProps {
   initialData?: Partial<Note>;
   isEditing?: boolean;
 }
+const ENABLE_PREMIUM_FEATURES = false;
 
 const EMPTY_CONTENT = {
   type: 'doc',
@@ -29,6 +32,41 @@ const EMPTY_CONTENT = {
 // Special value to indicate "Add new category" option
 const ADD_NEW_CATEGORY = 'add_new_category';
 
+// Define types for TipTap nodes
+interface TextNode {
+  type: 'text';
+  text: string;
+  marks?: { type: string }[];
+}
+
+interface ParagraphNode {
+  type: 'paragraph';
+  content: TextNode[];
+}
+
+interface HeadingNode {
+  type: 'heading';
+  attrs: { level: number };
+  content: TextNode[];
+}
+
+interface ListItemNode {
+  type: 'listItem';
+  content: ParagraphNode[];
+}
+
+interface BulletListNode {
+  type: 'bulletList';
+  content: ListItemNode[];
+}
+
+type ContentNode = ParagraphNode | HeadingNode | BulletListNode;
+
+interface TipTapDocument {
+  type: 'doc';
+  content: ContentNode[];
+}
+
 export default function NoteForm({ initialData = {}, isEditing = false }: NoteFormProps) {
   const router = useRouter();
   const { addNote, editNote } = useNotes();
@@ -36,7 +74,7 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
   const { tags } = useTags();
   
   const [title, setTitle] = useState(initialData.title || '');
-  const [content, setContent] = useState(initialData.content || EMPTY_CONTENT);
+  const [content, setContent] = useState<Record<string, unknown>>(initialData.content || EMPTY_CONTENT);
   const [selectedTags, setSelectedTags] = useState<string[]>(initialData.tags || []);
   const [category, setCategory] = useState<string>(initialData.category || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -90,6 +128,152 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
       console.error('Error creating category:', err);
       throw err; // Let the modal handle the error
     }
+  };
+
+  // Helper function to parse text with bold and italic marks
+  function parseBoldItalicText(text: string): TextNode[] {
+    const segments: TextNode[] = [];
+    let currentIndex = 0;
+    
+    // Find bold patterns like **text**
+    const boldPattern = /\*\*(.*?)\*\*/g;
+    let boldMatch;
+    
+    while ((boldMatch = boldPattern.exec(text)) !== null) {
+      // Add normal text before the match
+      if (boldMatch.index > currentIndex) {
+        segments.push({
+          type: 'text',
+          text: text.substring(currentIndex, boldMatch.index)
+        });
+      }
+      
+      // Add the bold text
+      segments.push({
+        type: 'text',
+        text: boldMatch[1],
+        marks: [{ type: 'bold' }]
+      });
+      
+      currentIndex = boldMatch.index + boldMatch[0].length;
+    }
+    
+    // Add any remaining text after the last match
+    if (currentIndex < text.length) {
+      segments.push({
+        type: 'text',
+        text: text.substring(currentIndex)
+      });
+    }
+    
+    // If no segments were created (no bold text), just return the whole text
+    if (segments.length === 0) {
+      return [{ type: 'text', text }];
+    }
+    
+    return segments;
+  }
+
+  // Updated function to handle improved content with better Markdown parsing
+  const handleImprovedContent = (improvedContent: string) => {
+    console.log("Original improved content:", improvedContent);
+    
+    // First, split the content into lines
+    const lines = improvedContent.split('\n');
+    const newContentNodes: ContentNode[] = [];
+    
+    // Process each line and convert to appropriate TipTap nodes
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      
+      // Handle headings
+      if (line.startsWith('# ')) {
+        newContentNodes.push({
+          type: 'heading',
+          attrs: { level: 1 },
+          content: [{ type: 'text', text: line.substring(2).trim() }]
+        });
+      } 
+      else if (line.startsWith('## ')) {
+        newContentNodes.push({
+          type: 'heading',
+          attrs: { level: 2 },
+          content: [{ type: 'text', text: line.substring(3).trim() }]
+        });
+      }
+      // Handle bold text (entire line is bold)
+      else if (line.startsWith('**') && line.endsWith('**')) {
+        newContentNodes.push({
+          type: 'paragraph',
+          content: [{
+            type: 'text',
+            text: line.substring(2, line.length - 2),
+            marks: [{ type: 'bold' }]
+          }]
+        });
+      }
+      // Handle list items
+      else if (line.trim().startsWith('- ')) {
+        // If this is the first list item, start a new bullet list
+        const lastNode = newContentNodes.length > 0 ? newContentNodes[newContentNodes.length - 1] : null;
+        
+        if (!lastNode || lastNode.type !== 'bulletList') {
+          newContentNodes.push({
+            type: 'bulletList',
+            content: []
+          } as BulletListNode);
+        }
+        
+        // Get the text content (strip the "- " prefix)
+        const itemText = line.trim().substring(2);
+        
+        // Create list item with any bold/italic formatting
+        const listItemContent = parseBoldItalicText(itemText);
+        
+        // Add this list item to the last bullet list
+        const lastList = newContentNodes[newContentNodes.length - 1] as BulletListNode;
+        if (lastList.type === 'bulletList' && Array.isArray(lastList.content)) {
+          lastList.content.push({
+            type: 'listItem',
+            content: [{
+              type: 'paragraph',
+              content: listItemContent
+            }]
+          });
+        }
+      }
+      // Handle empty lines
+      else if (line.trim() === '') {
+        // Only add empty paragraph if it's not after a list or before a heading
+        const prevNode = newContentNodes.length > 0 ? newContentNodes[newContentNodes.length - 1] : null;
+        const nextLine = i < lines.length - 1 ? lines[i + 1] : '';
+        
+        if (!(prevNode?.type === 'bulletList' || 
+              nextLine.startsWith('# ') || 
+              nextLine.startsWith('## '))) {
+          newContentNodes.push({
+            type: 'paragraph',
+            content: []
+          });
+        }
+      }
+      // Regular paragraph with potential formatting
+      else {
+        newContentNodes.push({
+          type: 'paragraph',
+          content: parseBoldItalicText(line)
+        });
+      }
+    }
+    
+    // Create the final content structure
+    const newContent: TipTapDocument = {
+      type: 'doc',
+      content: newContentNodes
+    };
+    
+    console.log("Converted TipTap content:", newContent);
+    setContent(newContent as unknown as Record<string, unknown>);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -178,6 +362,16 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
           onChange={setContent}
         />
       </div>
+      
+      {/* Note Improver Component */}
+      {ENABLE_PREMIUM_FEATURES && (
+        <div className="mt-4">
+          <NoteImprover 
+            content={content} 
+            onImproveSuccess={handleImprovedContent} 
+          />
+        </div>
+      )}
       
       <div className="flex justify-end space-x-3">
         <Button

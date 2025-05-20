@@ -1,4 +1,5 @@
 import { useEditor, EditorContent, /* Editor */ } from '@tiptap/react';
+import { useEffect } from 'react';
 import StarterKit from '@tiptap/starter-kit';
 import BulletList from '@tiptap/extension-bullet-list';
 import OrderedList from '@tiptap/extension-ordered-list';
@@ -100,6 +101,24 @@ export default function NoteEditor({
       onChange(editor.getJSON());
     },
   });
+
+  // Add this useEffect to update content when it changes externally
+  useEffect(() => {
+    if (editor && content) {
+      // Only update if the editor content differs significantly from the supplied content
+      // Check if content is different from what's in the editor
+      const editorContent = editor.getJSON();
+      const newContentStr = JSON.stringify(content);
+      const editorContentStr = JSON.stringify(editorContent);
+      
+      // Only update if they're different and editor isn't already focused
+      // This prevents disrupting user typing
+      if (newContentStr !== editorContentStr && !editor.isFocused) {
+        // Set content, preserving selection if possible
+        editor.commands.setContent(content, false);
+      }
+    }
+  }, [editor, content]);
 
   const addImage = useCallback(() => {
     const url = window.prompt('Enter image URL');
