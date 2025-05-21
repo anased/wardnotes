@@ -97,6 +97,21 @@ export default function SettingsPage() {
               Customize the app&apos;s appearance and theme preferences
             </p>
           </Link>
+          {/* subscriptioin Settings Card */}
+          <Link 
+            href="/settings/subscription" 
+            className="p-6 transition-shadow bg-white rounded-lg shadow hover:shadow-md dark:bg-gray-800"
+          >
+            <div className="flex items-center mb-4">
+              <svg className="w-8 h-8 mr-3 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+              </svg>
+              <h2 className="text-xl font-semibold">Subscription</h2>
+            </div>
+            <p className="text-gray-600 dark:text-gray-400">
+              Manage your subscription and billing information
+            </p>
+          </Link>
         </div>
       </div>
     </PageContainer>

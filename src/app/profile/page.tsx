@@ -1,9 +1,12 @@
+// src/app/profile/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import useAuth from '@/lib/hooks/useAuth';
 import useNotes from '@/lib/hooks/useNotes';
+import { useSubscription } from '@/lib/hooks/useSubscription'; // Add this import
 import PageContainer from '@/components/layout/PageContainer';
 import Button from '@/components/ui/Button';
 import Image from 'next/image';
@@ -11,6 +14,7 @@ import Image from 'next/image';
 export default function ProfilePage() {
   const { user, signOut, loading: authLoading } = useAuth();
   const { notes } = useNotes();
+  const { subscription, isPremium } = useSubscription(); // Add this hook
   const router = useRouter();
 
   const [darkMode, setDarkMode] = useState(false);
@@ -135,6 +139,38 @@ export default function ProfilePage() {
               </span>
             </div>
           </div>
+        </div>
+
+        {/* Subscription Status Section - New */}
+        <div className="p-6 bg-white rounded-lg shadow dark:bg-gray-800">
+          <h2 className="mb-4 text-xl font-semibold">Subscription Status</h2>
+          <div className="flex items-center mb-4">
+            <div className="p-2 mr-4 bg-primary-100 rounded-full dark:bg-primary-900">
+              <svg className="w-6 h-6 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-lg font-medium">
+                {isPremium ? 'Premium Plan' : 'Free Plan'}
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400">
+                {isPremium 
+                  ? 'You have access to all premium features' 
+                  : 'Upgrade to access premium features'}
+              </p>
+              {subscription?.valid_until && isPremium && (
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-500">
+                  Renews on {new Date(subscription.valid_until).toLocaleDateString()}
+                </p>
+              )}
+            </div>
+          </div>
+          <Link href="/settings/subscription">
+            <Button variant="outline" fullWidth>
+              {isPremium ? 'Manage Subscription' : 'Upgrade to Premium'}
+            </Button>
+          </Link>
         </div>
 
         {/* Settings */}

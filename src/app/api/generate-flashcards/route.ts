@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/client';
 import OpenAI from 'openai';
 import { TipTapNode } from '@/types/content';
+import { requirePremium } from '@/lib/middleware/requirePremium';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || '',
@@ -13,6 +14,11 @@ const MAX_CACHE_AGE_MINUTES = 60; // 1 hour TTL
 
 export async function GET(request: NextRequest) {
   try {
+    // Check premium access first
+    const premiumCheckResult = await requirePremium(request);
+    if (premiumCheckResult) {
+      return premiumCheckResult; // Return error response if not premium
+    }
     // Get the note ID from the query params
     const searchParams = request.nextUrl.searchParams;
     const noteId = searchParams.get('noteId');

@@ -1,6 +1,10 @@
 // src/lib/supabase/types.ts
 export type NoteCategory = string; // Changed from enum to string to support custom categories
 
+// Define subscription status and plan types
+export type SubscriptionStatus = 'active' | 'canceled' | 'past_due' | 'trialing' | 'unpaid' | 'free';
+export type SubscriptionPlan = 'free' | 'premium';
+
 // Define the Database schema inline
 export interface Database {
   public: {
@@ -129,6 +133,41 @@ export interface Database {
           updated_at?: string;
         };
       };
+      subscriptions: {
+        Row: {
+          id: string;
+          user_id: string;
+          stripe_customer_id: string | null;
+          stripe_subscription_id: string | null;
+          subscription_status: SubscriptionStatus;
+          subscription_plan: SubscriptionPlan;
+          valid_until: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          stripe_customer_id?: string | null;
+          stripe_subscription_id?: string | null;
+          subscription_status?: SubscriptionStatus;
+          subscription_plan?: SubscriptionPlan;
+          valid_until?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          stripe_customer_id?: string | null;
+          stripe_subscription_id?: string | null;
+          subscription_status?: SubscriptionStatus;
+          subscription_plan?: SubscriptionPlan;
+          valid_until?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
     Views: {
       [key: string]: {
@@ -169,6 +208,11 @@ export type DailyActivityRow = Database['public']['Tables']['daily_activity']['R
 export type DailyActivityInsert = Database['public']['Tables']['daily_activity']['Insert'];
 export type DailyActivityUpdate = Database['public']['Tables']['daily_activity']['Update'];
 
+// Subscription types
+export type SubscriptionRow = Database['public']['Tables']['subscriptions']['Row'];
+export type SubscriptionInsert = Database['public']['Tables']['subscriptions']['Insert'];
+export type SubscriptionUpdate = Database['public']['Tables']['subscriptions']['Update'];
+
 // Extended Note type with joined data if needed
 export type NoteWithAuthor = NoteRow & {
   author: {
@@ -193,3 +237,4 @@ export type Note = NoteRow;
 export type Category = CategoryRow;
 export type Tag = TagRow;
 export type DailyActivity = DailyActivityRow;
+export type Subscription = SubscriptionRow;

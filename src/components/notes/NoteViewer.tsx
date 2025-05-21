@@ -1,3 +1,4 @@
+// src/components/notes/NoteViewer.tsx - Updated
 import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -6,11 +7,8 @@ import useNotes from '@/lib/hooks/useNotes';
 import Button from '../ui/Button';
 import CategoryBadge from '../ui/CategoryBadge';
 import NoteEditor from './NoteEditor';
-// The FlashcardGeneratorModal import is removed or commented out
 import FlashcardGeneratorModal from './FlashcardGeneratorModal';
-
-// You could add a constant to control premium features
-const ENABLE_PREMIUM_FEATURES = false;
+import PremiumFeatureGate from '../premium/PremiumFeatureGate'; // Import the premium gate
 
 interface NoteViewerProps {
   note: Note;
@@ -21,7 +19,6 @@ export default function NoteViewer({ note }: NoteViewerProps) {
   const { removeNote } = useNotes();
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  // This state is kept but won't be used when premium features are disabled
   const [showFlashcardModal, setShowFlashcardModal] = useState(false);
 
   // Format the date (e.g., "May 2, 2025")
@@ -57,15 +54,19 @@ export default function NoteViewer({ note }: NoteViewerProps) {
         </div>
         
         <div className="flex space-x-3">
-          {/* Flashcard button only shows if premium features are enabled */}
-          {ENABLE_PREMIUM_FEATURES && (
+          {/* Wrap the flashcard feature with the premium gate */}
+          <PremiumFeatureGate
+            featureName="AI Flashcard Generator"
+            description="Generate Anki-compatible flashcards from this note to boost your learning efficiency."
+          >
             <Button 
               variant="outline"
               onClick={() => setShowFlashcardModal(true)}
             >
               Generate Flashcards
             </Button>
-          )}
+          </PremiumFeatureGate>
+          
           <Link href={`/notes/${note.id}/edit`}>
             <Button variant="outline">
               Edit
@@ -123,8 +124,8 @@ export default function NoteViewer({ note }: NoteViewerProps) {
         </div>
       )}
       
-      {/* Flashcard Generator Modal is conditionally included only if premium features are enabled */}
-      {ENABLE_PREMIUM_FEATURES && showFlashcardModal && (
+      {/* Flashcard Generator Modal - only shown for premium users */}
+      {showFlashcardModal && (
         <FlashcardGeneratorModal
           isOpen={showFlashcardModal}
           onClose={() => setShowFlashcardModal(false)}

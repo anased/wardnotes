@@ -12,12 +12,13 @@ import TagInput from '../ui/TagInput';
 import NoteEditor from './NoteEditor';
 import CategoryCreationModal from '../ui/CategoryCreationModal';
 import NoteImprover from './NoteImprover'; // Add this import
+import PremiumFeatureGate from '../premium/PremiumFeatureGate'; // Import the premium gate
 
 interface NoteFormProps {
   initialData?: Partial<Note>;
   isEditing?: boolean;
 }
-const ENABLE_PREMIUM_FEATURES = false;
+const ENABLE_PREMIUM_FEATURES = true;
 
 const EMPTY_CONTENT = {
   type: 'doc',
@@ -364,14 +365,18 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
       </div>
       
       {/* Note Improver Component */}
-      {ENABLE_PREMIUM_FEATURES && (
-        <div className="mt-4">
+      {/* Replace the ENABLE_PREMIUM_FEATURES check with PremiumFeatureGate */}
+      <div className="mt-4">
+        <PremiumFeatureGate
+          featureName="AI Note Improvement"
+          description="Use AI to structure and enhance your medical notes for better clarity and organization."
+        >
           <NoteImprover 
             content={content} 
             onImproveSuccess={handleImprovedContent} 
           />
-        </div>
-      )}
+        </PremiumFeatureGate>
+      </div>
       
       <div className="flex justify-end space-x-3">
         <Button
