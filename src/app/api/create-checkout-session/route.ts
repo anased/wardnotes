@@ -1,7 +1,7 @@
 // src/app/api/create-checkout-session/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/client';
-import { stripe, PREMIUM_MONTHLY_PRICE_ID, PREMIUM_ANNUAL_PRICE_ID } from '@/lib/stripe/stripe';
+import { getStripeClient, PREMIUM_MONTHLY_PRICE_ID, PREMIUM_ANNUAL_PRICE_ID } from '@/lib/stripe/stripe';
 import getURL from '@/lib/utils/getURL';
 
 export async function POST(request: NextRequest) {
@@ -92,6 +92,9 @@ export async function POST(request: NextRequest) {
     }
     
     let customerId = subscription?.stripe_customer_id;
+    
+    // Initialize Stripe client
+    const stripe = getStripeClient();
     
     // If the user doesn't have a Stripe customer ID yet, create one
     if (!customerId) {

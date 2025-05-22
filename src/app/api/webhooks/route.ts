@@ -1,7 +1,7 @@
 // src/app/api/webhooks/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/client';
-import { stripe } from '@/lib/stripe/stripe';
+import { getStripeClient } from '@/lib/stripe/stripe';
 import Stripe from 'stripe';
 
 // Disable body parsing as Stripe needs the raw body
@@ -73,7 +73,8 @@ export async function POST(request: NextRequest) {
     
     console.log('🔐 Using webhook secret starting with:', webhookSecret.substring(0, 5));
     
-    // Verify Stripe webhook
+    // Initialize Stripe client and verify webhook
+    const stripe = getStripeClient();
     let event;
     try {
       event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);

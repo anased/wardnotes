@@ -1,7 +1,7 @@
 // src/app/api/create-customer-portal/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/client';
-import { stripe } from '@/lib/stripe/stripe';
+import { getStripeClient } from '@/lib/stripe/stripe';
 import getURL from '@/lib/utils/getURL';
 
 export async function POST(request: NextRequest) {
@@ -55,7 +55,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'User does not have a Stripe customer ID' }, { status: 400 });
     }
     
-    // Create a billing portal session
+    // Initialize Stripe client and create a billing portal session
+    const stripe = getStripeClient();
     const baseUrl = getURL();
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: subscription.stripe_customer_id,
