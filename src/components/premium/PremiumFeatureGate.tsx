@@ -1,5 +1,5 @@
 // src/components/premium/PremiumFeatureGate.tsx
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, cloneElement, isValidElement } from 'react';
 import { useSubscription } from '@/lib/hooks/useSubscription';
 import Button from '../ui/Button';
 
@@ -7,18 +7,20 @@ interface PremiumFeatureGateProps {
   children: ReactNode;
   featureName: string;
   description: string;
+  showPremiumBadge?: boolean;
 }
 
 export default function PremiumFeatureGate({ 
   children, 
   featureName, 
-  description 
+  description,
+  showPremiumBadge = true
 }: PremiumFeatureGateProps) {
   const { isPremium, redirectToCheckout } = useSubscription();
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
 
-  // If the user is premium, just render the children
+  // If the user is premium, just render the children normally
   if (isPremium) {
     return <>{children}</>;
   }
@@ -33,42 +35,41 @@ export default function PremiumFeatureGate({
     }
   };
 
-  // Render a preview/locked version for free users
+  // Function to handle clicks on premium features
+  const handlePremiumFeatureClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setShowUpgradeModal(true);
+  };
+
+  // Clone children and add premium restrictions
+  const modifiedChildren = cloneElement(
+    isValidElement(children) ? children : <div>{children}</div>,
+    {
+      onClick: (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        handlePremiumFeatureClick(e);
+      },
+      className: `${(children as any)?.props?.className || ''} cursor-not-allowed opacity-60 pointer-events-none`,
+      title: `${featureName} - Premium Feature`
+    }
+  );
+
   return (
     <>
-      <div className="relative">
-        {/* Premium feature teaser/locked state */}
-        <div 
-          onClick={() => setShowUpgradeModal(true)}
-          className="cursor-pointer transition-transform hover:scale-[1.01]"
-        >
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-gray-900 bg-opacity-70 rounded-lg">
-            <div className="p-4 text-center">
-              <span className="inline-block px-3 py-1 mb-2 text-xs font-medium text-primary-800 bg-primary-100 rounded-full dark:bg-primary-900 dark:text-primary-300">
-                PREMIUM
-              </span>
-              <h3 className="mb-2 text-xl font-bold text-white">{featureName}</h3>
-              <p className="mb-4 text-gray-200">
-                {description}
-              </p>
-              <Button
-                variant="primary"
-                className="bg-primary-500 hover:bg-primary-600"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowUpgradeModal(true);
-                }}
-              >
-                Unlock Feature
-              </Button>
-            </div>
-          </div>
-          
-          {/* Blurred version of the premium feature */}
-          <div className="filter blur-sm pointer-events-none">
-            {children}
-          </div>
-        </div>
+      <div 
+        className="relative inline-block cursor-pointer"
+        onClick={handlePremiumFeatureClick}
+      >
+        {modifiedChildren}
+        
+        {/* Premium badge */}
+        {showPremiumBadge && (
+          <span className="absolute -top-1 -right-1 px-1.5 py-0.5 text-xs font-bold text-white bg-primary-500 rounded-full">
+            PRO
+          </span>
+        )}
       </div>
       
       {/* Upgrade modal */}
@@ -79,9 +80,9 @@ export default function PremiumFeatureGate({
               <h3 className="text-lg font-medium">Upgrade to Premium</h3>
               <button
                 onClick={() => setShowUpgradeModal(false)}
-                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 text-2xl leading-none"
               >
-                &times;
+                ×
               </button>
             </div>
             
@@ -94,7 +95,7 @@ export default function PremiumFeatureGate({
                 </div>
                 <div>
                   <h4 className="text-lg font-semibold">{featureName}</h4>
-                  <p className="text-gray-600 dark:text-gray-400">{description}</p>
+                  <p className="text-gray-600 dark:text-gray-400 text-sm">{description}</p>
                 </div>
               </div>
               
@@ -104,19 +105,19 @@ export default function PremiumFeatureGate({
               
               <ul className="mb-6 space-y-2 text-gray-600 dark:text-gray-400">
                 <li className="flex items-center">
-                  <svg className="w-5 h-5 mr-2 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <svg className="w-5 h-5 mr-2 text-primary-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                   <span>Generate Anki flashcards from your notes</span>
                 </li>
                 <li className="flex items-center">
-                  <svg className="w-5 h-5 mr-2 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <svg className="w-5 h-5 mr-2 text-primary-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                   <span>Improve your notes with AI structuring</span>
                 </li>
                 <li className="flex items-center">
-                  <svg className="w-5 h-5 mr-2 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <svg className="w-5 h-5 mr-2 text-primary-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                   <span>Priority support and early access to new features</span>

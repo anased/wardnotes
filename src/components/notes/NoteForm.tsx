@@ -365,17 +365,11 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
       </div>
       
       {/* Note Improver Component */}
-      {/* Replace the ENABLE_PREMIUM_FEATURES check with PremiumFeatureGate */}
       <div className="mt-4">
-        <PremiumFeatureGate
-          featureName="AI Note Improvement"
-          description="Use AI to structure and enhance your medical notes for better clarity and organization."
-        >
-          <NoteImprover 
-            content={content} 
-            onImproveSuccess={handleImprovedContent} 
-          />
-        </PremiumFeatureGate>
+        <NoteImprover 
+          content={content} 
+          onImproveSuccess={handleImprovedContent} 
+        />
       </div>
       
       <div className="flex justify-end space-x-3">

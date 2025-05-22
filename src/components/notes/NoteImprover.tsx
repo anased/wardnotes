@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase/client';
 import Button from '../ui/Button';
 import { TipTapNode } from '@/types/content';
 import { convertTipTapToPlainText } from '@/lib/utils/content-converter';
+import PremiumFeatureGate from '../premium/PremiumFeatureGate';
 
 // Define maximum character limit
 const MAX_CHARACTERS = 4000;
@@ -106,16 +107,21 @@ export default function NoteImprover({ content, onImproveSuccess }: NoteImprover
         </div>
         
         <div className="mt-2">
-          <Button
-            onClick={handleImproveNote}
-            isLoading={isLoading}
-            disabled={isOverLimit || characterCount === 0}
-            variant="outline"
-            className="flex items-center"
+          <PremiumFeatureGate
+            featureName="AI Note Improvement"
+            description="Use AI to structure and enhance your medical notes for better clarity and organization."
           >
-            <span className="mr-2">✨</span>
-            Improve Note
-          </Button>
+            <Button
+              onClick={handleImproveNote}
+              isLoading={isLoading}
+              disabled={isOverLimit || characterCount === 0}
+              variant="outline"
+              className="flex items-center"
+            >
+              <span className="mr-2">✨</span>
+              Improve Note
+            </Button>
+          </PremiumFeatureGate>
         </div>
         
         {error && (
