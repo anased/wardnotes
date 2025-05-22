@@ -72,7 +72,7 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
   const router = useRouter();
   const { addNote, editNote } = useNotes();
   const { categories, addCategory } = useCategories();
-  const { tags } = useTags();
+  const { tags, addTag } = useTags(); // Make sure we have the addTag function
   
   const [title, setTitle] = useState(initialData.title || '');
   const [content, setContent] = useState<Record<string, unknown>>(initialData.content || EMPTY_CONTENT);
@@ -128,6 +128,33 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
     } catch (err) {
       console.error('Error creating category:', err);
       throw err; // Let the modal handle the error
+    }
+  };
+
+  // New function to handle tag changes and auto-create new tags
+  const handleTagsChange = async (newTags: string[]) => {
+    try {
+      // Find tags that are new (not in the existing tags list)
+      const existingTagNames = tags.map(tag => tag.name);
+      const newTagNames = newTags.filter(tag => !existingTagNames.includes(tag));
+      
+      // Create new tags in the database
+      for (const newTagName of newTagNames) {
+        try {
+          await addTag(newTagName);
+          console.log(`Created new tag: ${newTagName}`);
+        } catch (err) {
+          // If tag creation fails (e.g., duplicate), just log it and continue
+          console.warn(`Failed to create tag "${newTagName}":`, err);
+        }
+      }
+      
+      // Update the selected tags
+      setSelectedTags(newTags);
+    } catch (err) {
+      console.error('Error handling tag changes:', err);
+      // Still update the selected tags even if some tag creation failed
+      setSelectedTags(newTags);
     }
   };
 
@@ -277,18 +304,55 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
     setContent(newContent as unknown as Record<string, unknown>);
   };
 
+  // Helper function to generate a title from content if none provided
+  const generateTitleFromContent = (content: Record<string, unknown>): string => {
+    try {
+      // Convert TipTap content to plain text
+      const tipTapContent = content as any;
+      let plainText = '';
+      
+      const extractText = (node: any): void => {
+        if (node.text) {
+          plainText += node.text;
+        } else if (node.content && Array.isArray(node.content)) {
+          node.content.forEach(extractText);
+        }
+      };
+      
+      if (tipTapContent.content) {
+        extractText(tipTapContent);
+      }
+      
+      // Take first 50 characters and clean up
+      plainText = plainText.trim();
+      if (plainText.length > 50) {
+        plainText = plainText.substring(0, 50).trim() + '...';
+      }
+      
+      // If we have content, use it as title, otherwise use a default with timestamp
+      if (plainText.length > 0) {
+        return plainText;
+      } else {
+        const now = new Date();
+        return `Note - ${now.toLocaleDateString()} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+      }
+    } catch (err) {
+      // Fallback to timestamp-based title
+      const now = new Date();
+      return `Note - ${now.toLocaleDateString()} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!title.trim()) {
-      setError('Title is required');
-      return;
-    }
     
     if (!category) {
       setError('Please select a category');
       return;
     }
+    
+    // Generate title if not provided
+    const finalTitle = title.trim() || generateTitleFromContent(content);
     
     try {
       setIsSubmitting(true);
@@ -296,7 +360,7 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
       if (isEditing && initialData.id) {
         // Update existing note
         await editNote(initialData.id, {
-          title,
+          title: finalTitle,
           content,
           tags: selectedTags,
           category,
@@ -306,7 +370,7 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
       } else {
         // Create new note
         const newNote = await addNote({
-          title,
+          title: finalTitle,
           content,
           tags: selectedTags,
           category,
@@ -331,11 +395,10 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
       )}
       
       <Input
-        label="Title"
+        label="Title (optional)"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        placeholder="Enter a descriptive title"
-        required
+        placeholder="Auto-generated from content if left empty"
       />
       
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -349,7 +412,7 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
         <TagInput
           label="Tags"
           value={selectedTags}
-          onChange={setSelectedTags}
+          onChange={handleTagsChange} // Use the new handler
           suggestions={tagSuggestions}
         />
       </div>
