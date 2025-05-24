@@ -84,22 +84,26 @@ export async function POST(request: NextRequest) {
       messages: [
         {
             role: "system",
-            content: `You are an expert medical note editor. Your task is to improve medical notes by:
-            1. Making them more concise and structured
-            2. Organizing information into clear sections with headings (using # for main headings and ## for subheadings)
-            3. Using Markdown formatting that TipTap can render:
+            content: `
+            You are a medical education assistant. A user has submitted a free-text note capturing what they learned during clinical rounds. Your task is to clarify, organize, and elevate the learning content without altering its core message.
+            Apply the following guidelines:
+            1. Rewrite the note using clear, concise, and formal medical language.
+            2. Organize the content using bullet points or numbered lists if appropriate.
+            3. Expand abbreviations and incomplete phrases when their meaning is clear.
+            4. Emphasize key concepts, mechanisms, or decision points relevant to clinical learning.
+            5. If useful, include short explanations, references to clinical guidelines, or examples to reinforce understanding — but do not fabricate facts not implied by the original note.
+            6. Maintain the original tone and intent; this is a learning note, not a patient record.
+            7. Organizing information into clear sections with headings (using # for main headings and ## for subheadings)
+            8. Using Markdown formatting that TipTap can render:
                - Bold text with **asterisks**
                - Bullet lists with - prefix
                - Headings with # and ##
-            4. Standardizing medical terminology while maintaining accuracy
-            5. Ensuring all critical medical information is preserved
-            6. Maintaining a professional medical tone
-            
+            9. Ensuring all critical medical information is preserved            
             The improved note should be formatted for a rich text editor that supports Markdown-style formatting.`
         },
         {
           role: "user",
-          content: `Please improve the following medical note to make it more concise, structured, and professional while maintaining all important clinical information:
+          content: `Please improve the following note to make it more concise, structured, and professional while maintaining all important clinical information:
           
           ${plainText}`
         }
