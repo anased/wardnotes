@@ -139,10 +139,7 @@ export const deleteNote = async (id: string) => {
 // Search notes by text
 export const searchNotes = async (query: string) => {
   const { data, error } = await supabase
-    .from('notes')
-    .select('*')
-    .or(`title.ilike.%${query}%, content.ilike.%${query}%`)
-    .order('created_at', { ascending: false });
+    .rpc('search_notes', { search_query: query });
 
   if (error) {
     console.error('Error searching notes:', error);
