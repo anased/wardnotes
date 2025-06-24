@@ -21,6 +21,12 @@ export default function MobileNav() {
         </svg>
         <span>New Note</span>
       </Link>
+      <Link href="/flashcards" className={`mobile-nav-item ${pathname === '/flashcards' ? 'active' : ''}`}>
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+        </svg>
+        <span>Flashcards</span>
+      </Link>
       <Link href="/learning-tracker" className={`mobile-nav-item ${pathname === '/learning-tracker' ? 'active' : ''}`}>
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
