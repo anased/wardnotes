@@ -28,8 +28,79 @@ export async function GET(request: NextRequest) {
     if (userError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    // Build query with filters
+    let query = supabase
+      .from('flashcards')
+      .select('*')
+      .eq('user_id', user.id);  // User filtering
+    
+    // Apply filters from search params
+    const deckId = searchParams.get('deck_id');
+    const status = searchParams.get('status');
+    const cardType = searchParams.get('card_type');
+    const searchText = searchParams.get('search');
+
+    if (deckId) {
+      query = query.eq('deck_id', deckId);
+    }
+    if (status) {
+      query = query.eq('status', status);
+    }
+    if (cardType) {
+      query = query.eq('card_type', cardType);
+    }
+    if (searchText) {
+      query = query.or(`front_content.ilike.%${searchText}%,back_content.ilike.%${searchText}%,cloze_content.ilike.%${searchText}%`);
+    }
+    query = query.order('created_at', { ascending: false });
+
+    const { data, error } = await query;
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ flashcards: data });
+  } catch (error) {
+    console.error('Error fetching flashcards:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const authHeader = request.headers.get('authorization');
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const token = authHeader.substring(7);
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    });
+
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
     const body: CreateFlashcardRequest = await request.json();
+
+    // 🔒 ADD: Verify user owns the deck
+    const { data: deck, error: deckError } = await supabase
+      .from('flashcard_decks')
+      .select('id')
+      .eq('id', body.deck_id)
+      .eq('user_id', user.id)
+      .single();
+
+    if (deckError || !deck) {
+      return NextResponse.json({ error: 'Deck not found or access denied' }, { status: 404 });
+    }
 
     const { data, error } = await supabase
       .from('flashcards')

@@ -29,10 +29,22 @@ export async function GET(request: NextRequest) {
 
     const deckId = searchParams.get('deck_id');
     const limit = parseInt(searchParams.get('limit') || '20');
+    if (deckId) {
+      const { data: deck, error: deckError } = await supabase
+        .from('flashcard_decks')
+        .select('id')
+        .eq('id', deckId)
+        .eq('user_id', user.id)
+        .single();
 
+      if (deckError || !deck) {
+        return NextResponse.json({ error: 'Deck not found or access denied' }, { status: 404 });
+      }
+    }
     let query = supabase
       .from('flashcards')
       .select('*')
+      .eq('user_id', user.id)
       .lte('next_review', new Date().toISOString())
       .neq('status', 'suspended')
       .order('next_review', { ascending: true })

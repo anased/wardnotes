@@ -29,11 +29,22 @@ export async function GET(
     if (userError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
+    const { data: deck, error: deckError } = await supabase
+      .from('flashcard_decks')
+      .select('id')
+      .eq('id', params.id)
+      .eq('user_id', user.id)
+      .single();
+    if (deckError || !deck) {
+      return NextResponse.json({ error: 'Deck not found or access denied' }, { status: 404 });
+    }
+    // Fetch flashcards for the specified deck
     const { data, error } = await supabase
       .from('flashcards')
       .select('status, next_review')
-      .eq('deck_id', params.id);
+      .eq('deck_id', params.id)
+      .eq('user_id', user.id);
+    
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

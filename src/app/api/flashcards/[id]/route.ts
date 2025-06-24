@@ -35,6 +35,7 @@ export async function GET(
       .from('flashcards')
       .select('*')
       .eq('id', params.id)
+      .eq('user_id', user.id)
       .single();
 
     if (error) {
@@ -82,6 +83,7 @@ export async function PUT(
         updated_at: new Date().toISOString()
       })
       .eq('id', params.id)
+      .eq('user_id', user.id)
       .select()
       .single();
 
@@ -124,7 +126,8 @@ export async function DELETE(
     const { error } = await supabase
       .from('flashcards')
       .delete()
-      .eq('id', params.id);
+      .eq('id', params.id)
+      .eq('user_id', user.id);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

@@ -92,6 +92,7 @@ export async function POST(request: NextRequest) {
       .from('flashcards')
       .select('*')
       .eq('id', body.flashcard_id)
+      .eq('user_id', user.id)
       .single();
 
     if (flashcardError || !flashcard) {
@@ -146,6 +147,7 @@ export async function POST(request: NextRequest) {
         updated_at: new Date().toISOString()
       })
       .eq('id', body.flashcard_id)
+      .eq('user_id', user.id)
       .select()
       .single();
 
