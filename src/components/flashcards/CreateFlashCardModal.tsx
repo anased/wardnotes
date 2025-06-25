@@ -1,8 +1,10 @@
+// Updated src/components/flashcards/CreateFlashCardModal.tsx
 import React, { useState } from 'react';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { FlashcardService } from '@/services/flashcard';
 import { DeckManagementModal } from './DeckManagementModal';
+import { ClozeEditor } from './ClozeEditor'; // Import the new component
 import type { FlashcardDeck, FlashcardType } from '@/types/flashcard';
 
 interface CreateFlashcardModalProps {
@@ -57,6 +59,12 @@ export function CreateFlashcardModal({
 
     if (cardType === 'cloze' && !clozeContent.trim()) {
       setError('Please fill in the cloze content');
+      return;
+    }
+
+    // Validate cloze content has at least one cloze deletion
+    if (cardType === 'cloze' && !clozeContent.includes('{{c')) {
+      setError('Cloze content must include at least one cloze deletion. Select text and click "Make Cloze".');
       return;
     }
 
@@ -168,6 +176,11 @@ export function CreateFlashcardModal({
               <option value="front_back">Front & Back</option>
               <option value="cloze">Cloze Deletion</option>
             </select>
+            {cardType === 'cloze' && (
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                💡 Cloze deletions are great for fill-in-the-blank style learning. Just type your content and select words to convert!
+              </p>
+            )}
           </div>
 
           {/* Card Content */}
@@ -203,23 +216,12 @@ export function CreateFlashcardModal({
               </div>
             </>
           ) : (
-            <div>
-              <label htmlFor="cloze" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Cloze Content
-              </label>
-              <textarea
-                id="cloze"
-                value={clozeContent}
-                onChange={(e) => setClozeContent(e.target.value)}
-                placeholder="Enter content with {{c1::word}} for cloze deletions"
-                rows={4}
-                className="input resize-none"
-                required
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Use {"{{c1::word}}"} syntax for cloze deletions. Example: "The {"{{c1::heart}}"} pumps {"{{c2::blood}}"} through the body."
-              </p>
-            </div>
+            <ClozeEditor
+              value={clozeContent}
+              onChange={setClozeContent}
+              placeholder="Enter your content, then select text and click 'Make Cloze' to create cloze deletions"
+              rows={5}
+            />
           )}
 
           {/* Tags */}

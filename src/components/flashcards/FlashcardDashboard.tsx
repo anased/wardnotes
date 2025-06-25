@@ -1,10 +1,11 @@
-// src/components/flashcards/FlashcardDashboard.tsx
+// Updated src/components/flashcards/FlashcardDashboard.tsx
 import React, { useState, useEffect } from 'react';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { DeckView } from './DeckView';
 import { CreateFlashcardModal } from './CreateFlashCardModal';
 import { StudySession } from './StudySession';
+import { DeckManagementModal } from './DeckManagementModal';
 import { FlashcardService } from '@/services/flashcard';
 import type { FlashcardDeck, DeckStats, StudySessionStats } from '@/types/flashcard';
 
@@ -13,6 +14,8 @@ export function FlashcardDashboard() {
   const [deckStats, setDeckStats] = useState<Record<string, DeckStats>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isDeckManagementOpen, setIsDeckManagementOpen] = useState(false);
+  const [editingDeck, setEditingDeck] = useState<FlashcardDeck | null>(null);
   const [studyingDeck, setStudyingDeck] = useState<FlashcardDeck | null>(null);
   const [analytics, setAnalytics] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -77,6 +80,33 @@ export function FlashcardDashboard() {
     setStudyingDeck(deck);
   };
 
+  const handleEditDeck = (deck: FlashcardDeck) => {
+    setEditingDeck(deck);
+    setIsDeckManagementOpen(true);
+  };
+
+  const handleDeleteDeck = async (deck: FlashcardDeck) => {
+    // Prevent deletion of default deck
+    if (deck.name === 'Default Deck') {
+      alert('Cannot delete the default deck');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${deck.name}"?\n\nThis will permanently delete the deck and all its flashcards. This action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await FlashcardService.deleteDeck(deck.id);
+      await loadDecks(); // Refresh the deck list
+    } catch (error) {
+      console.error('Failed to delete deck:', error);
+      alert('Failed to delete deck. Please try again.');
+    }
+  };
+
   const handleSessionComplete = (stats: StudySessionStats) => {
     setStudyingDeck(null);
     loadDecks(); // Refresh deck stats
@@ -85,6 +115,15 @@ export function FlashcardDashboard() {
 
   const handleSessionPause = () => {
     setStudyingDeck(null);
+  };
+
+  const handleDeckManagementClose = () => {
+    setIsDeckManagementOpen(false);
+    setEditingDeck(null);
+  };
+
+  const handleDeckCreatedOrUpdated = () => {
+    loadDecks(); // Refresh the deck list
   };
 
   if (studyingDeck) {
@@ -169,14 +208,14 @@ export function FlashcardDashboard() {
         <div className="card p-4">
           <div className="flex items-center space-x-2">
             <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
             </svg>
             <div>
               <div className="text-2xl font-bold text-orange-600">
-                {analytics?.streak || 0}
+                {totalStats.totalCards}
               </div>
               <div className="text-sm text-gray-600 dark:text-gray-400">
-                Day Streak
+                Total Cards
               </div>
             </div>
           </div>
@@ -185,31 +224,19 @@ export function FlashcardDashboard() {
 
       {/* Search */}
       <div className="mb-6">
-        <div className="relative">
-          <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <Input
-            placeholder="Search decks..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
-        </div>
+        <Input
+          type="text"
+          placeholder="Search decks..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10"
+        />
       </div>
 
-      {/* Decks Grid */}
+      {/* Deck Grid */}
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="card p-6 animate-pulse">
-              <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4 mb-4"></div>
-              <div className="space-y-2">
-                <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-full"></div>
-                <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded w-2/3"></div>
-              </div>
-            </div>
-          ))}
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
       ) : filteredDecks.length === 0 ? (
         <div className="card p-8 text-center">
@@ -238,8 +265,8 @@ export function FlashcardDashboard() {
                 suspendedCards: 0
               }}
               onStartStudy={() => handleStartStudy(deck)}
-              onEditDeck={() => {}} // TODO: Implement edit deck
-              onDeleteDeck={() => {}} // TODO: Implement delete deck
+              onEditDeck={() => handleEditDeck(deck)}
+              onDeleteDeck={() => handleDeleteDeck(deck)}
             />
           ))}
         </div>
@@ -251,6 +278,14 @@ export function FlashcardDashboard() {
         onClose={() => setIsCreateModalOpen(false)}
         decks={decks}
         onFlashcardCreated={loadDecks}
+      />
+
+      {/* Deck Management Modal */}
+      <DeckManagementModal
+        isOpen={isDeckManagementOpen}
+        onClose={handleDeckManagementClose}
+        onDeckCreated={handleDeckCreatedOrUpdated}
+        editingDeck={editingDeck}
       />
     </div>
   );

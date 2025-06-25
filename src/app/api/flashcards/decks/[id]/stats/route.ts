@@ -64,6 +64,7 @@ export async function GET(
       switch (card.status) {
         case 'new':
           stats.newCards++;
+          stats.dueCards++;
           break;
         case 'learning':
           stats.learningCards++;

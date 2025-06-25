@@ -111,7 +111,7 @@ export class FlashcardService {
       .from('flashcards')
       .select('status, next_review')
       .eq('deck_id', deckId)
-      .eq('user_id', user.id);  // Add user filter
+      .eq('user_id', user.id);
     
     if (error) throw error;
     
@@ -129,6 +129,7 @@ export class FlashcardService {
       switch (card.status) {
         case 'new':
           stats.newCards++;
+          stats.dueCards++; // ✅ NEW CARDS SHOULD BE DUE!
           break;
         case 'learning':
           stats.learningCards++;
