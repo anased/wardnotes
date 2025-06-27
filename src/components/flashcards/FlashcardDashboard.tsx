@@ -1,4 +1,4 @@
-// Updated src/components/flashcards/FlashcardDashboard.tsx
+// src/components/flashcards/FlashcardDashboard.tsx
 import React, { useState, useEffect } from 'react';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -6,6 +6,7 @@ import { DeckView } from './DeckView';
 import { CreateFlashcardModal } from './CreateFlashCardModal';
 import { StudySession } from './StudySession';
 import { DeckManagementModal } from './DeckManagementModal';
+import { FlashcardListView } from './FlashcardListView';
 import { FlashcardService } from '@/services/flashcard';
 import type { FlashcardDeck, DeckStats, StudySessionStats } from '@/types/flashcard';
 
@@ -17,6 +18,7 @@ export function FlashcardDashboard() {
   const [isDeckManagementOpen, setIsDeckManagementOpen] = useState(false);
   const [editingDeck, setEditingDeck] = useState<FlashcardDeck | null>(null);
   const [studyingDeck, setStudyingDeck] = useState<FlashcardDeck | null>(null);
+  const [viewingCardsDeck, setViewingCardsDeck] = useState<FlashcardDeck | null>(null);
   const [analytics, setAnalytics] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -85,6 +87,10 @@ export function FlashcardDashboard() {
     setIsDeckManagementOpen(true);
   };
 
+  const handleViewCards = (deck: FlashcardDeck) => {
+    setViewingCardsDeck(deck);
+  };
+
   const handleDeleteDeck = async (deck: FlashcardDeck) => {
     // Prevent deletion of default deck
     if (deck.name === 'Default Deck') {
@@ -126,6 +132,10 @@ export function FlashcardDashboard() {
     loadDecks(); // Refresh the deck list
   };
 
+  const handleFlashcardUpdated = () => {
+    loadDecks(); // Refresh deck stats when flashcards are updated
+  };
+
   if (studyingDeck) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -151,16 +161,16 @@ export function FlashcardDashboard() {
           <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          Create Flashcard
+          New Flashcard
         </Button>
       </div>
 
-      {/* Overview Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+      {/* Stats Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="card p-4">
           <div className="flex items-center space-x-2">
             <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <div>
               <div className="text-2xl font-bold text-blue-600">
@@ -176,27 +186,11 @@ export function FlashcardDashboard() {
         <div className="card p-4">
           <div className="flex items-center space-x-2">
             <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <div>
               <div className="text-2xl font-bold text-green-600">
-                {totalStats.newCards}
-              </div>
-              <div className="text-sm text-gray-600 dark:text-gray-400">
-                New Cards
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="card p-4">
-          <div className="flex items-center space-x-2">
-            <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-            <div>
-              <div className="text-2xl font-bold text-purple-600">
-                {analytics?.accuracy ? Math.round(analytics.accuracy) : 0}%
+                {analytics ? Math.round(analytics.accuracy) : 0}%
               </div>
               <div className="text-sm text-gray-600 dark:text-gray-400">
                 Accuracy
@@ -267,6 +261,7 @@ export function FlashcardDashboard() {
               onStartStudy={() => handleStartStudy(deck)}
               onEditDeck={() => handleEditDeck(deck)}
               onDeleteDeck={() => handleDeleteDeck(deck)}
+              onViewCards={() => handleViewCards(deck)}
             />
           ))}
         </div>
@@ -287,6 +282,16 @@ export function FlashcardDashboard() {
         onDeckCreated={handleDeckCreatedOrUpdated}
         editingDeck={editingDeck}
       />
+
+      {/* Flashcard List View Modal */}
+      {viewingCardsDeck && (
+        <FlashcardListView
+          deck={viewingCardsDeck}
+          isOpen={!!viewingCardsDeck}
+          onClose={() => setViewingCardsDeck(null)}
+          onFlashcardUpdated={handleFlashcardUpdated}
+        />
+      )}
     </div>
   );
 }

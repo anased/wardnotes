@@ -63,14 +63,10 @@ export default function AuthRedirectHandler() {
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
       console.log("Auth state change event:", event);
       
+      // Only handle notifications here, let useAuth handle redirects
       if (event === 'SIGNED_IN' && session) {
-        console.log("User signed in, redirecting to dashboard");
+        console.log("User signed in");
         showNotification("Successfully signed in!", "success");
-        
-        // Use a slight delay to ensure state is updated
-        setTimeout(() => {
-          router.push('/dashboard');
-        }, 100);
       }
     });
     

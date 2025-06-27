@@ -35,13 +35,20 @@ export default function useAuth() {
         setUser(newSession?.user ?? null);
         setLoading(false);
         
-        // On sign-in, redirect to dashboard
+        // On sign-in, redirect to dashboard ONLY if currently on auth page
         if (event === 'SIGNED_IN' && newSession) {
-          console.log('User signed in, redirecting to dashboard');
-          // Use a slight delay to ensure state is updated
-          setTimeout(() => {
-            router.push('/dashboard');
-          }, 100);
+          console.log('User signed in, checking current route');
+          
+          // Only redirect if we're on an auth-related page
+          const currentPath = window.location.pathname;
+          if (currentPath.startsWith('/auth') || currentPath === '/') {
+            console.log('Redirecting from auth page to dashboard');
+            setTimeout(() => {
+              router.push('/dashboard');
+            }, 100);
+          } else {
+            console.log('User already on protected page, not redirecting');
+          }
         }
         
         // On sign-out, redirect to home
