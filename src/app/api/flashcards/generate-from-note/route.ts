@@ -78,11 +78,16 @@ export async function POST(request: NextRequest) {
           .select()
           .single();
         
-        if (createError) {
+        if (createError || !newDeck) {
           return NextResponse.json({ error: 'Failed to create default deck' }, { status: 500 });
         }
         
         defaultDeck = newDeck;
+      }
+      
+      // Explicit null check to satisfy TypeScript
+      if (!defaultDeck) {
+        return NextResponse.json({ error: 'Failed to get or create default deck' }, { status: 500 });
       }
       
       deckId = defaultDeck.id;

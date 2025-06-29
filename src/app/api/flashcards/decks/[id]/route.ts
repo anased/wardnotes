@@ -7,9 +7,10 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const params = await context.params;
     const authHeader = request.headers.get('authorization');
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -53,9 +54,10 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const params = await context.params;
     const authHeader = request.headers.get('authorization');
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -113,9 +115,10 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const params = await context.params;
     const authHeader = request.headers.get('authorization');
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -136,36 +139,30 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // First, check if the deck exists and belongs to the user
-    const { data: deck, error: deckError } = await supabase
+    // First check if the deck exists and belongs to the user
+    const { data: deck, error: fetchError } = await supabase
       .from('flashcard_decks')
-      .select('id, name')
+      .select('name')
       .eq('id', params.id)
       .eq('user_id', user.id)
       .single();
 
-    if (deckError || !deck) {
+    if (fetchError || !deck) {
       return NextResponse.json({ error: 'Deck not found or access denied' }, { status: 404 });
     }
 
-    // Check if this is the default deck (prevent deletion)
-    if (deck.name === 'Default Deck') {
-      return NextResponse.json({ error: 'Cannot delete the default deck' }, { status: 400 });
-    }
-
-    // Get count of flashcards in this deck
+    // Get the count of flashcards in this deck
     const { count: cardCount, error: countError } = await supabase
       .from('flashcards')
-      .select('*', { count: 'exact', head: true })
+      .select('id', { count: 'exact' })
       .eq('deck_id', params.id)
       .eq('user_id', user.id);
 
     if (countError) {
-      console.error('Error counting cards in deck:', countError);
-      return NextResponse.json({ error: 'Error checking deck contents' }, { status: 500 });
+      console.warn('Could not get card count:', countError);
     }
 
-    // Delete all flashcards in the deck first (cascade delete)
+    // Delete all flashcards in this deck first
     if (cardCount && cardCount > 0) {
       const { error: deleteCardsError } = await supabase
         .from('flashcards')
