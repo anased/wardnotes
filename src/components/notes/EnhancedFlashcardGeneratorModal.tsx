@@ -116,18 +116,19 @@ export function EnhancedFlashcardGeneratorModal({
     }
   }, [noteId, cardType, selectedDeckId]);
 
-  // Generate and save flashcards using the new API
-  const generateAndSaveFlashcards = async () => {
+  // Save the EXISTING preview flashcards instead of generating new ones
+  const savePreviewFlashcards = async () => {
     try {
       setStatus('loading');
       setError('');
 
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        throw new Error('You must be logged in to generate flashcards');
+        throw new Error('You must be logged in to save flashcards');
       }
 
-      const response = await fetch('/api/flashcards/generate-from-note', {
+      // Use the new API endpoint that saves from preview
+      const response = await fetch('/api/flashcards/save-from-preview', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -135,15 +136,14 @@ export function EnhancedFlashcardGeneratorModal({
         },
         body: JSON.stringify({
           note_id: noteId,
-          card_type: cardType,
           deck_id: selectedDeckId,
-          max_cards: maxCards
+          card_type: cardType
         })
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate flashcards');
+        throw new Error(errorData.error || 'Failed to save flashcards');
       }
 
       const data = await response.json();
@@ -151,116 +151,114 @@ export function EnhancedFlashcardGeneratorModal({
       setStatus('saved');
       setActiveTab('review');
     } catch (err) {
-      console.error('Error generating flashcards:', err);
-      setError(err instanceof Error ? err.message : 'Failed to generate flashcards');
+      console.error('Error saving flashcards:', err);
+      setError(err instanceof Error ? err.message : 'Failed to save flashcards');
       setStatus('error');
     }
   };
 
-  // Download traditional Anki export
-  const downloadAnkiExport = async () => {
-    try {
-      setStatus('loading');
-      
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error('You must be logged in to download flashcards');
-      }
-
-      const response = await fetch(`/api/generate-flashcards?noteId=${noteId}`, {
-        credentials: 'include',
-        headers: {
-          'Authorization': `Bearer ${session.access_token}`
-        }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to download flashcards');
-      }
-
-      const textContent = await response.text();
-      const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
-      const url = window.URL.createObjectURL(blob);
-      
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${noteTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_flashcards.txt`;
-      document.body.appendChild(a);
-      a.click();
-      
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      
-      setStatus('preview');
-    } catch (err) {
-      console.error('Error downloading flashcards:', err);
-      setError(err instanceof Error ? err.message : 'Failed to download flashcards');
-      setStatus('error');
-    }
-  };
-
-  const renderFlashcardPreview = (card: Flashcard, index: number) => {
-    if (card.card_type === 'cloze') {
-      const highlightedText = card.cloze_content?.replace(
-        /(\{\{c\d+::.*?(?:::.*?)?\}\})/g, 
-        '<span class="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-1 rounded font-medium">$1</span>'
-      );
-      
-      return (
-        <div key={index} className="card p-4 mb-4">
-          <div className="flex justify-between items-start mb-2">
-            <span className="tag text-xs">
-              Cloze Deletion
-            </span>
-            <span className="text-xs text-gray-500">#{index + 1}</span>
-          </div>
-          <div 
-            className="text-sm leading-relaxed"
-            dangerouslySetInnerHTML={{ __html: highlightedText || '' }} 
-          />
-        </div>
-      );
+  // Generate and save flashcards in one step (for backward compatibility)
+  const generateAndSaveFlashcards = async () => {
+    if (previewCards.length > 0) {
+      // If we have preview cards, just save them
+      await savePreviewFlashcards();
     } else {
-      return (
-        <div key={index} className="card p-4 mb-4">
-          <div className="flex justify-between items-start mb-2">
-            <span className="tag text-xs">
-              Front & Back
-            </span>
-            <span className="text-xs text-gray-500">#{index + 1}</span>
-          </div>
-          <div className="space-y-3">
-            <div>
-              <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                Front:
-              </div>
-              <div className="text-sm">{card.front_content}</div>
-            </div>
-            <div className="border-t pt-3">
-              <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-                Back:
-              </div>
-              <div className="text-sm text-blue-600 dark:text-blue-400">
-                {card.back_content}
-              </div>
-            </div>
-          </div>
-        </div>
-      );
+      // Otherwise, generate new ones (fallback)
+      try {
+        setStatus('loading');
+        setError('');
+
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          throw new Error('You must be logged in to generate flashcards');
+        }
+
+        const response = await fetch('/api/flashcards/generate-from-note', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({
+            note_id: noteId,
+            card_type: cardType,
+            deck_id: selectedDeckId,
+            max_cards: maxCards
+          })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to generate flashcards');
+        }
+
+        const data = await response.json();
+        setGeneratedCards(data.flashcards);
+        setStatus('saved');
+        setActiveTab('review');
+      } catch (err) {
+        console.error('Error generating flashcards:', err);
+        setError(err instanceof Error ? err.message : 'Failed to generate flashcards');
+        setStatus('error');
+      }
     }
   };
+
+  const downloadForAnki = () => {
+    const cards = previewCards.length > 0 ? previewCards : generatedCards;
+    if (cards.length === 0) return;
+
+    const ankiText = cards.map(card => {
+      if (card.cloze_content) {
+        return card.cloze_content;
+      } else if (card.front_content && card.back_content) {
+        return `${card.front_content}\t${card.back_content}`;
+      }
+      return '';
+    }).filter(Boolean).join('\n');
+
+    const blob = new Blob([ankiText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${noteTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_flashcards.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const renderFlashcardPreview = (card: Flashcard, index: number) => (
+    <div key={card.id || index} className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg mb-3">
+      {card.cloze_content ? (
+        <div>
+          <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Cloze Card {index + 1}</div>
+          <div className="font-medium">{card.cloze_content}</div>
+        </div>
+      ) : (
+        <div>
+          <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Card {index + 1}</div>
+          <div className="mb-2">
+            <strong>Front:</strong> {card.front_content}
+          </div>
+          <div>
+            <strong>Back:</strong> {card.back_content}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
-      <div className="w-full max-w-4xl bg-white rounded-lg shadow-lg dark:bg-gray-800 max-h-[80vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-          <h3 className="text-lg font-medium">Enhanced Flashcard Generator</h3>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+            Generate Flashcards: {noteTitle}
+          </h2>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -270,37 +268,42 @@ export function EnhancedFlashcardGeneratorModal({
 
         {/* Tab Navigation */}
         <div className="border-b border-gray-200 dark:border-gray-700">
-          <div className="flex">
+          <nav className="flex space-x-8 px-6">
             {['generate', 'preview', 'review'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`px-6 py-3 text-sm font-medium capitalize border-b-2 ${
+                className={`py-4 px-1 border-b-2 font-medium text-sm capitalize ${
                   activeTab === tab
-                    ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
                     : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
                 }`}
               >
                 {tab}
               </button>
             ))}
-          </div>
+          </nav>
         </div>
 
-        <div className="p-6">
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-160px)]">
+          {error && (
+            <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+              <p className="text-red-600 dark:text-red-400">{error}</p>
+            </div>
+          )}
+
           {/* Generate Tab */}
           {activeTab === 'generate' && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
-                  <label htmlFor="cardType" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Card Type
                   </label>
                   <select
-                    id="cardType"
                     value={cardType}
                     onChange={(e) => setCardType(e.target.value as FlashcardType)}
-                    className="input"
+                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   >
                     <option value="cloze">Cloze Deletion</option>
                     <option value="front_back">Front & Back</option>
@@ -308,17 +311,15 @@ export function EnhancedFlashcardGeneratorModal({
                 </div>
 
                 <div>
-                  <label htmlFor="deck" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Target Deck
                   </label>
                   <select
-                    id="deck"
                     value={selectedDeckId}
                     onChange={(e) => setSelectedDeckId(e.target.value)}
-                    className="input"
+                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   >
-                    <option value="">Select a deck</option>
-                    {decks.map(deck => (
+                    {decks.map((deck) => (
                       <option key={deck.id} value={deck.id}>
                         {deck.name}
                       </option>
@@ -327,25 +328,25 @@ export function EnhancedFlashcardGeneratorModal({
                 </div>
 
                 <div>
-                  <label htmlFor="maxCards" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Maximum Cards
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Max Cards
                   </label>
                   <Input
-                    id="maxCards"
                     type="number"
-                    min="1"
-                    max="50"
                     value={maxCards}
                     onChange={(e) => setMaxCards(parseInt(e.target.value) || 10)}
+                    min={1}
+                    max={50}
+                    className="w-full"
                   />
                 </div>
               </div>
 
-              <div className="flex space-x-2">
+              <div className="flex space-x-3">
                 <Button 
                   onClick={generatePreview}
                   disabled={status === 'loading' || !selectedDeckId}
-                  className="flex-1"
+                  variant="outline"
                 >
                   {status === 'loading' ? (
                     <>
@@ -378,7 +379,7 @@ export function EnhancedFlashcardGeneratorModal({
                       <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                       </svg>
-                      Create & Save
+                      {previewCards.length > 0 ? 'Save Previewed Cards' : 'Create & Save'}
                     </>
                   )}
                 </Button>
@@ -389,9 +390,9 @@ export function EnhancedFlashcardGeneratorModal({
                   Enhanced Flashcard System
                 </h4>
                 <ul className="text-sm text-blue-700 dark:text-blue-400 space-y-1">
+                  <li>• <strong>Preview First:</strong> Generate and review cards before saving</li>
                   <li>• <strong>Integrated Study System:</strong> Cards saved directly for spaced repetition</li>
                   <li>• <strong>Progress Tracking:</strong> Review history and performance analytics</li>
-                  <li>• <strong>Mobile Compatible:</strong> Study on web and mobile apps</li>
                   <li>• <strong>Legacy Support:</strong> Still supports traditional Anki export</li>
                 </ul>
               </div>
@@ -410,29 +411,25 @@ export function EnhancedFlashcardGeneratorModal({
                 </div>
               )}
 
-              {status === 'error' && (
-                <div className="p-4 text-red-700 bg-red-100 rounded-lg dark:bg-red-900 dark:text-red-200">
-                  <p>Error: {error}</p>
-                  <Button onClick={generatePreview} className="mt-4" variant="outline">
-                    Try Again
-                  </Button>
-                </div>
-              )}
-
               {status === 'preview' && previewCards.length > 0 && (
                 <div>
-                  <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-medium">
-                      Preview ({previewCards.length} cards)
-                    </h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                        Preview: {previewCards.length} Flashcards
+                      </h3>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Review the generated flashcards before saving to your deck
+                      </p>
+                    </div>
                     <div className="flex space-x-2">
-                      <Button onClick={downloadAnkiExport} variant="outline">
+                      <Button variant="outline" onClick={downloadForAnki}>
                         <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                         Download for Anki
                       </Button>
-                      <Button onClick={generateAndSaveFlashcards}>
+                      <Button onClick={savePreviewFlashcards}>
                         <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                         </svg>
@@ -444,6 +441,15 @@ export function EnhancedFlashcardGeneratorModal({
                   <div className="max-h-96 overflow-y-auto">
                     {previewCards.map((card, index) => renderFlashcardPreview(card, index))}
                   </div>
+                </div>
+              )}
+
+              {status === 'error' && (
+                <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                  <p className="text-red-600 dark:text-red-400">{error}</p>
+                  <Button onClick={generatePreview} className="mt-4" variant="outline">
+                    Try Again
+                  </Button>
                 </div>
               )}
 
