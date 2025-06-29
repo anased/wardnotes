@@ -297,6 +297,43 @@ export class FlashcardService {
     return data || [];
   }
   
+  static async getFlashcardsDue(deckId?: string, limit: number = 50): Promise<Flashcard[]> {
+    return this.getDueCards(deckId, limit);
+  }
+  
+  static async getNewFlashcards(deckId?: string, limit: number = 20): Promise<Flashcard[]> {
+    const user = await this.getAuthenticatedUser();
+    
+    let query = supabase
+      .from('flashcards')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('status', 'new')
+      .order('created_at', { ascending: true })
+      .limit(limit);
+    
+    if (deckId) {
+      query = query.eq('deck_id', deckId);
+    }
+    
+    const { data, error } = await query;
+    
+    if (error) throw error;
+    return data || [];
+  }
+
+  static async getStudyCards(deckId?: string, maxDue: number = 30, maxNew: number = 10): Promise<Flashcard[]> {
+    const [dueCards, newCards] = await Promise.all([
+      this.getFlashcardsDue(deckId, maxDue),
+      this.getNewFlashcards(deckId, maxNew)
+    ]);
+    
+    // Combine and shuffle
+    const allCards = [...dueCards, ...newCards];
+    return allCards.sort(() => Math.random() - 0.5);
+  }
+
+
   // ======================
   // Review System
   // ======================
@@ -359,6 +396,14 @@ export class FlashcardService {
     return updatedFlashcard;
   }
   
+  static async submitReviewById(flashcardId: string, quality: ReviewQuality, responseTime?: number): Promise<Flashcard> {
+    return this.submitReview({
+      flashcard_id: flashcardId,
+      quality,
+      response_time: responseTime
+    });
+  }
+
   static async getReviewHistory(flashcardId: string): Promise<FlashcardReview[]> {
     const user = await this.getAuthenticatedUser();
     

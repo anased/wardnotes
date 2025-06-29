@@ -1,5 +1,7 @@
+// src/components/flashcards/ClozeEditor.tsx
 import React, { useState, useRef, useCallback } from 'react';
 import Button from '@/components/ui/Button';
+import { extractClozeNumbers, previewClozeCard } from '@//lib/utils/clozeUtils';
 
 interface ClozeEditorProps {
   value: string;
@@ -63,14 +65,8 @@ export function ClozeEditor({ value, onChange, placeholder, rows = 4 }: ClozeEdi
     setClozeCounter(1);
   }, [value, onChange]);
 
-  const previewCloze = useCallback(() => {
-    if (!value.includes('{{c')) {
-      return value;
-    }
-    
-    // Show blanks for preview
-    return value.replace(/\{\{c\d+::(.*?)(?:::.*?)?\}\}/g, '[...]');
-  }, [value]);
+  // Get all cloze numbers in the current content
+  const clozeNumbers = extractClozeNumbers(value);
 
   return (
     <div className="space-y-3">
@@ -123,38 +119,72 @@ export function ClozeEditor({ value, onChange, placeholder, rows = 4 }: ClozeEdi
         <p>
           <strong>Next cloze number:</strong> c{clozeCounter}
         </p>
+        {clozeNumbers.length > 1 && (
+          <p className="text-blue-600 dark:text-blue-400">
+            <strong>Multiple clozes detected!</strong> This will create {clozeNumbers.length} separate flashcards.
+          </p>
+        )}
       </div>
 
       {/* Preview */}
       {value && (
         <div className="mt-3">
           <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">
-            Preview (how it will look during study):
+            Preview (how cards will look during study):
           </div>
-          <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border text-sm">
-            {value.includes('{{c') ? (
-              <div>
-                <div className="mb-2">
-                  <span className="text-xs text-gray-500">Question view:</span>
-                  <div className="mt-1">{previewCloze()}</div>
+          
+          {value.includes('{{c') ? (
+            <div className="space-y-3">
+              {clozeNumbers.length > 0 ? (
+                clozeNumbers.map((clozeNum, index) => (
+                  <div key={clozeNum} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border">
+                    <div className="text-xs text-gray-500 mb-2">
+                      Card {index + 1} of {clozeNumbers.length} (Testing cloze c{clozeNum}):
+                    </div>
+                    <div className="mb-2">
+                      <span className="text-xs text-gray-500">Question view:</span>
+                      <div className="mt-1 text-sm">{previewClozeCard(value, clozeNum)}</div>
+                    </div>
+                    <div>
+                      <span className="text-xs text-gray-500">Answer view:</span>
+                      <div 
+                        className="mt-1 text-sm"
+                        dangerouslySetInnerHTML={{
+                          __html: value.replace(
+                            /\{\{c\d+::(.*?)(?:::.*?)?\}\}/g,
+                            '<span class="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-1 rounded font-semibold">$1</span>'
+                          )
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border text-sm">
+                  <div className="mb-2">
+                    <span className="text-xs text-gray-500">Question view:</span>
+                    <div className="mt-1">{value.replace(/\{\{c\d+::(.*?)(?:::.*?)?\}\}/g, '[...]')}</div>
+                  </div>
+                  <div>
+                    <span className="text-xs text-gray-500">Answer view:</span>
+                    <div 
+                      className="mt-1"
+                      dangerouslySetInnerHTML={{
+                        __html: value.replace(
+                          /\{\{c\d+::(.*?)(?:::.*?)?\}\}/g,
+                          '<span class="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-1 rounded font-semibold">$1</span>'
+                        )
+                      }}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <span className="text-xs text-gray-500">Answer view:</span>
-                  <div 
-                    className="mt-1"
-                    dangerouslySetInnerHTML={{
-                      __html: value.replace(
-                        /\{\{c\d+::(.*?)(?:::.*?)?\}\}/g,
-                        '<span class="bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-1 rounded font-semibold">$1</span>'
-                      )
-                    }}
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="text-gray-500">No cloze deletions yet. Select text and click "Make Cloze" to add them.</div>
-            )}
-          </div>
+              )}
+            </div>
+          ) : (
+            <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border text-sm text-gray-500">
+              No cloze deletions yet. Select text and click "Make Cloze" to add them.
+            </div>
+          )}
         </div>
       )}
     </div>
