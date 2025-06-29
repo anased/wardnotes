@@ -4,10 +4,10 @@ import Button from '@/components/ui/Button';
 import { FlashcardView } from './FlashcardView';
 import { FlashcardService } from '@/services/flashcard';
 import { splitClozeCard, extractClozeNumbers } from '@/lib/utils/clozeUtils';
-import type { Flashcard, ReviewQuality, StudySessionStats } from '@/types/flashcard';
+import type { Flashcard, FlashcardDeck, ReviewQuality, StudySessionStats } from '@/types/flashcard';
 
 interface StudySessionProps {
-  deckId: string;
+  deck: FlashcardDeck; // Change from deckId to deck to match existing usage
   onSessionComplete: (stats: StudySessionStats) => void;
   onSessionPause: () => void;
 }
@@ -18,7 +18,7 @@ interface StudyCard {
   totalClozes?: number;  // Total number of clozes in the original card
 }
 
-export function StudySession({ deckId, onSessionComplete, onSessionPause }: StudySessionProps) {
+export function StudySession({ deck, onSessionComplete, onSessionPause }: StudySessionProps) {
   const [studyCards, setStudyCards] = useState<StudyCard[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
@@ -69,11 +69,11 @@ export function StudySession({ deckId, onSessionComplete, onSessionPause }: Stud
         setIsLoading(true);
         
         // Start the session
-        const session = await FlashcardService.startStudySession(deckId, 'review');
+        const session = await FlashcardService.startStudySession(deck.id, 'review');
         setSessionId(session.id);
         
         // Get cards due for review
-        const flashcards = await FlashcardService.getFlashcardsDue(deckId);
+        const flashcards = await FlashcardService.getFlashcardsDue(deck.id);
         
         // Convert to study cards and shuffle
         const studyCards = createStudyCards(flashcards);
@@ -95,7 +95,7 @@ export function StudySession({ deckId, onSessionComplete, onSessionPause }: Stud
     };
 
     initializeSession();
-  }, [deckId, onSessionComplete, createStudyCards]);
+  }, [deck.id, onSessionComplete, createStudyCards]);
 
   const currentStudyCard = useMemo(() => {
     return studyCards[currentIndex] || null;
