@@ -17,6 +17,7 @@ const TagInput = forwardRef<TagInputHandle, TagInputProps>(
     const [inputValue, setInputValue] = useState('');
     const [filteredSuggestions, setFilteredSuggestions] = useState<string[]>([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
+    const [isSelectingSuggestion, setIsSelectingSuggestion] = useState(false); // New state to track suggestion selection
     const inputRef = useRef<HTMLInputElement>(null);
     const suggestionsRef = useRef<HTMLDivElement>(null);
 
@@ -63,6 +64,7 @@ const TagInput = forwardRef<TagInputHandle, TagInputProps>(
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       setInputValue(e.target.value);
+      setIsSelectingSuggestion(false); // Reset selection flag when user types
       if (e.target.value.trim()) {
         setShowSuggestions(true);
       }
@@ -79,6 +81,7 @@ const TagInput = forwardRef<TagInputHandle, TagInputProps>(
       
       setInputValue('');
       setShowSuggestions(false);
+      setIsSelectingSuggestion(false); // Reset selection flag
     };
 
     const removeTag = (tagToRemove: string) => {
@@ -104,21 +107,30 @@ const TagInput = forwardRef<TagInputHandle, TagInputProps>(
     };
 
     const handleBlur = () => {
-      // Add tag on blur if there's input
-      if (inputValue) {
+      // Only add tag on blur if user is not selecting a suggestion and there's input
+      if (!isSelectingSuggestion && inputValue.trim()) {
         addTag(inputValue);
       }
+      
       // Don't hide suggestions immediately to allow clicking on them
       setTimeout(() => {
         if (!suggestionsRef.current?.contains(document.activeElement)) {
           setShowSuggestions(false);
+          setIsSelectingSuggestion(false);
         }
       }, 200);
     };
 
     const handleSuggestionClick = (suggestion: string) => {
+      setIsSelectingSuggestion(true); // Set flag before adding tag
       addTag(suggestion);
       inputRef.current?.focus();
+    };
+
+    // Handle mousedown on suggestions to prevent blur from interfering
+    const handleSuggestionMouseDown = (e: React.MouseEvent) => {
+      e.preventDefault(); // Prevent blur from being triggered
+      setIsSelectingSuggestion(true);
     };
 
     return (
@@ -175,6 +187,7 @@ const TagInput = forwardRef<TagInputHandle, TagInputProps>(
                   <li 
                     key={suggestion}
                     className="px-3 py-2 text-sm cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700"
+                    onMouseDown={handleSuggestionMouseDown} // Prevent blur on mousedown
                     onClick={() => handleSuggestionClick(suggestion)}
                   >
                     {suggestion}
