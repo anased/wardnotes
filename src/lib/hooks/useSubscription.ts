@@ -123,17 +123,6 @@ export function useSubscription() {
     };
     
     fetchSubscription();
-    
-    // Also set up a subscription to auth state changes
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
-        fetchSubscription();
-      }
-    });
-    
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
   }, []);
 
   // Function to redirect to Stripe Checkout
@@ -225,12 +214,49 @@ export function useSubscription() {
     }
   };
 
+  // Function to manually refresh subscription data
+  const refreshSubscription = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Get the current user's session
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        setSubscription(null);
+        return;
+      }
+      
+      // Get user's subscription
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .maybeSingle();
+      
+      if (error) {
+        throw error;
+      }
+      
+      if (data) {
+        setSubscription(data as Subscription);
+      }
+    } catch (err) {
+      console.error('Error refreshing subscription:', err);
+      setError(err as Error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return {
     subscription,
     isPremium,
     loading,
     error,
     redirectToCheckout,
-    manageBilling
+    manageBilling,
+    refreshSubscription
   };
 }

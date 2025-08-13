@@ -64,7 +64,8 @@ export default function AuthRedirectHandler() {
       console.log("Auth state change event:", event);
       
       // Only handle notifications here, let useAuth handle redirects
-      if (event === 'SIGNED_IN' && session) {
+      // Also prevent duplicate notifications by checking if we're in a redirect scenario
+      if (event === 'SIGNED_IN' && session && !window.location.hash.includes('access_token')) {
         console.log("User signed in");
         showNotification("Successfully signed in!", "success");
       }

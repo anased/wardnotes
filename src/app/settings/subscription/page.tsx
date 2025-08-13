@@ -13,7 +13,7 @@ import { useNotification } from '@/lib/context/NotificationContext';
 
 export default function SubscriptionPage() {
   const { user, loading: authLoading } = useAuth();
-  const { subscription, isPremium, loading: subscriptionLoading, redirectToCheckout, manageBilling } = useSubscription();
+  const { subscription, isPremium, loading: subscriptionLoading, redirectToCheckout, manageBilling, refreshSubscription } = useSubscription();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { showNotification } = useNotification();
@@ -38,6 +38,8 @@ export default function SubscriptionPage() {
     
     if (success === 'true') {
       showNotification('Your subscription has been activated!', 'success');
+      // Refresh subscription data to get updated status
+      refreshSubscription();
       // Remove query params
       router.replace('/settings/subscription');
     } else if (canceled === 'true') {
@@ -45,7 +47,7 @@ export default function SubscriptionPage() {
       // Remove query params
       router.replace('/settings/subscription');
     }
-  }, [user, authLoading, router, searchParams, showNotification]);
+  }, [user, authLoading, router, searchParams, showNotification, refreshSubscription]);
 
   const handleUpgrade = async () => {
     setIsProcessing(true);
