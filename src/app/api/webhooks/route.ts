@@ -102,6 +102,78 @@ export async function POST(request: NextRequest) {
     
     // Handle the event
     switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data.object as any;
+        
+        console.log('💰 Processing checkout session completed:', {
+          sessionId: session.id,
+          customerId: session.customer,
+          subscriptionId: session.subscription,
+          paymentStatus: session.payment_status
+        });
+        
+        if (session.mode === 'subscription' && session.subscription && session.payment_status === 'paid') {
+          // Retrieve the subscription from Stripe to get full details
+          const subscription = await stripe.subscriptions.retrieve(session.subscription);
+          
+          const stripeCustomerId = subscription.customer as string;
+          const subscriptionStatus = subscription.status;
+          const subscriptionId = subscription.id;
+          const isActive = subscriptionStatus === 'active' || subscriptionStatus === 'trialing';
+          
+          console.log('📋 Subscription details from checkout:', {
+            customerId: stripeCustomerId,
+            subscriptionId: subscriptionId,
+            status: subscriptionStatus,
+            isActive: isActive
+          });
+          
+          // Calculate the current period end date
+          const currentPeriodEnd = new Date(subscription.current_period_end * 1000);
+          
+          console.log('📅 Subscription valid until:', currentPeriodEnd.toISOString());
+          
+          // Find and update the subscription record
+          const { data: subscriptionRecord, error: findError } = await supabase
+            .from('subscriptions')
+            .select('*')
+            .eq('stripe_customer_id', stripeCustomerId);
+          
+          console.log('🔍 Looking up subscription by customer ID:', {
+            customerId: stripeCustomerId,
+            found: subscriptionRecord && subscriptionRecord.length > 0,
+            count: subscriptionRecord?.length || 0,
+            error: findError
+          });
+          
+          if (subscriptionRecord && subscriptionRecord.length > 0) {
+            for (const record of subscriptionRecord) {
+              const { data: updateData, error: updateError } = await supabase
+                .from('subscriptions')
+                .update({
+                  stripe_subscription_id: subscriptionId,
+                  subscription_status: 'active',
+                  subscription_plan: 'premium',
+                  valid_until: currentPeriodEnd.toISOString(),
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', record.id)
+                .select();
+              
+              console.log('🔄 Checkout subscription update result:', {
+                recordId: record.id,
+                userId: record.user_id,
+                success: !updateError,
+                data: updateData,
+                error: updateError
+              });
+            }
+          }
+        }
+        
+        break;
+      }
+      
       case 'customer.subscription.created':
       case 'customer.subscription.updated': {
         const subscriptionObject = event.data.object as StripeSubscriptionObject;
