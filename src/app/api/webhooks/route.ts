@@ -114,7 +114,8 @@ export async function POST(request: NextRequest) {
         
         if (session.mode === 'subscription' && session.subscription && session.payment_status === 'paid') {
           // Retrieve the subscription from Stripe to get full details
-          const subscription = await stripe.subscriptions.retrieve(session.subscription);
+          const subscriptionResponse = await stripe.subscriptions.retrieve(session.subscription);
+          const subscription = subscriptionResponse;
           
           const stripeCustomerId = subscription.customer as string;
           const subscriptionStatus = subscription.status;
@@ -129,7 +130,7 @@ export async function POST(request: NextRequest) {
           });
           
           // Calculate the current period end date
-          const currentPeriodEnd = new Date(subscription.current_period_end * 1000);
+          const currentPeriodEnd = new Date((subscription as any).current_period_end * 1000);
           
           console.log('📅 Subscription valid until:', currentPeriodEnd.toISOString());
           
