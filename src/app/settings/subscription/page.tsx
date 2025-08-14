@@ -1,7 +1,7 @@
 // src/app/settings/subscription/page.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import useAuth from '@/lib/hooks/useAuth';
@@ -13,13 +13,14 @@ import { useNotification } from '@/lib/context/NotificationContext';
 
 export default function SubscriptionPage() {
   const { user, loading: authLoading } = useAuth();
-  const { subscription, isPremium, loading: subscriptionLoading, redirectToCheckout, manageBilling, refreshSubscription } = useSubscription();
+  const { subscription, isPremium, loading: subscriptionLoading, redirectToCheckout, manageBilling, refreshSubscription, syncWithStripe } = useSubscription();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { showNotification } = useNotification();
   
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'annual'>('monthly');
   const [isProcessing, setIsProcessing] = useState(false);
+  const hasProcessedParams = useRef(false);
 
   // Display prices based on US dollars for now, but this could be dynamic
   const monthlyPrice = '$9.99';
@@ -30,24 +31,48 @@ export default function SubscriptionPage() {
     // If not logged in, redirect to login page
     if (!authLoading && !user) {
       router.push('/auth');
+      return;
+    }
+    
+    // Only process params once to prevent infinite loops
+    if (hasProcessedParams.current) {
+      return;
     }
     
     // Check for success or canceled params from Stripe redirect
     const success = searchParams?.get('success');
     const canceled = searchParams?.get('canceled');
+    const portal = searchParams?.get('portal');
     
     if (success === 'true') {
+      hasProcessedParams.current = true;
       showNotification('Your subscription has been activated!', 'success');
       // Refresh subscription data to get updated status
       refreshSubscription();
       // Remove query params
       router.replace('/settings/subscription');
     } else if (canceled === 'true') {
+      hasProcessedParams.current = true;
       showNotification('Subscription process was canceled.', 'info');
       // Remove query params
       router.replace('/settings/subscription');
+    } else if (portal === 'true') {
+      hasProcessedParams.current = true;
+      // User returned from customer portal, sync subscription data with Stripe
+      console.log('User returned from customer portal, syncing subscription data with Stripe');
+      syncWithStripe()
+        .then((result) => {
+          if (result.updated) {
+            showNotification('Subscription status updated!', 'success');
+          }
+        })
+        .catch(() => {
+          showNotification('Failed to sync subscription status', 'error');
+        });
+      // Remove query params
+      router.replace('/settings/subscription');
     }
-  }, [user, authLoading, router, searchParams, showNotification, refreshSubscription]);
+  }, [user, authLoading, router, searchParams, showNotification]);
 
   const handleUpgrade = async () => {
     setIsProcessing(true);
@@ -62,6 +87,34 @@ export default function SubscriptionPage() {
     setIsProcessing(true);
     try {
       await manageBilling();
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleRefreshSubscription = async () => {
+    setIsProcessing(true);
+    try {
+      await refreshSubscription();
+      showNotification('Subscription status refreshed!', 'success');
+    } catch (error) {
+      showNotification('Failed to refresh subscription status', 'error');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleSyncWithStripe = async () => {
+    setIsProcessing(true);
+    try {
+      const result = await syncWithStripe();
+      if (result.updated) {
+        showNotification('Subscription synced and updated!', 'success');
+      } else {
+        showNotification('Subscription is already up to date', 'info');
+      }
+    } catch (error) {
+      showNotification('Failed to sync with Stripe', 'error');
     } finally {
       setIsProcessing(false);
     }
@@ -138,13 +191,29 @@ export default function SubscriptionPage() {
                   <span>Priority support and early access to new features</span>
                 </li>
               </ul>
-              <Button
-                onClick={handleManageBilling}
-                isLoading={isProcessing}
-                variant="outline"
-              >
-                Manage Billing
-              </Button>
+              <div className="flex space-x-3 flex-wrap">
+                <Button
+                  onClick={handleManageBilling}
+                  isLoading={isProcessing}
+                  variant="outline"
+                >
+                  Manage Billing
+                </Button>
+                <Button
+                  onClick={handleSyncWithStripe}
+                  isLoading={isProcessing}
+                  variant="outline"
+                >
+                  Sync with Stripe
+                </Button>
+                <Button
+                  onClick={handleRefreshSubscription}
+                  isLoading={isProcessing}
+                  variant="outline"
+                >
+                  Refresh Status
+                </Button>
+              </div>
             </div>
           ) : (
             <div>

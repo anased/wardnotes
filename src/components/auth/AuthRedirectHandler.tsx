@@ -59,22 +59,8 @@ export default function AuthRedirectHandler() {
     // Run once on mount
     checkUrlForTokens();
     
-    // Also listen for auth state changes
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log("Auth state change event:", event);
-      
-      // Only handle notifications here, let useAuth handle redirects
-      // Also prevent duplicate notifications by checking if we're in a redirect scenario
-      if (event === 'SIGNED_IN' && session && !window.location.hash.includes('access_token')) {
-        console.log("User signed in");
-        showNotification("Successfully signed in!", "success");
-      }
-    });
-    
-    // Cleanup
-    return () => {
-      authListener?.subscription.unsubscribe();
-    };
+    // No cleanup needed since we're only running the check once
+    return () => {};
   }, [router, showNotification]);
 
   // This component doesn't render anything

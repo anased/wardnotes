@@ -1,5 +1,5 @@
 // src/lib/hooks/useSubscription.ts
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabase/client';
 import { useNotification } from '@/lib/context/NotificationContext';
 import { Subscription, SubscriptionPlan, SubscriptionStatus } from '@/lib/supabase/types';
@@ -9,6 +9,7 @@ export function useSubscription() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const { showNotification } = useNotification();
+  const isRefreshing = useRef(false);
 
   // Computed property to check if the user has premium access
   const isPremium = subscription?.subscription_status === 'active' && 
@@ -216,7 +217,14 @@ export function useSubscription() {
 
   // Function to manually refresh subscription data
   const refreshSubscription = async () => {
+    // Prevent concurrent refreshes
+    if (isRefreshing.current) {
+      console.log('⏭️ Subscription refresh already in progress, skipping');
+      return;
+    }
+    
     try {
+      isRefreshing.current = true;
       setLoading(true);
       setError(null);
       
@@ -228,6 +236,8 @@ export function useSubscription() {
         return;
       }
       
+      console.log('🔄 Refreshing subscription data for user:', session.user.id);
+      
       // Get user's subscription
       const { data, error } = await supabase
         .from('subscriptions')
@@ -236,15 +246,86 @@ export function useSubscription() {
         .maybeSingle();
       
       if (error) {
+        console.error('❌ Error fetching subscription from database:', error);
         throw error;
       }
       
+      console.log('📋 Fresh subscription data from database:', data);
+      
       if (data) {
         setSubscription(data as Subscription);
+        console.log('✅ Subscription state updated:', {
+          status: data.subscription_status,
+          plan: data.subscription_plan,
+          validUntil: data.valid_until
+        });
+      } else {
+        console.log('⚠️ No subscription record found, creating default free subscription');
+        setSubscription({
+          id: '0',
+          user_id: session.user.id,
+          stripe_customer_id: null,
+          stripe_subscription_id: null,
+          subscription_status: 'free',
+          subscription_plan: 'free',
+          valid_until: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
       }
     } catch (err) {
       console.error('Error refreshing subscription:', err);
       setError(err as Error);
+    } finally {
+      setLoading(false);
+      isRefreshing.current = false;
+    }
+  };
+
+  // Function to sync subscription status directly with Stripe
+  const syncWithStripe = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Get the current session
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        throw new Error('You must be logged in to sync subscription');
+      }
+      
+      console.log('🔄 Syncing subscription with Stripe...');
+      
+      // Get the access token
+      const token = session.access_token;
+      
+      // Call our sync API
+      const response = await fetch('/api/sync-subscription', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to sync subscription');
+      }
+      
+      const result = await response.json();
+      console.log('✅ Sync result:', result);
+      
+      if (result.subscription) {
+        setSubscription(result.subscription);
+      }
+      
+      return result;
+    } catch (err) {
+      console.error('Error syncing with Stripe:', err);
+      setError(err as Error);
+      throw err;
     } finally {
       setLoading(false);
     }
@@ -257,6 +338,7 @@ export function useSubscription() {
     error,
     redirectToCheckout,
     manageBilling,
-    refreshSubscription
+    refreshSubscription,
+    syncWithStripe
   };
 }

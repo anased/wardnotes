@@ -4,6 +4,7 @@ import { Metadata } from 'next';
 import { GoogleAnalytics } from '@next/third-parties/google'
 import { WebVitals } from '@/components/WebVitals'
 import { NotificationProvider } from '@/lib/context/NotificationContext';
+import { AuthProvider } from '@/lib/context/AuthContext';
 import AuthRedirectHandler from '@/components/auth/AuthRedirectHandler';
 
 // Initialize the Inter font
@@ -96,9 +97,11 @@ export default function RootLayout({
     <html lang="en" className={inter.variable}>
       <body>
         <NotificationProvider>
-          <AuthRedirectHandler />
-          <WebVitals />
-          {children}
+          <AuthProvider>
+            <AuthRedirectHandler />
+            <WebVitals />
+            {children}
+          </AuthProvider>
         </NotificationProvider>
       </body>
       {gaId && <GoogleAnalytics gaId={gaId} />}

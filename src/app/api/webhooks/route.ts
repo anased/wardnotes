@@ -85,6 +85,7 @@ export async function POST(request: NextRequest) {
     }
     
     console.log('📨 Received webhook event type:', event.type);
+    console.log('🔍 Event data object:', JSON.stringify(event.data.object, null, 2));
     
     // Initialize Supabase client
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -182,13 +183,18 @@ export async function POST(request: NextRequest) {
         const subscriptionStatus = subscriptionObject.status;
         const subscriptionId = subscriptionObject.id;
         const isActive = subscriptionStatus === 'active' || subscriptionStatus === 'trialing';
+        const isCanceled = subscriptionStatus === 'canceled' || 
+                          subscriptionStatus === 'incomplete_expired' ||
+                          (subscriptionObject as any).cancel_at_period_end === true;
         
         console.log('💳 Processing subscription event:', {
           eventType: event.type,
           customerId: stripeCustomerId,
           subscriptionId: subscriptionId,
           status: subscriptionStatus,
-          isActive: isActive
+          isActive: isActive,
+          isCanceled: isCanceled,
+          cancelAtPeriodEnd: (subscriptionObject as any).cancel_at_period_end
         });
         
         // Calculate the current period end date
@@ -266,8 +272,8 @@ export async function POST(request: NextRequest) {
                     user_id: userId,
                     stripe_customer_id: stripeCustomerId,
                     stripe_subscription_id: subscriptionId,
-                    subscription_status: isActive ? 'active' : subscriptionStatus,
-                    subscription_plan: isActive ? planName : 'free',
+                    subscription_status: isCanceled ? 'canceled' : (isActive ? 'active' : subscriptionStatus),
+                    subscription_plan: (isActive && !isCanceled) ? planName : 'free',
                     valid_until: currentPeriodEnd.toISOString(),
                     updated_at: new Date().toISOString(),
                   }, { 
@@ -296,8 +302,8 @@ export async function POST(request: NextRequest) {
               .from('subscriptions')
               .update({
                 stripe_subscription_id: subscriptionId,
-                subscription_status: isActive ? 'active' : subscriptionStatus,
-                subscription_plan: isActive ? planName : 'free',
+                subscription_status: isCanceled ? 'canceled' : (isActive ? 'active' : subscriptionStatus),
+                subscription_plan: (isActive && !isCanceled) ? planName : 'free',
                 valid_until: currentPeriodEnd.toISOString(),
                 updated_at: new Date().toISOString(),
               })
@@ -310,8 +316,9 @@ export async function POST(request: NextRequest) {
               success: !updateError,
               data: updateData,
               error: updateError,
-              newStatus: isActive ? 'active' : subscriptionStatus,
-              newPlan: isActive ? planName : 'free'
+              newStatus: isCanceled ? 'canceled' : (isActive ? 'active' : subscriptionStatus),
+              newPlan: (isActive && !isCanceled) ? planName : 'free',
+              isCanceled: isCanceled
             });
           }
         }
