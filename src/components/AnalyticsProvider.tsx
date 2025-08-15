@@ -13,27 +13,18 @@ export function AnalyticsProvider() {
   useEffect(() => {
     const posthogKey = process.env.NEXT_PUBLIC_POSTHOG_KEY;
     
-    // Temporary production debugging - remove after verification
-    console.log('🎯 Analytics: Environment check', {
-      hasKey: !!posthogKey,
-      keyPrefix: posthogKey?.substring(0, 8),
-      nodeEnv: process.env.NODE_ENV,
-      enableAnalytics: process.env.NEXT_PUBLIC_ENABLE_ANALYTICS
-    });
-    
     if (!posthogKey) {
-      console.log('🎯 Analytics: PostHog key not found, skipping initialization');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Analytics: PostHog key not found, skipping initialization');
+      }
       return;
     }
-
-    const isDisabled = process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_ENABLE_ANALYTICS !== 'true';
-    console.log('🎯 Analytics: Initializing PostHog', { disabled: isDisabled });
 
     // Initialize PostHog
     init({
       apiKey: posthogKey,
       apiHost: 'https://us.posthog.com',
-      disabled: isDisabled
+      disabled: process.env.NODE_ENV !== 'production' && process.env.NEXT_PUBLIC_ENABLE_ANALYTICS !== 'true'
     });
   }, [init]);
 
