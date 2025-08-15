@@ -34,18 +34,19 @@ class AnalyticsService implements Analytics {
         capture_pageview: true,
         capture_pageleave: true,
         loaded: (posthog) => {
-          if (process.env.NODE_ENV === 'development') {
-            console.log('Analytics: PostHog loaded successfully');
-          }
+          // Temporary production debugging - remove after verification
+          console.log('🎯 Analytics: PostHog loaded successfully');
+          // Set a global flag for debugging
+          (window as any).__posthog_loaded = true;
         }
       });
 
       this.initialized = true;
       this.config = config;
       
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Analytics: Initialized successfully');
-      }
+      // Temporary production debugging - remove after verification
+      console.log('🎯 Analytics: Initialized successfully');
+      (window as any).__analytics_initialized = true;
     } catch (error) {
       console.error('Analytics: Failed to initialize PostHog', error);
     }
@@ -87,9 +88,8 @@ class AnalyticsService implements Analytics {
 
       posthog.capture(event, eventProperties);
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Analytics: Event tracked', { event, properties: eventProperties });
-      }
+      // Temporary production debugging - remove after verification
+      console.log('🎯 Analytics: Event tracked', { event, properties: eventProperties });
     } catch (error) {
       console.error('Analytics: Failed to track event', error);
     }
