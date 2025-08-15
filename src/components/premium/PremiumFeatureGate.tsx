@@ -2,6 +2,7 @@
 import { ReactNode, useState, cloneElement, isValidElement } from 'react';
 import { useSubscription } from '@/lib/hooks/useSubscription';
 import Button from '../ui/Button';
+import { useAnalytics } from '@/lib/analytics/useAnalytics';
 
 interface PremiumFeatureGateProps {
   children: ReactNode;
@@ -16,7 +17,8 @@ export default function PremiumFeatureGate({
   description,
   showPremiumBadge = true
 }: PremiumFeatureGateProps) {
-  const { isPremium, redirectToCheckout } = useSubscription();
+  const { isPremium, redirectToCheckout, subscription } = useSubscription();
+  const { track } = useAnalytics();
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
 
@@ -28,6 +30,13 @@ export default function PremiumFeatureGate({
   // Handle upgrade click
   const handleUpgradeClick = async () => {
     setIsRedirecting(true);
+    
+    // Track trial started when clicking upgrade from paywall
+    track('trial_started', {
+      plan_type: 'monthly',
+      subscription_status: subscription?.subscription_status || 'free'
+    });
+    
     try {
       await redirectToCheckout();
     } finally {
@@ -39,6 +48,14 @@ export default function PremiumFeatureGate({
   const handlePremiumFeatureClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    
+    // Track paywall viewed
+    track('paywall_viewed', {
+      feature_blocked: featureName.toLowerCase().replace(/\s+/g, '_'),
+      upgrade_context: 'premium_feature_gate',
+      subscription_status: subscription?.subscription_status || 'free'
+    });
+    
     setShowUpgradeModal(true);
   };
 

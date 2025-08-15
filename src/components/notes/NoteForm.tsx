@@ -13,6 +13,8 @@ import NoteEditor from './NoteEditor';
 import CategoryCreationModal from '../ui/CategoryCreationModal';
 import NoteImprover from './NoteImprover'; // Add this import
 import PremiumFeatureGate from '../premium/PremiumFeatureGate'; // Import the premium gate
+import { useAnalytics } from '@/lib/analytics/useAnalytics';
+import { useSubscription } from '@/lib/hooks/useSubscription';
 
 interface NoteFormProps {
   initialData?: Partial<Note>;
@@ -73,6 +75,8 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
   const { addNote, editNote } = useNotes();
   const { categories, addCategory } = useCategories();
   const { tags, addTag } = useTags(); // Make sure we have the addTag function
+  const { track } = useAnalytics();
+  const { subscription } = useSubscription();
   
   const [title, setTitle] = useState(initialData.title || '');
   const [content, setContent] = useState<Record<string, unknown>>(initialData.content || EMPTY_CONTENT);
@@ -143,6 +147,13 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
         try {
           await addTag(newTagName);
           console.log(`Created new tag: ${newTagName}`);
+          
+          // Track tag added event
+          track('tag_added', {
+            tag_name: newTagName,
+            note_id: initialData.id || 'new',
+            subscription_status: subscription?.subscription_status === 'active' ? 'premium' : 'free'
+          });
         } catch (err) {
           // If tag creation fails (e.g., duplicate), just log it and continue
           console.warn(`Failed to create tag "${newTagName}":`, err);
@@ -375,6 +386,21 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
           tags: selectedTags,
           category,
         });
+        
+        // Track note creation
+        track('note_created', {
+          note_category: category,
+          tag_count: selectedTags.length,
+          subscription_status: subscription?.subscription_status === 'active' ? 'premium' : 'free'
+        });
+        
+        // Check if this is their first note with tags (onboarding completion)
+        if (selectedTags.length > 0) {
+          // This could be enhanced to check if it's truly their first note
+          track('onboarding_completed', {
+            subscription_status: subscription?.subscription_status === 'active' ? 'premium' : 'free'
+          });
+        }
         
         router.push(`/notes/${newNote.id}`);
       }

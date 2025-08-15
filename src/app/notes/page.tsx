@@ -13,6 +13,8 @@ import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import Button from '@/components/ui/Button';
 import Spinner from '@/components/ui/Spinner';
+import { useAnalytics } from '@/lib/analytics/useAnalytics';
+import { useSubscription } from '@/lib/hooks/useSubscription';
 
 export default function NotesPage() {
   const { user, loading: authLoading } = useAuth();
@@ -27,6 +29,8 @@ export default function NotesPage() {
   } = useNotes();
   const { categories } = useCategories();
   const { tags } = useTags(); // Get tags from the hook
+  const { track } = useAnalytics();
+  const { subscription } = useSubscription();
   const router = useRouter();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -71,9 +75,19 @@ export default function NotesPage() {
     try {
       setIsSearching(true);
       await search(searchQuery);
+      
       // Reset filters when searching
       setCategory('All');
       setSelectedTag('All');
+      
+      // Track search usage after search completes
+      setTimeout(() => {
+        track('search_used', {
+          search_query: searchQuery,
+          results_count: notes.length,
+          subscription_status: subscription?.subscription_status === 'active' ? 'premium' : 'free'
+        });
+      }, 100);
     } catch (err) {
       console.error('Search error:', err);
     } finally {

@@ -3,6 +3,8 @@ import { useState, useEffect, useCallback } from 'react';
 import Button from '@/components/ui/Button';
 import Spinner from '@/components/ui/Spinner';
 import { supabase } from '@/lib/supabase/client';
+import { useAnalytics } from '@/lib/analytics/useAnalytics';
+import { useSubscription } from '@/lib/hooks/useSubscription';
 
 interface FlashcardGeneratorModalProps {
   isOpen: boolean;
@@ -30,12 +32,20 @@ export default function FlashcardGeneratorModal({
   const [previewCards, setPreviewCards] = useState<string[]>([]);
   const [error, setError] = useState<string>('');
   const [debugInfo, setDebugInfo] = useState<string>('');
+  const { track } = useAnalytics();
+  const { subscription } = useSubscription();
 
   // Create a memoized version of generatePreview to use in the dependency array
   const generatePreview = useCallback(async () => {
     try {
       setStatus('loading');
       setDebugInfo(`Starting preview generation for note ID: ${noteId}`);
+      
+      // Track flashcard generation started
+      track('ai_flashcard_generate_started', {
+        note_id: noteId,
+        subscription_status: subscription?.subscription_status === 'active' ? 'premium' : 'free'
+      });
       
       // Verify we have a valid note ID
       if (!noteId) {
@@ -98,6 +108,13 @@ export default function FlashcardGeneratorModal({
       if ('cards' in responseData) {
         setPreviewCards(responseData.cards);
         setStatus('preview');
+        
+        // Track flashcard generation completed
+        track('ai_flashcard_generate_completed', {
+          note_id: noteId,
+          flashcard_count: responseData.cards.length,
+          subscription_status: subscription?.subscription_status === 'active' ? 'premium' : 'free'
+        });
       } else {
         throw new Error('Invalid response format: missing cards array');
       }

@@ -6,9 +6,11 @@ import Input from '../ui/Input';
 import PasswordStrengthIndicator from '../ui/PasswordStrengthIndicator';
 import { validatePassword } from '@/lib/utils/passwordValidator';
 import GoogleLoginButton from './GoogleLoginButton';
+import { useAnalytics } from '@/lib/analytics/useAnalytics';
 
 export default function SignupForm() {
   const { signUp } = useAuth();
+  const { track } = useAnalytics();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -37,10 +39,21 @@ export default function SignupForm() {
       return;
     }
     
+    // Track signup started
+    track('signup_started', {
+      subscription_status: 'free'
+    });
+    
     try {
       setIsLoading(true);
       setError('');
       await signUp(email, password);
+      
+      // Track signup completed
+      track('signup_completed', {
+        subscription_status: 'free'
+      });
+      
       setSuccess(true);
     } catch (err: unknown) {
       const error = err as Error;

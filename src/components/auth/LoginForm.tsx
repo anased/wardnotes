@@ -4,9 +4,11 @@ import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Link from 'next/link';
 import GoogleLoginButton from './GoogleLoginButton';
+import { useAnalytics } from '@/lib/analytics/useAnalytics';
 
 export default function LoginForm() {
   const { signIn } = useAuth();
+  const { track } = useAnalytics();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -24,6 +26,12 @@ export default function LoginForm() {
       setIsLoading(true);
       setError('');
       await signIn(email, password);
+      
+      // Track successful signin
+      track('signin_completed', {
+        subscription_status: 'free'
+      });
+      
       // Navigation is handled in the useAuth hook
     } catch (err: unknown) {
       const error = err as Error;

@@ -10,6 +10,7 @@ import PageContainer from '@/components/layout/PageContainer';
 import Button from '@/components/ui/Button';
 import Spinner from '@/components/ui/Spinner';
 import { useNotification } from '@/lib/context/NotificationContext';
+import { useAnalytics } from '@/lib/analytics/useAnalytics';
 
 export default function SubscriptionPage() {
   const { user, loading: authLoading } = useAuth();
@@ -17,10 +18,12 @@ export default function SubscriptionPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { showNotification } = useNotification();
+  const { track } = useAnalytics();
   
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'annual'>('monthly');
   const [isProcessing, setIsProcessing] = useState(false);
   const hasProcessedParams = useRef(false);
+  const [hasTrackedPaywallView, setHasTrackedPaywallView] = useState(false);
 
   // Display prices based on US dollars for now, but this could be dynamic
   const monthlyPrice = '$9.99';
@@ -47,6 +50,13 @@ export default function SubscriptionPage() {
     if (success === 'true') {
       hasProcessedParams.current = true;
       showNotification('Your subscription has been activated!', 'success');
+      
+      // Track checkout completed
+      track('checkout_completed', {
+        plan_type: selectedPlan,
+        subscription_status: 'premium'
+      });
+      
       // Refresh subscription data to get updated status
       refreshSubscription();
       // Remove query params
@@ -74,9 +84,28 @@ export default function SubscriptionPage() {
     }
   }, [user, authLoading, router, searchParams, showNotification]);
 
+  // Track paywall view for non-premium users
+  useEffect(() => {
+    const loading = authLoading || subscriptionLoading;
+    if (!loading && !isPremium && !hasTrackedPaywallView) {
+      track('paywall_viewed', {
+        feature_blocked: 'subscription_upgrade',
+        upgrade_context: 'subscription_page',
+        subscription_status: 'free'
+      });
+      setHasTrackedPaywallView(true);
+    }
+  }, [authLoading, subscriptionLoading, isPremium, hasTrackedPaywallView, track]);
+
   const handleUpgrade = async () => {
     setIsProcessing(true);
     try {
+      // Track checkout started (trial_started is close enough)
+      track('trial_started', {
+        plan_type: selectedPlan,
+        subscription_status: 'free'
+      });
+      
       await redirectToCheckout(selectedPlan === 'annual');
     } finally {
       setIsProcessing(false);

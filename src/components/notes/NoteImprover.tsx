@@ -5,6 +5,8 @@ import Button from '../ui/Button';
 import { TipTapNode } from '@/types/content';
 import { convertTipTapToPlainText } from '@/lib/utils/content-converter';
 import PremiumFeatureGate from '../premium/PremiumFeatureGate';
+import { useAnalytics } from '@/lib/analytics/useAnalytics';
+import { useSubscription } from '@/lib/hooks/useSubscription';
 
 // Define maximum character limit
 const MAX_CHARACTERS = 4000;
@@ -19,6 +21,8 @@ export default function NoteImprover({ content, onImproveSuccess }: NoteImprover
   const [error, setError] = useState<string | null>(null);
   const [showImproveModal, setShowImproveModal] = useState(false);
   const [improvedContent, setImprovedContent] = useState('');
+  const { track } = useAnalytics();
+  const { subscription } = useSubscription();
   
   // Convert TipTap JSON to plain text for character count
   const plainText = convertTipTapToPlainText(content as TipTapNode);
@@ -39,6 +43,12 @@ export default function NoteImprover({ content, onImproveSuccess }: NoteImprover
     try {
       setIsLoading(true);
       setError(null);
+      
+      // Track AI improvement started
+      track('ai_note_improve_started', {
+        note_id: 'current',
+        subscription_status: subscription?.subscription_status === 'active' ? 'premium' : 'free'
+      });
       
       // Get the current session
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -72,6 +82,12 @@ export default function NoteImprover({ content, onImproveSuccess }: NoteImprover
       const data = await response.json();
       setImprovedContent(data.improvedNote);
       setShowImproveModal(true);
+      
+      // Track AI improvement completed
+      track('ai_note_improve_completed', {
+        note_id: 'current',
+        subscription_status: subscription?.subscription_status === 'active' ? 'premium' : 'free'
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {

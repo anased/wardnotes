@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabase/client';
 import { useNotification } from '@/lib/context/NotificationContext';
 import { Subscription, SubscriptionPlan, SubscriptionStatus } from '@/lib/supabase/types';
+import { analytics } from '../analytics/useAnalytics';
 
 export function useSubscription() {
   const [subscription, setSubscription] = useState<Subscription | null>(null);
@@ -10,6 +11,7 @@ export function useSubscription() {
   const [error, setError] = useState<Error | null>(null);
   const { showNotification } = useNotification();
   const isRefreshing = useRef(false);
+  const previousSubscriptionStatus = useRef<string | null>(null);
 
   // Computed property to check if the user has premium access
   const isPremium = subscription?.subscription_status === 'active' && 
@@ -125,6 +127,28 @@ export function useSubscription() {
     
     fetchSubscription();
   }, []);
+
+  // Track subscription cancellations
+  useEffect(() => {
+    if (subscription && previousSubscriptionStatus.current) {
+      // Check if subscription was cancelled
+      if (
+        previousSubscriptionStatus.current === 'active' && 
+        subscription.subscription_status === 'canceled'
+      ) {
+        // Track subscription cancellation
+        analytics.track('subscription_cancelled', {
+          subscription_status: 'canceled',
+          user_id: subscription.user_id
+        });
+      }
+    }
+    
+    // Update the previous status
+    if (subscription?.subscription_status) {
+      previousSubscriptionStatus.current = subscription.subscription_status;
+    }
+  }, [subscription]);
 
   // Function to redirect to Stripe Checkout
   const redirectToCheckout = async (isYearly: boolean = false) => {

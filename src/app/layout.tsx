@@ -6,6 +6,7 @@ import { WebVitals } from '@/components/WebVitals'
 import { NotificationProvider } from '@/lib/context/NotificationContext';
 import { AuthProvider } from '@/lib/context/AuthContext';
 import AuthRedirectHandler from '@/components/auth/AuthRedirectHandler';
+import { AnalyticsProvider } from '@/components/AnalyticsProvider';
 
 // Initialize the Inter font
 const inter = Inter({ 
@@ -98,6 +99,7 @@ export default function RootLayout({
       <body>
         <NotificationProvider>
           <AuthProvider>
+            <AnalyticsProvider />
             <AuthRedirectHandler />
             <WebVitals />
             {children}
