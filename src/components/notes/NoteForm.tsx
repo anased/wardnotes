@@ -90,10 +90,17 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
 
   // Generate category options from the database, adding the "Add new category" option
   const categoryOptions = [
+    // Add placeholder option if no categories exist
+    ...(categories.length === 0 ? [{
+      value: '',
+      label: 'No categories yet - create one below'
+    }] : []),
+    // Add existing categories
     ...categories.map(cat => ({
       value: cat.name,
       label: cat.name
     })),
+    // Always add the "Add new category" option
     {
       value: ADD_NEW_CATEGORY,
       label: '+ Add new category...'
@@ -358,7 +365,7 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
     e.preventDefault();
     
     if (!category) {
-      setError('Please select a category');
+      setError(categories.length === 0 ? 'Please create a category first' : 'Please select a category');
       return;
     }
     
