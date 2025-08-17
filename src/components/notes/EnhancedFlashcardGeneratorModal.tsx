@@ -4,6 +4,7 @@ import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import Spinner from '@/components/ui/Spinner';
+import DeckCreationModal from '@/components/ui/DeckCreationModal';
 import { FlashcardService } from '@/services/flashcard';
 import { supabase } from '@/lib/supabase/client';
 import type { FlashcardDeck, FlashcardType, Flashcard } from '@/types/flashcard';
@@ -16,6 +17,9 @@ interface EnhancedFlashcardGeneratorModalProps {
 }
 
 type Status = 'idle' | 'loading' | 'preview' | 'saved' | 'error';
+
+// Special value to indicate "Add new deck" option
+const ADD_NEW_DECK = 'add_new_deck';
 
 // Store the last generated cards to ensure consistency between preview and save
 let lastGeneratedCards: any[] = [];
@@ -39,6 +43,9 @@ export function EnhancedFlashcardGeneratorModal({
   const [savedFlashcards, setSavedFlashcards] = useState<Flashcard[]>([]);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('generate');
+  
+  // State for the deck creation modal
+  const [showDeckModal, setShowDeckModal] = useState(false);
 
   // Load decks on open
   useEffect(() => {
@@ -65,10 +72,12 @@ export function EnhancedFlashcardGeneratorModal({
       const decksData = await FlashcardService.getDecks();
       setDecks(decksData);
       
-      // Set default deck
-      const defaultDeck = decksData.find(d => d.name === 'Default Deck') || decksData[0];
-      if (defaultDeck) {
+      // Set default deck if there are decks available
+      if (decksData.length > 0) {
+        const defaultDeck = decksData.find(d => d.name === 'Default Deck') || decksData[0];
         setSelectedDeckId(defaultDeck.id);
+      } else {
+        setSelectedDeckId('');
       }
     } catch (error) {
       console.error('Failed to load decks:', error);
@@ -78,7 +87,7 @@ export function EnhancedFlashcardGeneratorModal({
 
   const generatePreview = useCallback(async () => {
     if (!selectedDeckId) {
-      setError('Please select a deck');
+      setError(decks.length === 0 ? 'Please create a deck first' : 'Please select a deck');
       return;
     }
 
@@ -156,7 +165,7 @@ export function EnhancedFlashcardGeneratorModal({
 
   const savePreviewFlashcards = async () => {
     if (!selectedDeckId) {
-      setError('Please select a deck');
+      setError(decks.length === 0 ? 'Please create a deck first' : 'Please select a deck');
       return;
     }
 
@@ -175,16 +184,18 @@ export function EnhancedFlashcardGeneratorModal({
         throw new Error('You must be logged in to save flashcards');
       }
 
-      // Use the same config as the preview to ensure consistency
-      const response = await fetch('/api/flashcards/generate-from-note', {
+      // Use the new save-preview endpoint to save the exact same cards that were previewed
+      const response = await fetch('/api/flashcards/save-preview', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({
-          ...lastGenerationConfig,
-          preview: false // This tells the API to save the cards
+          cards: lastGeneratedCards,
+          deck_id: selectedDeckId,
+          note_id: noteId,
+          card_type: cardType
         })
       });
 
@@ -206,7 +217,7 @@ export function EnhancedFlashcardGeneratorModal({
 
   const generateAndSaveFlashcards = async () => {
     if (!selectedDeckId) {
-      setError('Please select a deck');
+      setError(decks.length === 0 ? 'Please create a deck first' : 'Please select a deck');
       return;
     }
 
@@ -273,6 +284,32 @@ export function EnhancedFlashcardGeneratorModal({
     URL.revokeObjectURL(url);
   };
 
+  // Handle deck selection change with special handling for "Add new deck" option
+  const handleDeckChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    
+    if (value === ADD_NEW_DECK) {
+      setShowDeckModal(true);
+    } else {
+      setSelectedDeckId(value);
+    }
+  };
+
+  // Handle creating a new deck from the modal
+  const handleCreateDeck = async (name: string, description: string, color: string) => {
+    try {
+      // Create the new deck
+      const newDeck = await FlashcardService.createDeck(name, description, color);
+      
+      // Reload decks and set the new deck as selected
+      await loadDecks();
+      setSelectedDeckId(newDeck.id);
+    } catch (err) {
+      console.error('Error creating deck:', err);
+      throw err; // Let the modal handle the error
+    }
+  };
+
   const renderFlashcardPreview = (card: Flashcard, index: number) => (
     <div key={card.id || index} className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg mb-3">
       {card.cloze_content ? (
@@ -312,10 +349,26 @@ export function EnhancedFlashcardGeneratorModal({
         <Select
           label="Target Deck"
           value={selectedDeckId}
-          onChange={(e) => setSelectedDeckId(e.target.value)}
+          onChange={handleDeckChange}
           options={[
-            { value: '', label: 'Select a deck...' },
-            ...decks.map(deck => ({ value: deck.id, label: deck.name }))
+            // Add placeholder option if no decks exist
+            ...(decks.length === 0 ? [{
+              value: '',
+              label: 'No decks yet - create one below'
+            }] : [{
+              value: '',
+              label: 'Select a deck...'
+            }]),
+            // Add existing decks
+            ...decks.map(deck => ({ 
+              value: deck.id, 
+              label: deck.name 
+            })),
+            // Always add the "Add new deck" option
+            {
+              value: ADD_NEW_DECK,
+              label: '+ Add new deck...'
+            }
           ]}
         />
 
@@ -328,6 +381,25 @@ export function EnhancedFlashcardGeneratorModal({
           onChange={(e) => setMaxCards(parseInt(e.target.value) || 10)}
         />
       </div>
+
+      {/* No Decks Warning */}
+      {decks.length === 0 && (
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+          <div className="flex items-center">
+            <svg className="w-5 h-5 text-yellow-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+            <div>
+              <p className="text-sm text-yellow-700 dark:text-yellow-400 font-medium">
+                No decks available
+              </p>
+              <p className="text-sm text-yellow-600 dark:text-yellow-500">
+                Create your first deck using the "Add new deck..." option above to get started with flashcard generation.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Card Type Info */}
       <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
@@ -388,7 +460,7 @@ export function EnhancedFlashcardGeneratorModal({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             }
-            Save to Deck
+            Save These Cards
           </Button>
         </div>
       </div>
@@ -399,7 +471,7 @@ export function EnhancedFlashcardGeneratorModal({
 
       <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
         <p className="text-sm text-blue-700 dark:text-blue-400">
-          💡 This is a preview. Click "Save to Deck" to create these exact flashcards in your deck.
+          💡 This is a preview. Click "Save These Cards" to save these exact flashcards to your deck (no new generation).
         </p>
       </div>
     </div>
@@ -571,6 +643,13 @@ export function EnhancedFlashcardGeneratorModal({
             </div>
           </div>
         </div>
+
+        {/* Deck Creation Modal */}
+        <DeckCreationModal
+          isOpen={showDeckModal}
+          onClose={() => setShowDeckModal(false)}
+          onSave={handleCreateDeck}
+        />
       </div>
     </div>
   );

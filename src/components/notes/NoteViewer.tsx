@@ -9,7 +9,7 @@ import { useSubscription } from '@/lib/hooks/useSubscription'; // Add this impor
 import Button from '../ui/Button';
 import CategoryBadge from '../ui/CategoryBadge';
 import NoteEditor from './NoteEditor';
-import FlashcardGeneratorModal from './FlashcardGeneratorModal';
+import { EnhancedFlashcardGeneratorModal } from './EnhancedFlashcardGeneratorModal';
 import PremiumFeatureGate from '../premium/PremiumFeatureGate'; // Import the premium gate
 import { FlashcardIntegrationButton } from './FlashcardIntegrationButton';
 
@@ -148,7 +148,7 @@ export default function NoteViewer({ note }: NoteViewerProps) {
       
       {/* Flashcard Generator Modal - only shown for premium users */}
       {showFlashcardModal && (
-        <FlashcardGeneratorModal
+        <EnhancedFlashcardGeneratorModal
           isOpen={showFlashcardModal}
           onClose={() => setShowFlashcardModal(false)}
           noteId={note.id}
