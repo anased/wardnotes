@@ -25,14 +25,16 @@ export default function PageContainer({
     <div className="flex flex-col min-h-screen">
       <Header />
       
-      <main className="flex-1 px-4 py-6 pb-20">
-        {title && (
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold">{title}</h1>
-          </div>
-        )}
-        
-        {children}
+      <main className="flex-1 py-6 pb-20">
+        <div className="container px-4 mx-auto">
+          {title && (
+            <div className="mb-6">
+              <h1 className="text-2xl font-bold">{title}</h1>
+            </div>
+          )}
+          
+          {children}
+        </div>
       </main>
       
       {shouldShowMobileNav && <MobileNav />}
