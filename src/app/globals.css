@@ -125,6 +125,22 @@
   @apply bg-yellow-200 dark:bg-yellow-700;
 }
 
+/* Landing page animations */
+.fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* List styles for TipTap editor */
 .ProseMirror ul {
   @apply list-disc pl-6 my-2;

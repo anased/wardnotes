@@ -42,3 +42,8 @@ next-env.d.ts
 
 # Mobile app directory (separate repository)
 wardnotes-mobile/
+
+# Claude Code files
+CLAUDE.md
+.playwright-mcp/
+ui-improvements-tracker.md
