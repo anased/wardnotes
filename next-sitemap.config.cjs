@@ -1,6 +1,6 @@
 /** @type {import('next-sitemap').IConfig} */
 module.exports = {
-  siteUrl: process.env.SITE_URL || 'https://wardnotes.app',
+  siteUrl: process.env.SITE_URL || 'https://wardnotes.vercel.app',
   generateRobotsTxt: true,
   robotsTxtOptions: {
     policies: [

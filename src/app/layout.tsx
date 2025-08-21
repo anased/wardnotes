@@ -45,21 +45,12 @@ export const metadata: Metadata = {
     ],
   },
   manifest: '/manifest.json',
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)', color: '#0f172a' },
-  ],
   appleWebApp: {
     title: 'WardNotes',
     statusBarStyle: 'black-translucent',
     capable: true,
   },
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-  },
+  metadataBase: new URL('https://wardnotes.vercel.app'),
   applicationName: 'WardNotes',
   openGraph: {
     type: 'website',
