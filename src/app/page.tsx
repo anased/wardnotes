@@ -56,21 +56,6 @@ export default function Home() {
               The smart note-taking app for medical students and residents. Automatically generate flashcards from your notes and master medical knowledge with spaced repetition.
             </p>
             
-            {/* Trust indicators */}
-            <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span>Free Forever</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span>Secure & Private</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span>HIPAA-Ready</span>
-              </div>
-            </div>
 
             <div className="flex flex-col space-y-4 sm:flex-row sm:space-y-0 sm:space-x-4">
               <Link href="/auth?tab=signup" className="btn btn-primary text-lg px-8 py-3">
@@ -322,8 +307,302 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Social Proof Section */}
+      {/* How It Works Section */}
       <section className="py-16 bg-gray-50 dark:bg-gray-900">
+        <div className="container px-4 mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+              How WardNotes Works
+            </h2>
+            <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+              Three simple steps to transform your medical learning
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {/* Step 1 */}
+            <div className="text-center">
+              <div className="w-16 h-16 mx-auto mb-4 bg-primary-100 dark:bg-primary-900 rounded-full flex items-center justify-center">
+                <span className="text-2xl font-bold text-primary-600 dark:text-primary-400">1</span>
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
+                Create & Organize Notes
+              </h3>
+              <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
+                Take clinical notes with rich text formatting. Organize them by categories like Cardiology, Surgery, or Internal Medicine. Add tags for quick reference.
+              </p>
+            </div>
+
+            {/* Step 2 */}
+            <div className="text-center">
+              <div className="w-16 h-16 mx-auto mb-4 bg-secondary-100 dark:bg-secondary-900 rounded-full flex items-center justify-center">
+                <span className="text-2xl font-bold text-secondary-600 dark:text-secondary-400">2</span>
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
+                Generate Flashcards with AI
+              </h3>
+              <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
+                Our AI automatically creates high-quality flashcards from your notes. Review and customize them, then organize into study decks by topic or rotation.
+              </p>
+            </div>
+
+            {/* Step 3 */}
+            <div className="text-center">
+              <div className="w-16 h-16 mx-auto mb-4 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
+                <span className="text-2xl font-bold text-green-600 dark:text-green-400">3</span>
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
+                Study & Track Progress
+              </h3>
+              <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
+                Use spaced repetition to master your flashcards. Track your learning streaks, monitor daily progress, and build consistent study habits.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Pricing Section */}
+      <section className="py-16 bg-white dark:bg-gray-800">
+        <div className="container px-4 mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+              Simple, Transparent Pricing
+            </h2>
+            <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+              Start free and upgrade when you need more features
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+            {/* Free Plan */}
+            <div className="card p-8 border-2 border-gray-200 dark:border-gray-700">
+              <div className="text-center mb-6">
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Free</h3>
+                <div className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
+                  $0
+                  <span className="text-lg font-normal text-gray-500">/month</span>
+                </div>
+                <p className="text-gray-600 dark:text-gray-300">Perfect for getting started</p>
+              </div>
+              
+              <ul className="space-y-3 mb-8">
+                <li className="flex items-center">
+                  <svg className="w-5 h-5 text-green-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="text-gray-700 dark:text-gray-300">Unlimited notes</span>
+                </li>
+                <li className="flex items-center">
+                  <svg className="w-5 h-5 text-green-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="text-gray-700 dark:text-gray-300">Custom categories & tags</span>
+                </li>
+                <li className="flex items-center">
+                  <svg className="w-5 h-5 text-green-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="text-gray-700 dark:text-gray-300">Manual flashcard generation</span>
+                </li>
+                <li className="flex items-center">
+                  <svg className="w-5 h-5 text-green-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="text-gray-700 dark:text-gray-300">Spaced repetition learning</span>
+                </li>
+                <li className="flex items-center">
+                  <svg className="w-5 h-5 text-green-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="text-gray-700 dark:text-gray-300">Progress tracking</span>
+                </li>
+              </ul>
+              
+              <Link href="/auth?tab=signup" className="btn btn-outline w-full">
+                Start Free
+              </Link>
+            </div>
+
+            {/* Premium Plan */}
+            <div className="card p-8 border-2 border-primary-500 relative">
+              <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                <span className="bg-primary-500 text-white px-4 py-1 rounded-full text-sm font-medium">
+                  Most Popular
+                </span>
+              </div>
+              
+              <div className="text-center mb-6">
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Premium</h3>
+                <div className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
+                  $9
+                  <span className="text-lg font-normal text-gray-500">/month</span>
+                </div>
+                <p className="text-gray-600 dark:text-gray-300">For serious medical students</p>
+              </div>
+              
+              <ul className="space-y-3 mb-8">
+                <li className="flex items-center">
+                  <svg className="w-5 h-5 text-green-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="text-gray-700 dark:text-gray-300">Unlimited notes</span>
+                </li>
+                <li className="flex items-center">
+                  <svg className="w-5 h-5 text-green-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="text-gray-700 dark:text-gray-300">Custom categories & tags</span>
+                </li>
+                <li className="flex items-center">
+                  <svg className="w-5 h-5 text-green-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="text-gray-700 dark:text-gray-300">Manual flashcard generation</span>
+                </li>
+                <li className="flex items-center">
+                  <svg className="w-5 h-5 text-green-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="text-gray-700 dark:text-gray-300">Spaced repetition learning</span>
+                </li>
+                <li className="flex items-center">
+                  <svg className="w-5 h-5 text-green-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="text-gray-700 dark:text-gray-300">Progress tracking</span>
+                </li>
+                <li className="flex items-center">
+                  <svg className="w-5 h-5 text-green-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="text-gray-700 dark:text-gray-300">AI-powered note improvement feature</span>
+                </li>
+                <li className="flex items-start">
+                  <svg className="w-5 h-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="text-gray-700 dark:text-gray-300">Advanced AI flashcard generation (Cloze and front-back modes)</span>
+                </li>
+                <li className="flex items-center">
+                  <svg className="w-5 h-5 text-green-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="text-gray-700 dark:text-gray-300">Early access to new features</span>
+                </li>
+              </ul>
+              
+              <Link href="/auth?tab=signup" className="btn btn-primary w-full">
+                Start Premium Trial
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ Section */}
+      <section className="py-16 bg-gray-50 dark:bg-gray-900">
+        <div className="container px-4 mx-auto max-w-4xl">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+              Frequently Asked Questions
+            </h2>
+            <p className="text-lg text-gray-600 dark:text-gray-300">
+              Everything you need to know about WardNotes
+            </p>
+          </div>
+          
+          <div className="space-y-6">
+            {/* FAQ Item 1 */}
+            <div className="card p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+                Is WardNotes HIPAA compliant?
+              </h3>
+              <p className="text-gray-600 dark:text-gray-300">
+                WardNotes is designed with healthcare data security in mind. However, we recommend using it for educational notes and study materials rather than patient information. Always follow your institution's guidelines for handling clinical data.
+              </p>
+            </div>
+
+            {/* FAQ Item 2 */}
+            <div className="card p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+                How does the AI flashcard generation work?
+              </h3>
+              <p className="text-gray-600 dark:text-gray-300">
+                Our AI analyzes your notes and automatically creates relevant question-and-answer pairs. It identifies key concepts, definitions, and relationships in your medical content to generate effective study materials.
+              </p>
+            </div>
+
+            {/* FAQ Item 3 */}
+            <div className="card p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+                Can I import my existing notes?
+              </h3>
+              <p className="text-gray-600 dark:text-gray-300">
+                Currently, you can copy and paste your existing notes into WardNotes. We're working on import features for popular note-taking formats. Contact support if you need help migrating your content.
+              </p>
+            </div>
+
+            {/* FAQ Item 4 */}
+            <div className="card p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+                What happens to my data if I cancel my subscription?
+              </h3>
+              <p className="text-gray-600 dark:text-gray-300">
+                Your data remains accessible even if you downgrade to the free plan. Premium features become unavailable, but your notes and flashcards are preserved. You can export your data at any time.
+              </p>
+            </div>
+
+            {/* FAQ Item 5 */}
+            <div className="card p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+                Is there a mobile app?
+              </h3>
+              <p className="text-gray-600 dark:text-gray-300">
+                Yes! WardNotes has native mobile apps for iOS and Android, allowing you to study flashcards and take notes on the go. The mobile app syncs seamlessly with the web version.
+              </p>
+            </div>
+
+            {/* FAQ Item 6 */}
+            <div className="card p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+                Do you offer student discounts?
+              </h3>
+              <p className="text-gray-600 dark:text-gray-300">
+                We offer special pricing for verified medical students and residents. Contact our support team with your institutional email for discount information.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Final CTA Section */}
+      <section className="py-16 bg-primary-600 dark:bg-primary-700">
+        <div className="container px-4 mx-auto text-center">
+          <h2 className="text-3xl font-bold text-white mb-4">
+            Ready to transform your medical learning?
+          </h2>
+          <p className="text-xl text-primary-100 mb-8 max-w-2xl mx-auto">
+            Join thousands of medical students and residents who are already using WardNotes to master their clinical knowledge.
+          </p>
+          
+          <div className="flex flex-col space-y-4 sm:flex-row sm:space-y-0 sm:space-x-4 sm:justify-center">
+            <Link href="/auth?tab=signup" className="btn bg-white text-primary-600 hover:bg-gray-100 text-lg px-8 py-3 font-semibold">
+              Start Free
+            </Link>
+            <Link href="/auth" className="btn btn-outline border-white text-white hover:bg-white hover:text-primary-600 text-lg px-8 py-3">
+              Sign In
+            </Link>
+          </div>
+          
+          <p className="text-sm text-primary-200 mt-6">
+            No credit card required • Free forever plan available
+          </p>
+        </div>
+      </section>
+
+      {/* Social Proof Section */}
+      <section className="py-16 bg-white dark:bg-gray-800">
         <div className="container px-4 mx-auto text-center">
           <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
             Built for medical education excellence
@@ -369,11 +648,80 @@ export default function Home() {
         </div>
       </section>
       
-      <footer className="py-8 bg-gray-50 dark:bg-gray-900">
-        <div className="container px-4 mx-auto text-center">
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            &copy; {new Date().getFullYear()} WardNotes. Made for medical professionals.
-          </p>
+      <footer className="py-12 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700">
+        <div className="container px-4 mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+            {/* Brand & Description */}
+            <div>
+              <div className="flex items-center mb-4">
+                <span className="text-xl font-bold text-primary-600 dark:text-primary-400">WardNotes</span>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                The smart note-taking app for medical students and residents. Transform your clinical notes into powerful flashcards with AI.
+              </p>
+            </div>
+
+            {/* Important Notice */}
+            <div>
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Important Notice</h3>
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                <div className="flex items-start">
+                  <svg className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                  <div>
+                    <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-1">
+                      No PHI (Protected Health Information)
+                    </p>
+                    <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                      Do not include patient identifiers or protected health information in your notes. Use for educational content only.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Legal Links */}
+            <div>
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Legal</h3>
+              <ul className="space-y-2">
+                <li>
+                  <Link href="/privacy" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
+                    Privacy Policy
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/terms" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
+                    Terms of Service
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/security" className="text-sm text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors">
+                    Security & Compliance
+                  </Link>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Bottom Border */}
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-8">
+            <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                &copy; {new Date().getFullYear()} WardNotes. Made for medical professionals.
+              </p>
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">Educational Use Only</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">HIPAA-Ready</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </footer>
     </div>
