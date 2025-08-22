@@ -9,7 +9,7 @@ Disallow: /auth/reset-password
 Disallow: /auth/verify
 
 # Host
-Host: https://wardnotes.app
+Host: https://wardnotes.vercel.app
 
 # Sitemaps
-Sitemap: https://wardnotes.app/sitemap.xml
+Sitemap: https://wardnotes.vercel.app/sitemap.xml
