@@ -25,6 +25,9 @@ export const metadata: Metadata = {
   authors: [{ name: 'WardNotes Team' }],
   creator: 'WardNotes',
   publisher: 'WardNotes',
+  verification: {
+    google: 'lRDlxYlpm-OORFtHb5obSNI5MLJqltYew0mw1Rit7aw',
+  },
   formatDetection: {
     email: false,
     address: false,

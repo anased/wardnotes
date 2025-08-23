@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 export default function Home() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('notes');
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
   
   // Check if user is already logged in
   useEffect(() => {
@@ -307,61 +308,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* How It Works Section */}
-      <section className="py-16 bg-gray-50 dark:bg-gray-900">
-        <div className="container px-4 mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-              How WardNotes Works
-            </h2>
-            <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-              Three simple steps to transform your medical learning
-            </p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {/* Step 1 */}
-            <div className="text-center">
-              <div className="w-16 h-16 mx-auto mb-4 bg-primary-100 dark:bg-primary-900 rounded-full flex items-center justify-center">
-                <span className="text-2xl font-bold text-primary-600 dark:text-primary-400">1</span>
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
-                Create & Organize Notes
-              </h3>
-              <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                Take clinical notes with rich text formatting. Organize them by categories like Cardiology, Surgery, or Internal Medicine. Add tags for quick reference.
-              </p>
-            </div>
-
-            {/* Step 2 */}
-            <div className="text-center">
-              <div className="w-16 h-16 mx-auto mb-4 bg-secondary-100 dark:bg-secondary-900 rounded-full flex items-center justify-center">
-                <span className="text-2xl font-bold text-secondary-600 dark:text-secondary-400">2</span>
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
-                Generate Flashcards with AI
-              </h3>
-              <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                Our AI automatically creates high-quality flashcards from your notes. Review and customize them, then organize into study decks by topic or rotation.
-              </p>
-            </div>
-
-            {/* Step 3 */}
-            <div className="text-center">
-              <div className="w-16 h-16 mx-auto mb-4 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
-                <span className="text-2xl font-bold text-green-600 dark:text-green-400">3</span>
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">
-                Study & Track Progress
-              </h3>
-              <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                Use spaced repetition to master your flashcards. Track your learning streaks, monitor daily progress, and build consistent study habits.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* Pricing Section */}
       <section className="py-16 bg-white dark:bg-gray-800">
         <div className="container px-4 mx-auto">
@@ -416,6 +362,24 @@ export default function Home() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                   <span className="text-gray-700 dark:text-gray-300">Progress tracking</span>
+                </li>
+                <li className="flex items-center opacity-50">
+                  <svg className="w-5 h-5 text-red-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  <span className="text-gray-500 dark:text-gray-500 line-through">AI-powered note improvement feature</span>
+                </li>
+                <li className="flex items-start opacity-50">
+                  <svg className="w-5 h-5 text-red-500 mr-3 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  <span className="text-gray-500 dark:text-gray-500 line-through">Advanced AI flashcard generation (Cloze and front-back modes)</span>
+                </li>
+                <li className="flex items-center opacity-50">
+                  <svg className="w-5 h-5 text-red-500 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  <span className="text-gray-500 dark:text-gray-500 line-through">Early access to new features</span>
                 </li>
               </ul>
               
@@ -512,65 +476,167 @@ export default function Home() {
             </p>
           </div>
           
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* FAQ Item 1 */}
-            <div className="card p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-                Is WardNotes HIPAA compliant?
-              </h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                WardNotes is designed with healthcare data security in mind. However, we recommend using it for educational notes and study materials rather than patient information. Always follow your institution's guidelines for handling clinical data.
-              </p>
+            <div className="card border border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => setOpenFaq(openFaq === 1 ? null : 1)}
+                className="w-full p-6 text-left flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+              >
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Is WardNotes HIPAA compliant?
+                </h3>
+                <svg 
+                  className={`w-5 h-5 text-gray-500 transition-transform ${openFaq === 1 ? 'rotate-180' : ''}`}
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {openFaq === 1 && (
+                <div className="px-6 pb-6">
+                  <p className="text-gray-600 dark:text-gray-300">
+                    WardNotes is designed with healthcare data security in mind. However, we recommend using it for educational notes and study materials rather than patient information. Always follow your institution's guidelines for handling clinical data.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* FAQ Item 2 */}
-            <div className="card p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-                How does the AI flashcard generation work?
-              </h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                Our AI analyzes your notes and automatically creates relevant question-and-answer pairs. It identifies key concepts, definitions, and relationships in your medical content to generate effective study materials.
-              </p>
+            <div className="card border border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => setOpenFaq(openFaq === 2 ? null : 2)}
+                className="w-full p-6 text-left flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+              >
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  How does the AI flashcard generation work?
+                </h3>
+                <svg 
+                  className={`w-5 h-5 text-gray-500 transition-transform ${openFaq === 2 ? 'rotate-180' : ''}`}
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {openFaq === 2 && (
+                <div className="px-6 pb-6">
+                  <p className="text-gray-600 dark:text-gray-300">
+                    Our AI analyzes your notes and automatically creates relevant question-and-answer pairs. It identifies key concepts, definitions, and relationships in your medical content to generate effective study materials.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* FAQ Item 3 */}
-            <div className="card p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-                Can I import my existing notes?
-              </h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                Currently, you can copy and paste your existing notes into WardNotes. We're working on import features for popular note-taking formats. Contact support if you need help migrating your content.
-              </p>
+            <div className="card border border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => setOpenFaq(openFaq === 3 ? null : 3)}
+                className="w-full p-6 text-left flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+              >
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Can I import my existing notes?
+                </h3>
+                <svg 
+                  className={`w-5 h-5 text-gray-500 transition-transform ${openFaq === 3 ? 'rotate-180' : ''}`}
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {openFaq === 3 && (
+                <div className="px-6 pb-6">
+                  <p className="text-gray-600 dark:text-gray-300">
+                    Currently, you can copy and paste your existing notes into WardNotes. We're working on import features for popular note-taking formats. Contact support if you need help migrating your content.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* FAQ Item 4 */}
-            <div className="card p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-                What happens to my data if I cancel my subscription?
-              </h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                Your data remains accessible even if you downgrade to the free plan. Premium features become unavailable, but your notes and flashcards are preserved. You can export your data at any time.
-              </p>
+            <div className="card border border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => setOpenFaq(openFaq === 4 ? null : 4)}
+                className="w-full p-6 text-left flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+              >
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  What happens to my data if I cancel my subscription?
+                </h3>
+                <svg 
+                  className={`w-5 h-5 text-gray-500 transition-transform ${openFaq === 4 ? 'rotate-180' : ''}`}
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {openFaq === 4 && (
+                <div className="px-6 pb-6">
+                  <p className="text-gray-600 dark:text-gray-300">
+                    Your data remains accessible even if you downgrade to the free plan. Premium features become unavailable, but your notes and flashcards are preserved. You can export your data at any time.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* FAQ Item 5 */}
-            <div className="card p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-                Is there a mobile app?
-              </h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                Yes! WardNotes has native mobile apps for iOS and Android, allowing you to study flashcards and take notes on the go. The mobile app syncs seamlessly with the web version.
-              </p>
+            <div className="card border border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => setOpenFaq(openFaq === 5 ? null : 5)}
+                className="w-full p-6 text-left flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+              >
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Is there a mobile app?
+                </h3>
+                <svg 
+                  className={`w-5 h-5 text-gray-500 transition-transform ${openFaq === 5 ? 'rotate-180' : ''}`}
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {openFaq === 5 && (
+                <div className="px-6 pb-6">
+                  <p className="text-gray-600 dark:text-gray-300">
+                    Yes! WardNotes has native mobile apps for iOS and Android, allowing you to study flashcards and take notes on the go. The mobile app syncs seamlessly with the web version.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* FAQ Item 6 */}
-            <div className="card p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-                Do you offer student discounts?
-              </h3>
-              <p className="text-gray-600 dark:text-gray-300">
-                We offer special pricing for verified medical students and residents. Contact our support team with your institutional email for discount information.
-              </p>
+            <div className="card border border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => setOpenFaq(openFaq === 6 ? null : 6)}
+                className="w-full p-6 text-left flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+              >
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Do you offer student discounts?
+                </h3>
+                <svg 
+                  className={`w-5 h-5 text-gray-500 transition-transform ${openFaq === 6 ? 'rotate-180' : ''}`}
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {openFaq === 6 && (
+                <div className="px-6 pb-6">
+                  <p className="text-gray-600 dark:text-gray-300">
+                    We offer special pricing for verified medical students and residents. Contact our support team with your institutional email for discount information.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>
