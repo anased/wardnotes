@@ -171,7 +171,8 @@ export async function POST(request: NextRequest) {
     let cancelUrl: string;
     
     if (isMobile && mobileRedirectScheme) {
-      // Mobile app redirects
+      // Mobile app redirects - mobileRedirectScheme should be "wardnotes://subscription" 
+      // We append query params directly
       successUrl = `${mobileRedirectScheme}?success=true&session_id={CHECKOUT_SESSION_ID}`;
       cancelUrl = `${mobileRedirectScheme}?canceled=true`;
     } else {
