@@ -24,6 +24,7 @@ export default function SubscriptionPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const hasProcessedParams = useRef(false);
   const [hasTrackedPaywallView, setHasTrackedPaywallView] = useState(false);
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
 
   // Display prices based on US dollars for now, but this could be dynamic
   const monthlyPrice = '$9.99';
@@ -397,30 +398,90 @@ export default function SubscriptionPage() {
           <h2 className="mb-4 text-xl font-semibold">Frequently Asked Questions</h2>
           
           <div className="space-y-4">
-            <div>
-              <h3 className="mb-2 text-lg font-medium">What's included in the premium plan?</h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                Premium members get access to AI-powered flashcard generation to create Anki-compatible flashcards from notes,
-                and AI note improvement to help structure and enhance medical notes. You'll also be first to access new premium
-                features as they're released.
-              </p>
+            {/* FAQ Item 1 */}
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg">
+              <button
+                onClick={() => setOpenFaq(openFaq === 1 ? null : 1)}
+                className="w-full p-4 text-left flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors rounded-lg"
+              >
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                  What's included in the premium plan?
+                </h3>
+                <svg 
+                  className={`w-5 h-5 text-gray-500 transition-transform ${openFaq === 1 ? 'rotate-180' : ''}`}
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {openFaq === 1 && (
+                <div className="px-4 pb-4">
+                  <p className="text-gray-600 dark:text-gray-400">
+                    Premium members get access to AI-powered flashcard generation to create Anki-compatible flashcards from notes,
+                    and AI note improvement to help structure and enhance medical notes. You'll also be first to access new premium
+                    features as they're released.
+                  </p>
+                </div>
+              )}
             </div>
             
-            <div>
-              <h3 className="mb-2 text-lg font-medium">Can I cancel my subscription?</h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                Yes, you can cancel your subscription at any time. You'll continue to have premium access until the end of your
-                current billing period. There are no refunds for partial months or years.
-              </p>
+            {/* FAQ Item 2 */}
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg">
+              <button
+                onClick={() => setOpenFaq(openFaq === 2 ? null : 2)}
+                className="w-full p-4 text-left flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors rounded-lg"
+              >
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                  Can I cancel my subscription?
+                </h3>
+                <svg 
+                  className={`w-5 h-5 text-gray-500 transition-transform ${openFaq === 2 ? 'rotate-180' : ''}`}
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {openFaq === 2 && (
+                <div className="px-4 pb-4">
+                  <p className="text-gray-600 dark:text-gray-400">
+                    Yes, you can cancel your subscription at any time. You'll continue to have premium access until the end of your
+                    current billing period. There are no refunds for partial months or years.
+                  </p>
+                </div>
+              )}
             </div>
             
-            <div>
-              <h3 className="mb-2 text-lg font-medium">How do the premium features work?</h3>
-              <p className="text-gray-600 dark:text-gray-400">
-                The flashcard generator turns your medical notes into effective Anki-compatible flashcards optimized for
-                spaced repetition learning. The note improvement tool helps structure and enhance your notes for better
-                readability and organization.
-              </p>
+            {/* FAQ Item 3 */}
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg">
+              <button
+                onClick={() => setOpenFaq(openFaq === 3 ? null : 3)}
+                className="w-full p-4 text-left flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors rounded-lg"
+              >
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                  How do the premium features work?
+                </h3>
+                <svg 
+                  className={`w-5 h-5 text-gray-500 transition-transform ${openFaq === 3 ? 'rotate-180' : ''}`}
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {openFaq === 3 && (
+                <div className="px-4 pb-4">
+                  <p className="text-gray-600 dark:text-gray-400">
+                    The flashcard generator turns your medical notes into effective Anki-compatible flashcards optimized for
+                    spaced repetition learning. The note improvement tool helps structure and enhance your notes for better
+                    readability and organization.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>

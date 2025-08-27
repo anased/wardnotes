@@ -7,8 +7,8 @@ import getURL from '@/lib/utils/getURL';
 export async function POST(request: NextRequest) {
   try {
     // Parse the request body
-    const { priceId, isYearly } = await request.json();
-    console.log('🛒 Creating checkout session for:', { priceId, isYearly });
+    const { priceId, isYearly, isMobile, mobileRedirectScheme } = await request.json();
+    console.log('🛒 Creating checkout session for:', { priceId, isYearly, isMobile, mobileRedirectScheme });
     
     // Get the authorization header
     const authHeader = request.headers.get('Authorization');
@@ -166,11 +166,26 @@ export async function POST(request: NextRequest) {
     // Create a Checkout Session
     const baseUrl = getURL();
     
+    // Define success and cancel URLs based on mobile vs web
+    let successUrl: string;
+    let cancelUrl: string;
+    
+    if (isMobile && mobileRedirectScheme) {
+      // Mobile app redirects
+      successUrl = `${mobileRedirectScheme}?success=true&session_id={CHECKOUT_SESSION_ID}`;
+      cancelUrl = `${mobileRedirectScheme}?canceled=true`;
+    } else {
+      // Web app redirects
+      successUrl = `${baseUrl}settings/subscription?success=true&session_id={CHECKOUT_SESSION_ID}`;
+      cancelUrl = `${baseUrl}settings/subscription?canceled=true`;
+    }
+    
     console.log('🔗 Creating checkout session with:', {
       customer: customerId,
       priceId: priceLookupId,
-      successUrl: `${baseUrl}settings/subscription?success=true&session_id={CHECKOUT_SESSION_ID}`,
-      cancelUrl: `${baseUrl}settings/subscription?canceled=true`
+      successUrl,
+      cancelUrl,
+      isMobile
     });
     
     const checkoutSession = await stripe.checkout.sessions.create({
@@ -182,8 +197,8 @@ export async function POST(request: NextRequest) {
         },
       ],
       mode: 'subscription',
-      success_url: `${baseUrl}settings/subscription?success=true&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}settings/subscription?canceled=true`,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
       subscription_data: {
         metadata: {
           userId: user.id,
