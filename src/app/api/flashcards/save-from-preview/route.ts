@@ -10,6 +10,11 @@ interface SaveFromPreviewRequest {
   note_id: string;
   deck_id: string;
   card_type: 'cloze' | 'front_back';
+  cards: Array<{
+    front?: string;
+    back?: string;
+    cloze?: string;
+  }>;
 }
 
 export async function POST(request: NextRequest) {
@@ -36,22 +41,15 @@ export async function POST(request: NextRequest) {
 
     const body: SaveFromPreviewRequest = await request.json();
 
-    // Step 1: Get the previewed flashcards from flashcard_generations table
-    const { data: generation, error: generationError } = await supabase
-      .from('flashcard_generations')
-      .select('cards')
-      .eq('note_id', body.note_id)
-      .eq('user_id', user.id)
-      .single();
-
-    if (generationError || !generation) {
+    // Validate that cards array is provided
+    if (!body.cards || !Array.isArray(body.cards) || body.cards.length === 0) {
       return NextResponse.json(
-        { error: 'No preview flashcards found. Please generate a preview first.' }, 
-        { status: 404 }
+        { error: 'No cards provided to save' },
+        { status: 400 }
       );
     }
 
-    // Step 2: Ensure the target deck exists and belongs to the user
+    // Step 1: Ensure the target deck exists and belongs to the user
     const { data: deck, error: deckError } = await supabase
       .from('flashcard_decks')
       .select('id')
@@ -63,8 +61,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Deck not found or unauthorized' }, { status: 404 });
     }
 
-    // Step 3: Convert the preview cards to flashcard records
-    const flashcardData = generation.cards.map((cardText: string) => {
+    // Step 2: Verify the note exists and belongs to the user (optional but good practice)
+    const { data: note, error: noteError } = await supabase
+      .from('notes')
+      .select('id')
+      .eq('id', body.note_id)
+      .eq('user_id', user.id)
+      .single();
+
+    if (noteError || !note) {
+      return NextResponse.json({ error: 'Note not found or unauthorized' }, { status: 404 });
+    }
+
+    // Step 3: Convert the cards to flashcard records
+    const flashcardData = body.cards.map((card) => {
       const baseCard = {
         deck_id: body.deck_id,
         note_id: body.note_id,
@@ -84,20 +94,15 @@ export async function POST(request: NextRequest) {
       if (body.card_type === 'cloze') {
         return {
           ...baseCard,
-          cloze_content: cardText,
+          cloze_content: card.cloze || '',
           front_content: null,
           back_content: null
         };
       } else {
-        // For front_back cards, assume format is "front -> back" or "front\tback"
-        const parts = cardText.includes(' -> ') 
-          ? cardText.split(' -> ') 
-          : cardText.split('\t');
-        
         return {
           ...baseCard,
-          front_content: parts[0]?.trim() || cardText,
-          back_content: parts[1]?.trim() || '',
+          front_content: card.front || '',
+          back_content: card.back || '',
           cloze_content: null
         };
       }

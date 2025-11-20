@@ -190,11 +190,29 @@ export async function POST(request: NextRequest) {
       max_cards
     );
 
-    // If this is just a preview, return the generated cards without saving
+    // If this is just a preview, save to flashcard_generations table and return
     if (preview) {
-      return NextResponse.json({ 
+      // Save preview to flashcard_generations table for later retrieval
+      const { error: savePreviewError } = await supabase
+        .from('flashcard_generations')
+        .upsert({
+          note_id: note_id,
+          user_id: user.id,
+          cards: generatedCards,
+          card_type: card_type,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'note_id' // Update if exists, insert if not
+        });
+
+      if (savePreviewError) {
+        console.error('Error saving preview to flashcard_generations:', savePreviewError);
+        // Continue anyway - don't fail the preview generation
+      }
+
+      return NextResponse.json({
         cards: generatedCards,
-        preview: true 
+        preview: true
       });
     }
 
