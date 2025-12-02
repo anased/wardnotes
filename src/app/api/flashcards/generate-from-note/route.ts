@@ -1,12 +1,11 @@
 // src/app/api/flashcards/generate-from-note/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import OpenAI from 'openai';
 import type { GenerateFlashcardsRequest } from '@/types/flashcard';
+import { generateSmartFlashcards } from '@/lib/utils/smartFlashcardGeneration';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // Helper function to convert TipTap JSON to plain text
 function convertTipTapToPlainText(content: any): string {
@@ -35,113 +34,7 @@ function convertTipTapToPlainText(content: any): string {
   return plainText.trim();
 }
 
-// Generate flashcards using OpenAI
-async function generateFlashcards(
-  content: string, 
-  title: string, 
-  cardType: 'cloze' | 'front_back', 
-  maxCards: number
-): Promise<Array<{front?: string, back?: string, cloze?: string}>> {
-  const prompt = cardType === 'cloze' 
-    ? `Generate ${maxCards} cloze deletion flashcards for the following medical note using {{c1::word}} format.
-
-Guidelines:
-- Create comprehensive cards covering key concepts
-- Use {{c1::term}} or {{c1::term::hint}} format
-- Focus on clinically relevant information
-- Provide context, not isolated facts
-- Create one cloze per fact (avoid multiple clozes in one card unless it reinforces relationships)
-- Use bidirectional phrasing where possible
-
-Medical Note Title: ${title}
-Content: ${content}
-
-Return each card on a new line.`
-    : `Generate ${maxCards} front-and-back flashcards for the following medical note.
-
-Guidelines:
-- Create clear, concise questions
-- Provide detailed, accurate answers
-- Focus on clinically relevant information
-- Use active recall principles
-- Questions should test understanding, not just memorization
-- Answers should be complete but concise
-
-Medical Note Title: ${title}
-Content: ${content}
-
-Format each card as:
-Q: [Question]
-A: [Answer]
-
-Separate each card with a blank line.`;
-
-  try {
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { 
-          role: "system", 
-          content: "You are a medical education expert who creates high-quality flashcards for medical students. Focus on creating clinically relevant, well-structured flashcards that promote deep understanding."
-        },
-        { role: "user", content: prompt }
-      ],
-      temperature: 0.7,
-      max_tokens: 2000,
-    });
-
-    const result = response.choices[0].message.content || '';
-    
-    if (cardType === 'cloze') {
-      return result.split('\n')
-        .filter(line => line.trim().length > 0)
-        .slice(0, maxCards)
-        .map(line => ({ cloze: line.trim() }));
-    } else {
-      const cards: Array<{front: string, back: string}> = [];
-      const lines = result.split('\n');
-      let currentQuestion = '';
-      let currentAnswer = '';
-      
-      for (const line of lines) {
-        if (line.startsWith('Q:')) {
-          currentQuestion = line.substring(2).trim();
-        } else if (line.startsWith('A:')) {
-          currentAnswer = line.substring(2).trim();
-          if (currentQuestion && currentAnswer) {
-            cards.push({ front: currentQuestion, back: currentAnswer });
-            currentQuestion = '';
-            currentAnswer = '';
-            
-            if (cards.length >= maxCards) break;
-          }
-        }
-      }
-      
-      return cards;
-    }
-  } catch (error) {
-    console.error('Error generating flashcards with AI:', error);
-    
-    // Fallback to simple text-based cards
-    const sentences = content.split('.').filter(s => s.trim().length > 10);
-    const fallbackCards = sentences.slice(0, Math.min(maxCards, 5)).map(sentence => {
-      if (cardType === 'cloze') {
-        const words = sentence.trim().split(' ');
-        const importantWordIndex = Math.floor(words.length / 2);
-        words[importantWordIndex] = `{{c1::${words[importantWordIndex]}}}`;
-        return { cloze: words.join(' ') };
-      } else {
-        return { 
-          front: `What is the meaning of: "${sentence.trim().substring(0, 50)}..."?`, 
-          back: sentence.trim() 
-        };
-      }
-    });
-    
-    return fallbackCards;
-  }
-}
+// No need for old generateFlashcards function - using smart generation now
 
 export async function POST(request: NextRequest) {
   try {
@@ -165,8 +58,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body: GenerateFlashcardsRequest & { preview?: boolean } = await request.json();
-    const { note_id, card_type, deck_id, max_cards = 10, preview = false } = body;
+    const body: GenerateFlashcardsRequest & { preview?: boolean; enable_deduplication?: boolean } = await request.json();
+    const { note_id, card_type, deck_id, max_cards = 10, preview = false, enable_deduplication = false } = body;
 
     // Get the note
     const { data: note, error: noteError } = await supabase
@@ -182,13 +75,16 @@ export async function POST(request: NextRequest) {
     // Convert note content to plain text
     const plainText = convertTipTapToPlainText(note.content);
 
-    // Generate flashcards using AI
-    const generatedCards = await generateFlashcards(
-      plainText, 
-      note.title, 
-      card_type, 
-      max_cards
+    // Generate flashcards using smart two-stage AI generation
+    const startTime = Date.now();
+    const generatedCards = await generateSmartFlashcards(
+      plainText,
+      note.title,
+      card_type,
+      max_cards,
+      enable_deduplication
     );
+    const generationTime = Date.now() - startTime;
 
     // If this is just a preview, save to flashcard_generations table and return
     if (preview) {
@@ -212,7 +108,19 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         cards: generatedCards,
-        preview: true
+        preview: true,
+        metadata: {
+          generationTime,
+          totalGenerated: generatedCards.length,
+          cardTypes: generatedCards.reduce((acc, card) => {
+            acc[card.type] = (acc[card.type] || 0) + 1;
+            return acc;
+          }, {} as Record<string, number>),
+          importanceLevels: generatedCards.reduce((acc, card) => {
+            acc[card.importance] = (acc[card.importance] || 0) + 1;
+            return acc;
+          }, {} as Record<string, number>)
+        }
       });
     }
 
@@ -298,9 +206,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to save flashcards' }, { status: 500 });
     }
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       flashcards: savedFlashcards,
-      preview: false 
+      preview: false,
+      metadata: {
+        generationTime,
+        totalGenerated: generatedCards.length,
+        totalSaved: savedFlashcards?.length || 0,
+        cardTypes: generatedCards.reduce((acc, card) => {
+          acc[card.type] = (acc[card.type] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>),
+        importanceLevels: generatedCards.reduce((acc, card) => {
+          acc[card.importance] = (acc[card.importance] || 0) + 1;
+          return acc;
+        }, {} as Record<string, number>)
+      }
     });
   } catch (error) {
     console.error('Error in generate-from-note API:', error);
