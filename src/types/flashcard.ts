@@ -96,6 +96,20 @@ export interface FlashcardData {
   tags?: string[];
 }
 
+// Preview card type for web app selection and editing UI
+export interface PreviewFlashcard {
+  id: string; // Temporary ID for preview management (e.g., "preview-0")
+  front?: string;
+  back?: string;
+  cloze?: string;
+  type: 'definition' | 'mechanism' | 'clinical_pearl' | 'differential' | 'treatment' | 'diagnostic';
+  importance: 'high' | 'medium' | 'low';
+  sourceContext?: string;
+  isSelected: boolean; // Checkbox state
+  isEdited: boolean; // Visual indicator
+  isExpanded?: boolean; // Inline editing state
+}
+
 // Study session interfaces
 export interface StudySessionStats {
   totalCards: number;
