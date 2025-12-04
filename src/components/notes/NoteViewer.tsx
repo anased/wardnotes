@@ -12,6 +12,7 @@ import NoteEditor from './NoteEditor';
 import { EnhancedFlashcardGeneratorModal } from './EnhancedFlashcardGeneratorModal';
 import PremiumFeatureGate from '../premium/PremiumFeatureGate'; // Import the premium gate
 import { FlashcardIntegrationButton } from './FlashcardIntegrationButton';
+import NoteFlashcardsSection from './NoteFlashcardsSection';
 
 interface NoteViewerProps {
   note: Note;
@@ -118,7 +119,13 @@ export default function NoteViewer({ note }: NoteViewerProps) {
       <div className="p-4 bg-white rounded-lg shadow dark:bg-gray-800">
         <NoteEditor content={note.content} onChange={() => {}} editable={false} />
       </div>
-      
+
+      {/* Flashcards Section */}
+      <NoteFlashcardsSection
+        noteId={note.id}
+        noteTitle={note.title}
+      />
+
       {/* Delete confirmation modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">

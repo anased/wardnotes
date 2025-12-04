@@ -163,38 +163,42 @@ export class FlashcardService {
   
   static async getFlashcards(filters?: FlashcardSearchFilters): Promise<Flashcard[]> {
     const user = await this.getAuthenticatedUser();
-    
+
     let query = supabase
       .from('flashcards')
       .select('*')
       .eq('user_id', user.id);  // Add user filter
-    
+
     if (filters?.deck_id) {
       query = query.eq('deck_id', filters.deck_id);
     }
-    
+
+    if (filters?.note_id) {
+      query = query.eq('note_id', filters.note_id);
+    }
+
     if (filters?.status) {
       query = query.eq('status', filters.status);
     }
-    
+
     if (filters?.card_type) {
       query = query.eq('card_type', filters.card_type);
     }
-    
+
     if (filters?.due_only) {
       query = query.lte('next_review', new Date().toISOString());
     }
-    
+
     if (filters?.tags?.length) {
       query = query.overlaps('tags', filters.tags);
     }
-    
+
     if (filters?.search_text) {
       query = query.or(`front_content.ilike.%${filters.search_text}%,back_content.ilike.%${filters.search_text}%,cloze_content.ilike.%${filters.search_text}%`);
     }
-    
+
     query = query.order('next_review', { ascending: true });
-    
+
     const { data, error } = await query;
     if (error) throw error;
     return data || [];
@@ -273,9 +277,9 @@ export class FlashcardService {
     if (error) throw error;
   }
   
-  static async getDueCards(deckId?: string, limit?: number): Promise<Flashcard[]> {
+  static async getDueCards(deckId?: string, noteId?: string, limit?: number): Promise<Flashcard[]> {
     const user = await this.getAuthenticatedUser();
-    
+
     let query = supabase
       .from('flashcards')
       .select('*')
@@ -283,22 +287,26 @@ export class FlashcardService {
       .lte('next_review', new Date().toISOString())
       .neq('status', 'suspended')
       .order('next_review', { ascending: true });
-    
+
     if (deckId) {
       query = query.eq('deck_id', deckId);
     }
-    
+
+    if (noteId) {
+      query = query.eq('note_id', noteId);
+    }
+
     if (limit) {
       query = query.limit(limit);
     }
-    
+
     const { data, error } = await query;
     if (error) throw error;
     return data || [];
   }
   
-  static async getFlashcardsDue(deckId?: string, limit: number = 50): Promise<Flashcard[]> {
-    return this.getDueCards(deckId, limit);
+  static async getFlashcardsDue(deckId?: string, noteId?: string, limit: number = 50): Promise<Flashcard[]> {
+    return this.getDueCards(deckId, noteId, limit);
   }
   
   static async getNewFlashcards(deckId?: string, limit: number = 20): Promise<Flashcard[]> {
@@ -324,7 +332,7 @@ export class FlashcardService {
 
   static async getStudyCards(deckId?: string, maxDue: number = 30, maxNew: number = 10): Promise<Flashcard[]> {
     const [dueCards, newCards] = await Promise.all([
-      this.getFlashcardsDue(deckId, maxDue),
+      this.getFlashcardsDue(deckId, undefined, maxDue),
       this.getNewFlashcards(deckId, maxNew)
     ]);
     

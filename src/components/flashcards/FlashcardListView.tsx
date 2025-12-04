@@ -6,7 +6,9 @@ import { FlashcardService } from '@/services/flashcard';
 import type { Flashcard, FlashcardDeck, FlashcardType, FlashcardStatus } from '@/types/flashcard';
 
 interface FlashcardListViewProps {
-  deck: FlashcardDeck;
+  deck?: FlashcardDeck; // Now optional to support note-based filtering
+  noteId?: string; // NEW - for note-based filtering
+  noteTitle?: string; // NEW - for display
   isOpen: boolean;
   onClose: () => void;
   onFlashcardUpdated?: () => void;
@@ -21,7 +23,7 @@ interface EditingFlashcard {
   tags: string[];
 }
 
-export function FlashcardListView({ deck, isOpen, onClose, onFlashcardUpdated }: FlashcardListViewProps) {
+export function FlashcardListView({ deck, noteId, noteTitle, isOpen, onClose, onFlashcardUpdated }: FlashcardListViewProps) {
   const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -31,21 +33,30 @@ export function FlashcardListView({ deck, isOpen, onClose, onFlashcardUpdated }:
   const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
-    if (isOpen && deck) {
+    if (isOpen && (deck || noteId)) {
       loadFlashcards();
     }
-  }, [isOpen, deck]);
+  }, [isOpen, deck, noteId]);
 
   const loadFlashcards = async () => {
     try {
       setIsLoading(true);
       setError('');
-      
-      // Get all flashcards for this deck
-      const cards = await FlashcardService.getFlashcards({
-        deck_id: deck.id
-      });
-      
+
+      // Build filters based on what's provided
+      const filters: any = {};
+
+      if (deck) {
+        filters.deck_id = deck.id;
+      }
+
+      if (noteId) {
+        filters.note_id = noteId;
+      }
+
+      // Get all flashcards with filters
+      const cards = await FlashcardService.getFlashcards(filters);
+
       setFlashcards(cards);
     } catch (error) {
       console.error('Failed to load flashcards:', error);
@@ -188,7 +199,13 @@ export function FlashcardListView({ deck, isOpen, onClose, onFlashcardUpdated }:
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
           <div>
-            <h3 className="text-lg font-medium">Flashcards in "{deck.name}"</h3>
+            <h3 className="text-lg font-medium">
+              {noteTitle
+                ? `Flashcards from "${noteTitle}"`
+                : deck
+                ? `Flashcards in "${deck.name}"`
+                : 'Flashcards'}
+            </h3>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
               {filteredFlashcards.length} of {flashcards.length} flashcards
             </p>

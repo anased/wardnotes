@@ -176,6 +176,7 @@ export interface GenerateFlashcardsRequest {
 
 export interface FlashcardSearchFilters {
   deck_id?: string;
+  note_id?: string;
   status?: FlashcardStatus;
   card_type?: FlashcardType;
   tags?: string[];

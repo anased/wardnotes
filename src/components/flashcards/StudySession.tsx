@@ -7,7 +7,9 @@ import { splitClozeCard, extractClozeNumbers } from '@/lib/utils/clozeUtils';
 import type { Flashcard, FlashcardDeck, ReviewQuality, StudySessionStats } from '@/types/flashcard';
 
 interface StudySessionProps {
-  deck: FlashcardDeck; // Change from deckId to deck to match existing usage
+  deck?: FlashcardDeck; // Now optional to support note-based study
+  noteId?: string; // NEW - for note-based study
+  noteTitle?: string; // NEW - for display
   onSessionComplete: (stats: StudySessionStats) => void;
   onSessionPause: () => void;
 }
@@ -18,7 +20,7 @@ interface StudyCard {
   totalClozes?: number;  // Total number of clozes in the original card
 }
 
-export function StudySession({ deck, onSessionComplete, onSessionPause }: StudySessionProps) {
+export function StudySession({ deck, noteId, noteTitle, onSessionComplete, onSessionPause }: StudySessionProps) {
   const [studyCards, setStudyCards] = useState<StudyCard[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
@@ -69,11 +71,11 @@ export function StudySession({ deck, onSessionComplete, onSessionPause }: StudyS
         setIsLoading(true);
         
         // Start the session
-        const session = await FlashcardService.startStudySession(deck.id, 'review');
+        const session = await FlashcardService.startStudySession(deck?.id, 'review');
         setSessionId(session.id);
-        
+
         // Get cards due for review
-        const flashcards = await FlashcardService.getFlashcardsDue(deck.id);
+        const flashcards = await FlashcardService.getFlashcardsDue(deck?.id, noteId);
         
         // Convert to study cards and shuffle
         const studyCards = createStudyCards(flashcards);
@@ -95,7 +97,7 @@ export function StudySession({ deck, onSessionComplete, onSessionPause }: StudyS
     };
 
     initializeSession();
-  }, [deck.id, onSessionComplete, createStudyCards]);
+  }, [deck?.id, noteId, onSessionComplete, createStudyCards]);
 
   const currentStudyCard = useMemo(() => {
     return studyCards[currentIndex] || null;
@@ -221,7 +223,7 @@ export function StudySession({ deck, onSessionComplete, onSessionPause }: StudyS
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-              Study Session
+              Study Session{noteTitle ? ` - ${noteTitle}` : deck ? ` - ${deck.name}` : ''}
             </h2>
             <p className="text-sm text-gray-600 dark:text-gray-400">
               Card {currentIndex + 1} of {studyCards.length}
