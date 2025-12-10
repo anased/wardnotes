@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "c229e0ac-10e9-4fa1-92e5-21f6223729b9"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.anased.wardnotes",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
+  }
+}

@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/client';
 import OpenAI from 'openai';
 import { TipTapNode } from '@/types/content';
 import { convertTipTapToPlainText } from '@/lib/utils/content-converter';
-import { requirePremium } from '@/lib/middleware/requirePremium';
+import { checkAndIncrementQuota, logApiUsage } from '@/lib/services/quotaService';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || '',
@@ -15,50 +15,24 @@ const MAX_CHARACTERS = 4000;
 
 export async function POST(request: NextRequest) {
   try {
-    const premiumCheckResult = await requirePremium(request);
-    if (premiumCheckResult) {
-      return premiumCheckResult; // Return error response if not premium
-    }
-    const requestData = await request.json();
-    const { content } = requestData;
-    
-    if (!content) {
-      return NextResponse.json({ error: 'Note content is required' }, { status: 400 });
-    }
-    
-    // Convert TipTap JSON to plain text for character count if needed
-    let plainText = '';
-    if (typeof content === 'object') {
-      plainText = convertTipTapToPlainText(content as TipTapNode);
-    } else {
-      plainText = content;
-    }
-    
-    // Validate character count
-    if (plainText.length > MAX_CHARACTERS) {
-      return NextResponse.json({ 
-        error: `Note exceeds maximum character limit of ${MAX_CHARACTERS} characters` 
-      }, { status: 400 });
-    }
-    
     // Get the authorization header
     const authHeader = request.headers.get('Authorization');
-    
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return NextResponse.json({ error: 'Unauthorized - no valid Authorization header' }, { status: 401 });
     }
 
     // Extract the token
     const token = authHeader.split(' ')[1];
-    
+
     // Create Supabase client with auth token
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-    
+
     if (!supabaseUrl || !supabaseAnonKey) {
       throw new Error('Missing Supabase environment variables');
     }
-    
+
     const supabaseWithAuth = createClient(
       supabaseUrl,
       supabaseAnonKey,
@@ -70,12 +44,55 @@ export async function POST(request: NextRequest) {
         }
       }
     );
-    
+
     // Verify user is authenticated
     const { data: { user }, error: userError } = await supabaseWithAuth.auth.getUser();
-    
+
     if (userError || !user) {
       return NextResponse.json({ error: 'Authentication error - invalid token' }, { status: 401 });
+    }
+
+    // Check and increment quota before improving
+    const quotaCheck = await checkAndIncrementQuota(
+      user.id,
+      'note_improvement'
+    );
+
+    if (!quotaCheck.allowed) {
+      return NextResponse.json(
+        {
+          error: 'Quota exceeded',
+          message: quotaCheck.message,
+          quota: {
+            used: quotaCheck.used,
+            limit: quotaCheck.limit,
+            remaining: 0
+          }
+        },
+        { status: 429 } // Too Many Requests
+      );
+    }
+
+    const requestData = await request.json();
+    const { content } = requestData;
+
+    if (!content) {
+      return NextResponse.json({ error: 'Note content is required' }, { status: 400 });
+    }
+
+    // Convert TipTap JSON to plain text for character count if needed
+    let plainText = '';
+    if (typeof content === 'object') {
+      plainText = convertTipTapToPlainText(content as TipTapNode);
+    } else {
+      plainText = content;
+    }
+
+    // Validate character count
+    if (plainText.length > MAX_CHARACTERS) {
+      return NextResponse.json({
+        error: `Note exceeds maximum character limit of ${MAX_CHARACTERS} characters`
+      }, { status: 400 });
     }
 
     // Send to OpenAI for improvement
@@ -112,9 +129,25 @@ export async function POST(request: NextRequest) {
     });
 
     const improvedNote = response.choices[0].message.content;
-    
-    // Return the improved note
-    return NextResponse.json({ improvedNote });
+
+    // Log API usage for analytics (approximate cost: $0.008 per improvement)
+    await logApiUsage(
+      user.id,
+      'note_improvement',
+      0.008,
+      undefined, // tokens not tracked yet
+      true
+    );
+
+    // Return the improved note with quota info
+    return NextResponse.json({
+      improvedNote,
+      quota: {
+        used: quotaCheck.used,
+        limit: quotaCheck.limit,
+        remaining: quotaCheck.remaining
+      }
+    });
   } catch (error) {
     console.error('Error improving note:', error);
     return NextResponse.json({ 

@@ -9,6 +9,422 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Note-Based Flashcard Section (December 2025)
+
+#### Overview
+Implementation of "flashcards from this note" section on web app note detail pages, providing feature parity with the mobile app's flashcard display functionality while maintaining web-optimized UX patterns.
+
+#### Problem Statement
+The web app lacked a way to view flashcards in the context of the note they were generated from. Users had to:
+- Navigate away from notes to the flashcard dashboard to see related flashcards
+- Manually remember which flashcards came from which notes
+- Open the flashcard generator to see if flashcards existed for a note
+
+The mobile app already had a "flashcards from this note" section that displayed:
+- Statistics showing due/new/learning card counts
+- Preview of the first 5 cards
+- Quick actions to study or manage flashcards
+- Empty state when no flashcards existed
+
+This feature needed to be adapted for the web app with a horizontal/compact layout optimized for desktop and larger screens.
+
+#### Solution Implemented
+
+##### 1. New Component: NoteFlashcardsSection
+**File:** `src/components/notes/NoteFlashcardsSection.tsx` (350 lines)
+
+**Purpose:** Display flashcard information and actions for a specific note
+
+**Props Interface:**
+```typescript
+interface NoteFlashcardsSectionProps {
+  noteId: string;
+  noteTitle: string;
+}
+```
+
+**State Management:**
+```typescript
+- flashcards: Flashcard[] - All flashcards for this note
+- loading: boolean - Data fetch state
+- error: string | null - Error messages
+- stats: { total, due, new, learning } - Calculated statistics
+- showStudyModal: boolean - Study session modal visibility
+- showListModal: boolean - Management modal visibility
+```
+
+**Key Features:**
+
+1. **Data Fetching:**
+   - Uses `FlashcardService.getFlashcards({ note_id: noteId })` on mount
+   - Filters flashcards to only those with matching `note_id`
+   - Auto-refreshes after study sessions or card edits
+
+2. **Statistics Calculation (Client-Side):**
+   ```typescript
+   const now = new Date();
+   const stats = {
+     total: cards.length,
+     due: cards.filter(card =>
+       new Date(card.next_review) <= now && card.status !== 'suspended'
+     ).length,
+     new: cards.filter(card => card.status === 'new').length,
+     learning: cards.filter(card => card.status === 'learning').length
+   };
+   ```
+
+3. **UI Layout (Horizontal/Compact for Web):**
+   - **Header Row:** "Flashcards from this note" title + card count badge
+   - **Stats Row:** 3-column grid with color-coded badges (Due=blue, New=green, Learning=yellow)
+   - **Card Preview Row:** Horizontal scrollable flex container showing up to 10 cards
+   - **Action Buttons Row:** "Study Due Cards (X)" and "View All Cards" buttons
+
+4. **Card Preview Design:**
+   - Fixed width (220px) cards in horizontal scroll
+   - Each card shows: Type badge, Status badge, 2-line truncated content
+   - Hover effects with border and shadow
+   - Click to open management modal
+   - Gradient fade on right edge if more than 10 cards exist
+
+5. **Empty State:**
+   - Icon + "No flashcards generated yet" heading
+   - Helpful message: "Use the AI Flashcard Generator to create flashcards from this note"
+
+6. **Loading State:**
+   - Spinner + "Loading flashcards..." message
+
+7. **Error State:**
+   - Alert icon + error message display
+
+##### 2. FlashcardService Updates
+**File:** `src/services/flashcard.ts`
+
+**Changes Made:**
+
+1. **Updated `getFlashcards()` Method (Lines 164-205):**
+   - Added filtering logic for `note_id` parameter
+   - **Before:** Only filtered by `deck_id`, `status`, `card_type`, etc.
+   - **After:** Also filters by `note_id` when provided
+   ```typescript
+   if (filters?.note_id) {
+     query = query.eq('note_id', filters.note_id);
+   }
+   ```
+
+2. **Updated `getDueCards()` Method (Lines 277-302):**
+   - Added optional `noteId` parameter (second parameter)
+   - **Signature:** `getDueCards(deckId?: string, noteId?: string, limit?: number)`
+   - Applies `note_id` filter when provided
+   ```typescript
+   if (noteId) {
+     query = query.eq('note_id', noteId);
+   }
+   ```
+
+3. **Updated `getFlashcardsDue()` Method (Lines 304-306):**
+   - Added optional `noteId` parameter
+   - **Signature:** `getFlashcardsDue(deckId?: string, noteId?: string, limit: number = 50)`
+   - Passes `noteId` to `getDueCards()`
+
+4. **Updated `getStudyCards()` Method (Line 331):**
+   - Fixed to pass `undefined` for `noteId` parameter to maintain backward compatibility
+   - **Before:** `getFlashcardsDue(deckId, maxDue)` - Would fail with new signature
+   - **After:** `getFlashcardsDue(deckId, undefined, maxDue)` - Explicitly passes undefined
+
+**Design Decision:** All parameters are optional to maintain backward compatibility. Existing code that only passes `deckId` continues to work without changes.
+
+##### 3. StudySession Component Updates
+**File:** `src/components/flashcards/StudySession.tsx`
+
+**Changes Made:**
+
+1. **Updated Props Interface (Lines 9-15):**
+   ```typescript
+   interface StudySessionProps {
+     deck?: FlashcardDeck;      // Changed from required to optional
+     noteId?: string;            // NEW - for note-based study
+     noteTitle?: string;         // NEW - for display in header
+     onSessionComplete: (stats: StudySessionStats) => void;
+     onSessionPause: () => void;
+   }
+   ```
+
+2. **Updated Component Signature (Line 23):**
+   - Added `noteId` and `noteTitle` to destructured props
+
+3. **Updated Session Initialization (Lines 74-78):**
+   - Changed `deck.id` to `deck?.id` (optional chaining)
+   - Pass both `deck?.id` and `noteId` to `getFlashcardsDue()`
+   ```typescript
+   const session = await FlashcardService.startStudySession(deck?.id, 'review');
+   const flashcards = await FlashcardService.getFlashcardsDue(deck?.id, noteId);
+   ```
+
+4. **Updated Header Display (Line 226):**
+   - Shows note title when studying from a note, deck name when studying from a deck
+   ```typescript
+   Study Session{noteTitle ? ` - ${noteTitle}` : deck ? ` - ${deck.name}` : ''}
+   ```
+
+5. **Updated useEffect Dependencies (Line 100):**
+   - Added `noteId` to dependency array to re-initialize when note changes
+
+**Backward Compatibility:** Existing deck-based study sessions work unchanged because `noteId` defaults to `undefined`.
+
+##### 4. FlashcardListView Component Updates
+**File:** `src/components/flashcards/FlashcardListView.tsx`
+
+**Changes Made:**
+
+1. **Updated Props Interface (Lines 8-15):**
+   ```typescript
+   interface FlashcardListViewProps {
+     deck?: FlashcardDeck;       // Changed from required to optional
+     noteId?: string;             // NEW - for note-based filtering
+     noteTitle?: string;          // NEW - for display in header
+     isOpen: boolean;
+     onClose: () => void;
+     onFlashcardUpdated?: () => void;
+   }
+   ```
+
+2. **Updated Component Signature (Line 26):**
+   - Added `noteId` and `noteTitle` to destructured props
+
+3. **Updated loadFlashcards() Method (Lines 41-67):**
+   - Changed from always filtering by `deck.id` to conditionally filtering
+   - **New Logic:**
+   ```typescript
+   const filters: any = {};
+   if (deck) {
+     filters.deck_id = deck.id;
+   }
+   if (noteId) {
+     filters.note_id = noteId;
+   }
+   const cards = await FlashcardService.getFlashcards(filters);
+   ```
+
+4. **Updated Header Display (Lines 202-208):**
+   - Shows appropriate title based on context
+   ```typescript
+   {noteTitle
+     ? `Flashcards from "${noteTitle}"`
+     : deck
+     ? `Flashcards in "${deck.name}"`
+     : 'Flashcards'}
+   ```
+
+5. **Updated useEffect Dependencies (Line 39):**
+   - Added `noteId` to dependency array
+   - Changed condition to `(deck || noteId)` to support both modes
+
+**Backward Compatibility:** Existing deck-based filtering works unchanged because `noteId` defaults to `undefined`.
+
+##### 5. Type System Updates
+**File:** `src/types/flashcard.ts`
+
+**Changes Made:**
+
+Added `note_id` to `FlashcardSearchFilters` interface (Line 179):
+```typescript
+export interface FlashcardSearchFilters {
+  deck_id?: string;
+  note_id?: string;        // NEW - for note-based filtering
+  status?: FlashcardStatus;
+  card_type?: FlashcardType;
+  tags?: string[];
+  due_only?: boolean;
+  search_text?: string;
+}
+```
+
+##### 6. Integration into NoteViewer
+**File:** `src/components/notes/NoteViewer.tsx`
+
+**Changes Made:**
+
+1. **Added Import (Line 15):**
+   ```typescript
+   import NoteFlashcardsSection from './NoteFlashcardsSection';
+   ```
+
+2. **Added Component (Lines 123-127):**
+   - Placed after note content div, before delete confirmation modal
+   ```typescript
+   <NoteFlashcardsSection
+     noteId={note.id}
+     noteTitle={note.title}
+   />
+   ```
+
+**Placement Decision:** Positioned below note content to maintain natural reading flow (read note → see related flashcards → take action).
+
+#### User Flows
+
+**Flow 1: Viewing Flashcards from a Note**
+1. User navigates to note detail page (`/notes/[id]`)
+2. NoteFlashcardsSection component mounts
+3. Component fetches flashcards with `note_id` filter
+4. If flashcards exist:
+   - Display stats (due/new/learning counts)
+   - Show horizontal preview of up to 10 cards
+   - Enable action buttons
+5. If no flashcards exist:
+   - Display empty state with helpful message
+
+**Flow 2: Studying from a Note**
+1. User clicks "Study Due Cards (X)" button
+2. NoteFlashcardsSection sets `showStudyModal = true`
+3. StudySession modal renders with `noteId` and `noteTitle` props
+4. StudySession fetches due cards filtered by `note_id`
+5. User studies cards with spaced repetition review
+6. On completion/pause:
+   - Modal closes
+   - NoteFlashcardsSection refreshes data
+   - Updated stats displayed
+
+**Flow 3: Managing Cards from a Note**
+1. User clicks "View All Cards" or a card preview
+2. NoteFlashcardsSection sets `showListModal = true`
+3. FlashcardListView modal renders with `noteId` and `noteTitle` props
+4. FlashcardListView fetches all cards filtered by `note_id`
+5. User can:
+   - Search and filter cards
+   - Edit card content inline
+   - Delete cards with confirmation
+   - Change card status
+6. On any update:
+   - `onFlashcardUpdated` callback fires
+   - NoteFlashcardsSection refreshes data
+   - Updated stats and previews displayed
+
+#### Technical Decisions
+
+**1. Why Optional Parameters Instead of New Methods?**
+- **Backward Compatibility:** Existing code continues to work without changes
+- **DRY Principle:** Avoid duplicating logic across deck/note variants
+- **Type Safety:** TypeScript enforces proper parameter usage
+- **Clean API:** `getFlashcardsDue(deckId)` or `getFlashcardsDue(undefined, noteId)` is self-documenting
+
+**2. Why Reuse StudySession and FlashcardListView?**
+- **Consistency:** Same UX for studying/managing cards regardless of source
+- **Maintainability:** Single implementation to update for improvements
+- **Feature Completeness:** Both components already had rich functionality (search, edit, delete, review)
+- **Code Reuse:** Saves ~500+ lines of duplicated code
+
+**3. Why Study Modal Instead of Navigation?**
+- **User Preference:** User explicitly chose modal in requirements gathering
+- **Context Preservation:** Note remains visible in background, easier to reference
+- **Faster UX:** No page load, instant modal open
+- **Consistent Pattern:** Matches existing modal patterns throughout app
+
+**4. Why Horizontal Layout?**
+- **Better Space Usage:** Web has more horizontal space than mobile
+- **More Cards Visible:** Shows 10 cards vs mobile's 5
+- **Familiar Pattern:** Horizontal scroll is common in modern web apps (Netflix, YouTube, etc.)
+- **Visual Hierarchy:** Stats → Cards → Actions creates clear top-to-bottom flow
+
+**5. Why Client-Side Stats Calculation?**
+- **Performance:** Already fetching all cards for preview, no extra API call needed
+- **Simplicity:** No new API endpoint required
+- **Real-Time:** Stats update immediately when cards change
+- **Flexibility:** Easy to add new stat types in future
+
+#### Testing & Verification
+
+**TypeScript Compilation:**
+- ✅ All types validated with `npm run typecheck`
+- ✅ No type errors in modified files
+- ✅ Optional parameter types properly enforced
+
+**Build Verification:**
+- ✅ Next.js production build succeeds
+- ✅ Bundle size: `/notes/[id]` route = 341 kB (acceptable for feature set)
+- ✅ No build warnings or errors
+
+**Backward Compatibility:**
+- ✅ Existing deck-based study sessions work unchanged
+- ✅ Flashcard dashboard functionality unaffected
+- ✅ Deck management features continue to work
+
+**Feature Testing:**
+- ✅ Empty state displays correctly when note has no flashcards
+- ✅ Loading state shows during data fetch
+- ✅ Error state displays on fetch failure
+- ✅ Stats accurately reflect due/new/learning counts
+- ✅ Card preview scrolls horizontally with proper styling
+- ✅ "Study Due Cards" button correctly opens study modal
+- ✅ Study session filters cards by note_id
+- ✅ "View All Cards" button opens management modal
+- ✅ Card management (edit/delete) works correctly
+- ✅ Data refreshes after study completion or card edits
+- ✅ Dark mode fully functional throughout
+- ✅ Responsive design works on mobile, tablet, and desktop
+
+#### Performance Considerations
+
+**Bundle Impact:**
+- New component adds ~7 KB to note detail page bundle
+- Uses existing StudySession and FlashcardListView components (no duplication)
+- Horizontal scroll uses CSS `overflow-x: auto` (no JavaScript library needed)
+
+**API Efficiency:**
+- Single API call to fetch flashcards on mount
+- Stats calculated client-side (no additional API calls)
+- Data cached in component state, only refreshes when needed
+
+**Rendering Performance:**
+- Preview limited to 10 cards maximum (prevents long render times)
+- Cards use simple div structure (no complex components)
+- Truncation done in JavaScript (faster than CSS line-clamp in some browsers)
+
+#### Known Limitations
+
+1. **No Real-Time Updates:**
+   - If flashcards are edited in another tab, user must refresh page to see changes
+   - **Mitigation:** Auto-refresh after study/edit actions covers most use cases
+
+2. **Preview Limited to 10 Cards:**
+   - Users with >10 flashcards per note must click "View All Cards" to see them all
+   - **Rationale:** Keeps UI clean and performant, prevents excessive scrolling
+
+3. **No Deck Selection in Study Modal:**
+   - When studying from a note, all cards from that note are included regardless of deck
+   - **Rationale:** Studying by note (not deck) is the primary use case for this feature
+
+#### Future Enhancement Opportunities
+
+1. **Card Reordering:**
+   - Allow drag-and-drop reordering of card previews
+   - Save custom order preference per note
+
+2. **Bulk Actions:**
+   - Add "Select Multiple" mode in preview
+   - Bulk delete, suspend, or move to different deck
+
+3. **Mini Study Mode:**
+   - Quick 5-card study session without opening modal
+   - Inline flashcard flip animation in preview
+
+4. **Study Progress Indicator:**
+   - Visual progress bar showing studied vs remaining cards
+   - Estimated time to complete review
+
+5. **Customizable Preview Count:**
+   - User preference to show 5, 10, or 20 cards in preview
+   - "Show All" option for power users
+
+#### Commit Information
+
+- **Commit Hash:** `bfb755b`
+- **Branch:** `main`
+- **Date:** December 4, 2025
+- **Files Changed:** 7 files, 372 insertions(+), 49 deletions(-)
+- **Co-Authored-By:** Claude (AI Assistant)
+
+---
+
 ### Added - Web App Flashcard Selection & Inline Editing (December 2025)
 
 #### Overview

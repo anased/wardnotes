@@ -168,6 +168,76 @@ export interface Database {
           updated_at?: string;
         };
       };
+      usage_quotas: {
+        Row: {
+          id: string;
+          user_id: string;
+          period_start: string;
+          period_end: string;
+          flashcard_generations_limit: number | null;
+          note_improvements_limit: number | null;
+          flashcard_generations_used: number;
+          note_improvements_used: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          period_start: string;
+          period_end: string;
+          flashcard_generations_limit?: number | null;
+          note_improvements_limit?: number | null;
+          flashcard_generations_used?: number;
+          note_improvements_used?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          period_start?: string;
+          period_end?: string;
+          flashcard_generations_limit?: number | null;
+          note_improvements_limit?: number | null;
+          flashcard_generations_used?: number;
+          note_improvements_used?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      api_usage_logs: {
+        Row: {
+          id: string;
+          user_id: string;
+          feature_type: 'flashcard_generation' | 'note_improvement';
+          api_cost: number;
+          tokens_used: number | null;
+          success: boolean;
+          error_message: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          feature_type: 'flashcard_generation' | 'note_improvement';
+          api_cost: number;
+          tokens_used?: number | null;
+          success?: boolean;
+          error_message?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          feature_type?: 'flashcard_generation' | 'note_improvement';
+          api_cost?: number;
+          tokens_used?: number | null;
+          success?: boolean;
+          error_message?: string | null;
+          created_at?: string;
+        };
+      };
     };
     Views: {
       [key: string]: {
@@ -213,6 +283,16 @@ export type SubscriptionRow = Database['public']['Tables']['subscriptions']['Row
 export type SubscriptionInsert = Database['public']['Tables']['subscriptions']['Insert'];
 export type SubscriptionUpdate = Database['public']['Tables']['subscriptions']['Update'];
 
+// Usage Quota types
+export type UsageQuotaRow = Database['public']['Tables']['usage_quotas']['Row'];
+export type UsageQuotaInsert = Database['public']['Tables']['usage_quotas']['Insert'];
+export type UsageQuotaUpdate = Database['public']['Tables']['usage_quotas']['Update'];
+
+// API Usage Log types
+export type ApiUsageLogRow = Database['public']['Tables']['api_usage_logs']['Row'];
+export type ApiUsageLogInsert = Database['public']['Tables']['api_usage_logs']['Insert'];
+export type ApiUsageLogUpdate = Database['public']['Tables']['api_usage_logs']['Update'];
+
 // Extended Note type with joined data if needed
 export type NoteWithAuthor = NoteRow & {
   author: {
@@ -238,3 +318,17 @@ export type Category = CategoryRow;
 export type Tag = TagRow;
 export type DailyActivity = DailyActivityRow;
 export type Subscription = SubscriptionRow;
+export type UsageQuota = UsageQuotaRow;
+export type ApiUsageLog = ApiUsageLogRow;
+
+// Quota check result type
+export interface QuotaCheckResult {
+  allowed: boolean;
+  used: number;
+  limit: number | null;
+  remaining: number | null;
+  message?: string;
+}
+
+// Feature types for quota tracking
+export type QuotaFeatureType = 'flashcard_generation' | 'note_improvement';

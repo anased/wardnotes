@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import type { GenerateFlashcardsRequest } from '@/types/flashcard';
 import { generateSmartFlashcards } from '@/lib/utils/smartFlashcardGeneration';
+import { checkAndIncrementQuota, logApiUsage } from '@/lib/services/quotaService';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -58,6 +59,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Check and increment quota before generating
+    const quotaCheck = await checkAndIncrementQuota(
+      user.id,
+      'flashcard_generation'
+    );
+
+    if (!quotaCheck.allowed) {
+      return NextResponse.json(
+        {
+          error: 'Quota exceeded',
+          message: quotaCheck.message,
+          quota: {
+            used: quotaCheck.used,
+            limit: quotaCheck.limit,
+            remaining: 0
+          }
+        },
+        { status: 429 } // Too Many Requests
+      );
+    }
+
     const body: GenerateFlashcardsRequest & { preview?: boolean; enable_deduplication?: boolean } = await request.json();
     const { note_id, card_type, deck_id, max_cards = 10, preview = false, enable_deduplication = false } = body;
 
@@ -85,6 +107,15 @@ export async function POST(request: NextRequest) {
       enable_deduplication
     );
     const generationTime = Date.now() - startTime;
+
+    // Log API usage for analytics (approximate cost: $0.02 per generation)
+    await logApiUsage(
+      user.id,
+      'flashcard_generation',
+      enable_deduplication ? 0.025 : 0.02,
+      undefined, // tokens not tracked yet
+      true
+    );
 
     // If this is just a preview, save to flashcard_generations table and return
     if (preview) {
@@ -119,7 +150,12 @@ export async function POST(request: NextRequest) {
           importanceLevels: generatedCards.reduce((acc, card) => {
             acc[card.importance] = (acc[card.importance] || 0) + 1;
             return acc;
-          }, {} as Record<string, number>)
+          }, {} as Record<string, number>),
+          quota: {
+            used: quotaCheck.used,
+            limit: quotaCheck.limit,
+            remaining: quotaCheck.remaining
+          }
         }
       });
     }
@@ -220,7 +256,12 @@ export async function POST(request: NextRequest) {
         importanceLevels: generatedCards.reduce((acc, card) => {
           acc[card.importance] = (acc[card.importance] || 0) + 1;
           return acc;
-        }, {} as Record<string, number>)
+        }, {} as Record<string, number>),
+        quota: {
+          used: quotaCheck.used,
+          limit: quotaCheck.limit,
+          remaining: quotaCheck.remaining
+        }
       }
     });
   } catch (error) {
