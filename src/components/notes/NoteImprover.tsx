@@ -5,8 +5,10 @@ import Button from '../ui/Button';
 import { TipTapNode } from '@/types/content';
 import { convertTipTapToPlainText } from '@/lib/utils/content-converter';
 import PremiumFeatureGate from '../premium/PremiumFeatureGate';
+import InlineQuotaIndicator from '../premium/InlineQuotaIndicator';
 import { useAnalytics } from '@/lib/analytics/useAnalytics';
 import { useSubscription } from '@/lib/hooks/useSubscription';
+import { useQuota } from '@/lib/hooks/useQuota';
 
 // Define maximum character limit
 const MAX_CHARACTERS = 4000;
@@ -22,7 +24,8 @@ export default function NoteImprover({ content, onImproveSuccess }: NoteImprover
   const [showImproveModal, setShowImproveModal] = useState(false);
   const [improvedContent, setImprovedContent] = useState('');
   const { track } = useAnalytics();
-  const { subscription } = useSubscription();
+  const { subscription, isPremium } = useSubscription();
+  const { refreshQuota } = useQuota();
   
   // Convert TipTap JSON to plain text for character count
   const plainText = convertTipTapToPlainText(content as TipTapNode);
@@ -76,13 +79,23 @@ export default function NoteImprover({ content, onImproveSuccess }: NoteImprover
       
       if (!response.ok) {
         const errorData = await response.json();
+
+        // Handle quota exhaustion specifically
+        if (response.status === 429) {
+          setError(errorData.message || 'Monthly note improvement limit reached. Upgrade to Premium for unlimited access.');
+          return;
+        }
+
         throw new Error(errorData.error || 'Failed to improve note');
       }
-      
+
       const data = await response.json();
       setImprovedContent(data.improvedNote);
       setShowImproveModal(true);
-      
+
+      // Refresh quota after successful improvement
+      await refreshQuota();
+
       // Track AI improvement completed
       track('ai_note_improve_completed', {
         note_id: 'current',
@@ -126,6 +139,7 @@ export default function NoteImprover({ content, onImproveSuccess }: NoteImprover
           <PremiumFeatureGate
             featureName="AI Note Improvement"
             description="Use AI to structure and enhance your medical notes for better clarity and organization."
+            featureType="note_improvement"
           >
             <Button
               onClick={handleImproveNote}
@@ -136,6 +150,9 @@ export default function NoteImprover({ content, onImproveSuccess }: NoteImprover
             >
               <span className="mr-2">✨</span>
               Improve Note
+              {!isPremium && (
+                <InlineQuotaIndicator featureType="note_improvement" />
+              )}
             </Button>
           </PremiumFeatureGate>
         </div>

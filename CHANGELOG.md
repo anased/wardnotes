@@ -9,6 +9,239 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Freemium Pricing with Monthly Usage Quotas (December 2025)
+
+#### Overview
+Implemented a soft paywall freemium pricing model that allows free users to try AI-powered features with monthly usage quotas (3 flashcard generations, 2 note improvements per month), while premium users retain unlimited access.
+
+#### Problem Statement
+The hard paywall prevented free users from experiencing AI features, limiting conversion opportunities. Users couldn't trial premium features before purchasing, resulting in:
+- Low conversion rates (users hesitant to pay without trying)
+- High API costs supporting unlimited trial users
+- No mechanism to demonstrate value proposition
+- Limited product-led growth potential
+
+#### Solution Implemented
+
+##### 1. Backend Infrastructure (Already Complete)
+**Database Migration:** `src/lib/supabase/migrations/add_usage_quotas.sql`
+
+**New Tables:**
+- `usage_quotas` - Tracks monthly usage limits and consumption per user
+  - Columns: flashcard_generations_used/limit, note_improvements_used/limit
+  - Period tracking: period_start, period_end
+  - Null limits indicate unlimited (premium users)
+- `api_usage_logs` - Analytics tracking for API costs (optional)
+
+**Database Functions:**
+- `initialize_user_quota(p_user_id)` - Creates quota for new users based on subscription
+- `check_and_increment_usage(p_user_id, p_feature_type)` - Validates and increments usage atomically
+- `reset_monthly_quotas()` - Resets quotas on the 1st of each month (cron job)
+- `get_user_quota(p_user_id)` - Retrieves formatted quota information
+
+**Backend Service:** `src/lib/services/quotaService.ts`
+- Functions: checkAndIncrementQuota, getUserQuota, getFormattedQuota, canUseFeature, logApiUsage
+
+**API Routes:**
+- `GET /api/user/quota` - Returns current quota state for authenticated user
+- Updated `/api/flashcards/generate-from-note` - Checks quota before AI generation
+- Updated `/api/improve-note` - Checks quota before AI improvement
+
+##### 2. Frontend Components
+
+**New Hook:** `src/lib/hooks/useQuota.ts`
+```typescript
+interface UseQuotaReturn {
+  quota: QuotaState | null;
+  loading: boolean;
+  error: Error | null;
+  refreshQuota: () => Promise<void>;
+  canUseFeature: (featureType: QuotaFeatureType) => boolean;
+  getRemainingUses: (featureType: QuotaFeatureType) => number | null;
+}
+```
+
+**Key Features:**
+- Centralized quota data fetching from `/api/user/quota`
+- Auto-skips fetch for premium users (they have unlimited)
+- Fail-open approach (allows usage if quota fetch fails)
+- Provides helper functions for quota checking
+
+**New Component:** `src/components/premium/InlineQuotaIndicator.tsx`
+- Displays "(X/Y left)" badges next to feature buttons
+- Color-coded: green (>1 remaining), yellow (1 remaining), red (0 remaining)
+- Auto-hides for premium users
+- Dark mode support
+
+**Modified Component:** `src/components/premium/PremiumFeatureGate.tsx`
+
+**Before (Hard Paywall):**
+```typescript
+if (isPremium) {
+  return <>{children}</>;
+}
+// Always block free users
+```
+
+**After (Soft Paywall):**
+```typescript
+// 1. Premium users: full access
+if (isPremium) {
+  return <>{children}</>;
+}
+
+// 2. Free users with quota available: allow access (NEW)
+if (featureType && quota && canUseFeature(featureType)) {
+  return <>{children}</>;
+}
+
+// 3. Free users without quota: show upgrade modal
+```
+
+**New Props:**
+- `featureType?: QuotaFeatureType` - Enables quota checking
+- `onQuotaExhausted?: () => void` - Callback when quota reached
+
+**Upgrade Modal Enhancement:**
+- Shows quota-specific messaging: "You've used X/Y free uses this month. Resets in N days."
+- Tracks analytics: `quota_limit_reached` event
+
+##### 3. Component Integration
+
+**FlashcardIntegrationButton** (`src/components/notes/FlashcardIntegrationButton.tsx`):
+- Added `featureType="flashcard_generation"` to PremiumFeatureGate
+- Shows inline quota indicator for free users
+- Handles 429 (quota exceeded) errors with user-friendly messages
+- Refreshes quota after successful generation
+
+**NoteImprover** (`src/components/notes/NoteImprover.tsx`):
+- Added `featureType="note_improvement"` to PremiumFeatureGate
+- Shows inline quota indicator for free users
+- Handles 429 errors gracefully
+- Refreshes quota after successful improvement
+
+**EnhancedFlashcardGeneratorModal** (`src/components/notes/EnhancedFlashcardGeneratorModal.tsx`):
+- Added optional `onSuccess?: () => void` callback prop
+- Handles 429 errors: "Monthly flashcard generation limit reached. Upgrade to Premium for unlimited access."
+- Calls `onSuccess()` callback after successful save to refresh quota
+
+**Dashboard** (`src/app/dashboard/page.tsx`):
+- Added QuotaDisplay component below welcome section
+- Only visible to free users
+- Shows at-a-glance quota status and upgrade link
+
+**Subscription Settings** (`src/app/settings/subscription/page.tsx`):
+- Added QuotaDisplay in free user section
+- Shows current usage before feature list
+- Contextualizes upgrade value proposition
+
+##### 4. Analytics Events
+
+**New Event:** `quota_limit_reached`
+```typescript
+interface QuotaLimitReachedProperties {
+  feature_type: 'flashcard_generation' | 'note_improvement';
+  days_until_reset?: number;
+  subscription_status: string;
+}
+```
+
+**Tracked When:**
+- User with exhausted quota clicks on gated feature
+- Provides data for conversion funnel analysis
+
+#### User Experience Flow
+
+**Free User Journey:**
+1. See quota indicators on Dashboard and Settings pages
+2. See "(2/3 left)" badge next to "Generate Flashcards" button
+3. Click button → Modal opens (quota available)
+4. Generate flashcards → Quota decrements to "(1/3 left)"
+5. Hit limit → Upgrade modal appears with: "Used 3/3 free uses this month. Resets in 15 days."
+6. Click "Upgrade to Premium" → Stripe checkout
+
+**Premium User Journey:**
+- No quota indicators shown (unlimited access)
+- No changes to existing experience
+- All features work identically
+
+#### Cost Analysis
+
+**Free Tier Quotas:**
+- 3 AI flashcard generations per month
+- 2 AI note improvements per month
+
+**Cost Per Free User Per Month:**
+- (3 × $0.02) + (2 × $0.008) = **$0.076 per user/month**
+
+**Break-Even Point:**
+- Need only 76 premium conversions per 10,000 free users = **0.76% conversion rate**
+- Industry standard: 2-5%
+- **Conclusion:** ROI positive even with pessimistic assumptions
+
+#### Files Modified/Created
+
+**Created:**
+- `src/lib/hooks/useQuota.ts` - Quota management hook
+- `src/components/premium/InlineQuotaIndicator.tsx` - Quota badge component
+
+**Modified:**
+- `src/components/premium/PremiumFeatureGate.tsx` - Added soft paywall support
+- `src/components/notes/FlashcardIntegrationButton.tsx` - Added quota indicator
+- `src/components/notes/EnhancedFlashcardGeneratorModal.tsx` - Added onSuccess callback, 429 handling
+- `src/components/notes/NoteImprover.tsx` - Added quota indicator, 429 handling
+- `src/app/dashboard/page.tsx` - Added QuotaDisplay component
+- `src/app/settings/subscription/page.tsx` - Added QuotaDisplay component
+- `src/types/analytics.ts` - Added quota-related event types
+
+#### Technical Details
+
+**Quota Checking Flow:**
+1. User clicks feature button
+2. PremiumFeatureGate checks: isPremium? → Allow
+3. If not premium: canUseFeature(featureType)? → Allow
+4. If quota exhausted → Show upgrade modal
+5. API endpoint performs server-side quota check (double validation)
+6. Returns 429 if quota exceeded
+7. Frontend handles 429 with user-friendly error message
+
+**Data Flow:**
+- Frontend: useQuota hook fetches quota on mount → cached in state
+- User action: refreshQuota() called after successful operation
+- Backend: check_and_increment_usage() atomically validates and increments
+- Monthly reset: Cron job calls reset_monthly_quotas() on 1st of month
+
+**Security:**
+- Row-level security (RLS) on usage_quotas table
+- Users can only view their own quotas
+- Server-side validation prevents quota bypass
+- Atomic increment prevents race conditions
+
+#### Backward Compatibility
+
+**Preserved Behavior:**
+- PremiumFeatureGate without `featureType` prop → Hard paywall (existing behavior)
+- Premium users → No changes, unlimited access
+- API routes → Existing functionality unchanged
+
+**Rollback Plan:**
+- Remove `featureType` prop from PremiumFeatureGate calls → reverts to hard paywall
+- Quota tracking continues in backend (no data loss)
+
+#### Success Metrics
+
+**Primary KPIs:**
+- Conversion Rate: Free → Premium (Target: 2-5%)
+- API Cost per Free User: Should stay ≤ $0.08/month
+- Net Revenue: Should increase ≥50% within 3 months
+
+**Secondary KPIs:**
+- Free User Activation Rate: % who use ≥1 AI feature
+- Quota Exhaustion Rate: % hitting monthly limit
+- Time to First Premium Conversion: Days from signup
+
+---
+
 ### Added - Note-Based Flashcard Section (December 2025)
 
 #### Overview

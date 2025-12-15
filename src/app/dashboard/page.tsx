@@ -5,15 +5,18 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import useAuth from '@/lib/hooks/useAuth';
 import useNotes from '@/lib/hooks/useNotes';
+import { useSubscription } from '@/lib/hooks/useSubscription';
 import PageContainer from '@/components/layout/PageContainer';
 import NoteCard from '@/components/notes/NoteCard';
 import Button from '@/components/ui/Button';
 import Spinner from '@/components/ui/Spinner';
+import QuotaDisplay from '@/components/premium/QuotaDisplay';
 import { useNotification } from '@/lib/context/NotificationContext';
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const { notes, loading: notesLoading, error } = useNotes();
+  const { isPremium } = useSubscription();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { showNotification } = useNotification();
@@ -68,6 +71,14 @@ export default function DashboardPage() {
             </Button>
           </Link>
         </div>
+
+        {/* Quota Display for free users */}
+        {!isPremium && (
+          <QuotaDisplay
+            className="mt-4"
+            showUpgradeLink={true}
+          />
+        )}
 
         {error && (
           <div className="p-4 text-red-700 bg-red-100 rounded-lg dark:bg-red-900 dark:text-red-200">

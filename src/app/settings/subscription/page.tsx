@@ -9,6 +9,7 @@ import { useSubscription } from '@/lib/hooks/useSubscription';
 import PageContainer from '@/components/layout/PageContainer';
 import Button from '@/components/ui/Button';
 import Spinner from '@/components/ui/Spinner';
+import QuotaDisplay from '@/components/premium/QuotaDisplay';
 import { useNotification } from '@/lib/context/NotificationContext';
 import { useAnalytics } from '@/lib/analytics/useAnalytics';
 
@@ -250,6 +251,13 @@ export default function SubscriptionPage() {
               <p className="mb-4">
                 Upgrade to Premium to unlock powerful features:
               </p>
+
+              {/* Show current usage */}
+              <QuotaDisplay
+                className="mb-6"
+                showUpgradeLink={false}
+              />
+
               <ul className="mb-6 space-y-2 text-gray-700 dark:text-gray-300">
                 <li className="flex items-center">
                   <svg className="w-5 h-5 mr-2 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

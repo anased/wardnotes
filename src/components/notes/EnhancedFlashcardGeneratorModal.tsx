@@ -14,6 +14,7 @@ interface EnhancedFlashcardGeneratorModalProps {
   onClose: () => void;
   noteId: string;
   noteTitle: string;
+  onSuccess?: () => void;
 }
 
 type Status = 'idle' | 'loading' | 'preview' | 'saved' | 'error';
@@ -29,7 +30,8 @@ export function EnhancedFlashcardGeneratorModal({
   isOpen,
   onClose,
   noteId,
-  noteTitle
+  noteTitle,
+  onSuccess
 }: EnhancedFlashcardGeneratorModalProps) {
   // Configuration state
   const [status, setStatus] = useState<Status>('idle');
@@ -279,6 +281,12 @@ export function EnhancedFlashcardGeneratorModal({
 
       if (!response.ok) {
         const errorData = await response.json();
+
+        // Handle quota exhaustion specifically
+        if (response.status === 429) {
+          throw new Error(errorData.message || 'Monthly flashcard generation limit reached. Upgrade to Premium for unlimited access.');
+        }
+
         throw new Error(errorData.error || 'Failed to save flashcards');
       }
 
@@ -290,6 +298,11 @@ export function EnhancedFlashcardGeneratorModal({
       setSavedFlashcards(data.flashcards);
       setStatus('saved');
       setActiveTab('review');
+
+      // Call onSuccess callback to refresh quota
+      if (onSuccess) {
+        onSuccess();
+      }
     } catch (err) {
       console.error('Error saving flashcards:', err);
       setError(err instanceof Error ? err.message : 'Failed to save flashcards');

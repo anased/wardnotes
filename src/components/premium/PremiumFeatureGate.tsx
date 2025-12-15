@@ -1,29 +1,41 @@
 // src/components/premium/PremiumFeatureGate.tsx
 import { ReactNode, useState, cloneElement, isValidElement } from 'react';
 import { useSubscription } from '@/lib/hooks/useSubscription';
+import { useQuota } from '@/lib/hooks/useQuota';
 import Button from '../ui/Button';
 import { useAnalytics } from '@/lib/analytics/useAnalytics';
+import type { QuotaFeatureType } from '@/lib/supabase/types';
 
 interface PremiumFeatureGateProps {
   children: ReactNode;
   featureName: string;
   description: string;
   showPremiumBadge?: boolean;
+  featureType?: QuotaFeatureType;
+  onQuotaExhausted?: () => void;
 }
 
-export default function PremiumFeatureGate({ 
-  children, 
-  featureName, 
+export default function PremiumFeatureGate({
+  children,
+  featureName,
   description,
-  showPremiumBadge = true
+  showPremiumBadge = true,
+  featureType,
+  onQuotaExhausted
 }: PremiumFeatureGateProps) {
   const { isPremium, redirectToCheckout, subscription } = useSubscription();
+  const { quota, canUseFeature } = useQuota();
   const { track } = useAnalytics();
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
 
-  // If the user is premium, just render the children normally
+  // 1. Premium users: full access (no changes)
   if (isPremium) {
+    return <>{children}</>;
+  }
+
+  // 2. Free users with quota available: allow access (NEW)
+  if (featureType && quota && canUseFeature(featureType)) {
     return <>{children}</>;
   }
 
@@ -48,14 +60,28 @@ export default function PremiumFeatureGate({
   const handlePremiumFeatureClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     // Track paywall viewed
     track('paywall_viewed', {
       feature_blocked: featureName.toLowerCase().replace(/\s+/g, '_'),
       upgrade_context: 'premium_feature_gate',
       subscription_status: subscription?.subscription_status || 'free'
     });
-    
+
+    // Track quota limit reached if applicable
+    if (featureType && quota && !canUseFeature(featureType)) {
+      track('quota_limit_reached', {
+        feature_type: featureType,
+        days_until_reset: quota?.period.daysRemaining,
+        subscription_status: 'free'
+      });
+    }
+
+    // Call onQuotaExhausted callback if provided
+    if (onQuotaExhausted) {
+      onQuotaExhausted();
+    }
+
     setShowUpgradeModal(true);
   };
 
@@ -115,7 +141,17 @@ export default function PremiumFeatureGate({
                   <p className="text-gray-600 dark:text-gray-400 text-sm">{description}</p>
                 </div>
               </div>
-              
+
+              {/* Quota-specific messaging */}
+              {featureType && quota && !canUseFeature(featureType) && (
+                <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                  <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                    You've used {quota[featureType].used}/{quota[featureType].limit} free uses this month.
+                    Resets in {quota.period.daysRemaining} day{quota.period.daysRemaining !== 1 ? 's' : ''}.
+                  </p>
+                </div>
+              )}
+
               <p className="mb-4 text-gray-700 dark:text-gray-300">
                 Upgrade to WardNotes Premium to unlock this feature and more:
               </p>

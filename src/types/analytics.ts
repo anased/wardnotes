@@ -38,7 +38,10 @@ export type AnalyticsEvent =
   | 'paywall_viewed'
   | 'trial_started'
   | 'checkout_completed'
-  | 'subscription_cancelled';
+  | 'subscription_cancelled'
+
+  // Quota events
+  | 'quota_limit_reached';
 
 // Base properties included in all events
 export interface BaseEventProperties {
@@ -83,8 +86,13 @@ export interface SubscriptionProperties extends BaseEventProperties {
   amount?: number;
 }
 
+export interface QuotaLimitReachedProperties extends BaseEventProperties {
+  feature_type: 'flashcard_generation' | 'note_improvement';
+  days_until_reset?: number;
+}
+
 // Union type for all event properties
-export type EventProperties = 
+export type EventProperties =
   | BaseEventProperties
   | NoteCreatedProperties
   | TagAddedProperties
@@ -92,7 +100,8 @@ export type EventProperties =
   | AIImproveProperties
   | FlashcardGenerateProperties
   | PaywallProperties
-  | SubscriptionProperties;
+  | SubscriptionProperties
+  | QuotaLimitReachedProperties;
 
 export interface Analytics {
   init: (config: AnalyticsConfig) => void;
