@@ -92,64 +92,84 @@ export async function POST(request: NextRequest) {
     }
     
     let customerId = subscription?.stripe_customer_id;
-    
+
     // Initialize Stripe client
     const stripe = getStripeClient();
-    
-    // If the user doesn't have a Stripe customer ID yet, create one
-    if (!customerId) {
+
+    // Helper function to create a new Stripe customer
+    const createNewCustomer = async () => {
       console.log('🆕 Creating new Stripe customer for user:', user.email);
-      
+
       const customer = await stripe.customers.create({
         email: user.email,
         metadata: {
           userId: user.id
         }
       });
-      
-      customerId = customer.id;
-      console.log('✅ Created Stripe customer:', customerId);
-      
+
+      const newCustomerId = customer.id;
+      console.log('✅ Created Stripe customer:', newCustomerId);
+
       // Update the user's record with the new Stripe customer ID
       console.log('🔄 Attempting to update subscription for user:', user.id);
-      
+
       const { data: updateData, error: updateError, count } = await supabaseWithAuth
         .from('subscriptions')
-        .update({ 
-          stripe_customer_id: customerId, 
-          updated_at: new Date().toISOString() 
+        .update({
+          stripe_customer_id: newCustomerId,
+          updated_at: new Date().toISOString()
         })
         .eq('user_id', user.id)
         .select('*');
-      
+
       console.log('💾 Updated subscription with customer ID:', {
         success: !updateError,
         data: updateData,
         count: count,
         error: updateError,
-        customerId: customerId,
+        customerId: newCustomerId,
         userId: user.id
       });
-      
+
       // Double-check by fetching the record again
       const { data: verifyData, error: verifyError } = await supabaseWithAuth
         .from('subscriptions')
         .select('*')
         .eq('user_id', user.id)
         .single();
-      
+
       console.log('🔍 Verification check after update:', {
         data: verifyData,
         error: verifyError,
         hasCustomerId: !!verifyData?.stripe_customer_id
       });
-      
+
       if (updateError) {
         console.error('❌ Failed to update subscription with customer ID:', updateError);
         // Continue anyway - we can still create the checkout session
       }
+
+      return newCustomerId;
+    };
+
+    // If the user doesn't have a Stripe customer ID yet, create one
+    if (!customerId) {
+      customerId = await createNewCustomer();
     } else {
-      console.log('✅ Using existing Stripe customer:', customerId);
+      // Verify the customer exists in Stripe (handles test->live mode migration)
+      console.log('🔍 Verifying existing Stripe customer:', customerId);
+      try {
+        await stripe.customers.retrieve(customerId);
+        console.log('✅ Using existing Stripe customer:', customerId);
+      } catch (error: any) {
+        // Customer doesn't exist (e.g., test mode customer in live mode)
+        if (error.code === 'resource_missing') {
+          console.log('⚠️ Customer not found (likely test mode customer), creating new one');
+          customerId = await createNewCustomer();
+        } else {
+          throw error; // Re-throw other errors
+        }
+      }
     }
     
     // Use the provided priceId or default to the appropriate price ID based on billing period
