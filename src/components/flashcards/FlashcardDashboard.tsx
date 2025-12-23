@@ -7,8 +7,9 @@ import { CreateFlashcardModal } from './CreateFlashCardModal';
 import { StudySession } from './StudySession';
 import { DeckManagementModal } from './DeckManagementModal';
 import { FlashcardListView } from './FlashcardListView';
+import { CustomStudySessionModal } from './CustomStudySessionModal';
 import { FlashcardService } from '@/services/flashcard';
-import type { FlashcardDeck, DeckStats, StudySessionStats } from '@/types/flashcard';
+import type { FlashcardDeck, DeckStats, StudySessionStats, Flashcard } from '@/types/flashcard';
 
 export function FlashcardDashboard() {
   const [decks, setDecks] = useState<FlashcardDeck[]>([]);
@@ -21,6 +22,8 @@ export function FlashcardDashboard() {
   const [viewingCardsDeck, setViewingCardsDeck] = useState<FlashcardDeck | null>(null);
   const [analytics, setAnalytics] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [customStudyCards, setCustomStudyCards] = useState<Flashcard[] | null>(null);
+  const [isCustomStudyModalOpen, setIsCustomStudyModalOpen] = useState(false);
 
   // Load decks and stats
   const loadDecks = async () => {
@@ -123,6 +126,20 @@ export function FlashcardDashboard() {
     setStudyingDeck(null);
   };
 
+  const handleCustomStudyStart = (cards: Flashcard[]) => {
+    setCustomStudyCards(cards);
+  };
+
+  const handleCustomSessionComplete = (stats: StudySessionStats) => {
+    setCustomStudyCards(null);
+    loadDecks(); // Refresh deck stats
+    loadAnalytics(); // Refresh analytics
+  };
+
+  const handleCustomSessionPause = () => {
+    setCustomStudyCards(null);
+  };
+
   const handleDeckManagementClose = () => {
     setIsDeckManagementOpen(false);
     setEditingDeck(null);
@@ -135,6 +152,19 @@ export function FlashcardDashboard() {
   const handleFlashcardUpdated = () => {
     loadDecks(); // Refresh deck stats when flashcards are updated
   };
+
+  // Custom study session rendering
+  if (customStudyCards) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <StudySession
+          cards={customStudyCards}
+          onSessionComplete={handleCustomSessionComplete}
+          onSessionPause={handleCustomSessionPause}
+        />
+      </div>
+    );
+  }
 
   if (studyingDeck) {
     return (
@@ -157,12 +187,25 @@ export function FlashcardDashboard() {
             Study with spaced repetition
           </p>
         </div>
-        <Button onClick={() => setIsCreateModalOpen(true)}>
-          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          New Flashcard
-        </Button>
+        <div className="flex gap-3">
+          <Button
+            onClick={() => setIsCustomStudyModalOpen(true)}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+            </svg>
+            Create Custom Study Session
+          </Button>
+          <Button onClick={() => setIsCreateModalOpen(true)}>
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            New Flashcard
+          </Button>
+        </div>
       </div>
 
       {/* Stats Overview */}
@@ -281,6 +324,14 @@ export function FlashcardDashboard() {
         onClose={handleDeckManagementClose}
         onDeckCreated={handleDeckCreatedOrUpdated}
         editingDeck={editingDeck}
+      />
+
+      {/* Custom Study Session Modal */}
+      <CustomStudySessionModal
+        isOpen={isCustomStudyModalOpen}
+        onClose={() => setIsCustomStudyModalOpen(false)}
+        onStartSession={handleCustomStudyStart}
+        decks={decks}
       />
 
       {/* Flashcard List View Modal */}

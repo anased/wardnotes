@@ -325,9 +325,102 @@ export class FlashcardService {
     }
     
     const { data, error } = await query;
-    
+
     if (error) throw error;
     return data || [];
+  }
+
+  /**
+   * Get flashcards for custom study session with flexible filtering
+   * @param deckId - Required: deck to study from
+   * @param tags - Optional: filter by tags (OR logic - any tag matches)
+   * @param dueOnly - Filter only cards due for review
+   * @param limit - Maximum cards to return (default 50)
+   */
+  static async getCustomStudyCards(
+    deckId: string,
+    tags?: string[],
+    dueOnly: boolean = true,
+    limit: number = 50
+  ): Promise<Flashcard[]> {
+    const user = await this.getAuthenticatedUser();
+
+    let query = supabase
+      .from('flashcards')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('deck_id', deckId)
+      .neq('status', 'suspended')
+      .order('next_review', { ascending: true });
+
+    // Apply due filter
+    if (dueOnly) {
+      query = query.lte('next_review', new Date().toISOString());
+    }
+
+    // Apply tag filter (OR logic)
+    if (tags && tags.length > 0) {
+      query = query.overlaps('tags', tags);
+    }
+
+    // Apply limit
+    query = query.limit(limit);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+  }
+
+  /**
+   * Get count of flashcards matching custom study criteria
+   * Used for live preview in modal
+   */
+  static async getCustomStudyCount(
+    deckId: string,
+    tags?: string[],
+    dueOnly: boolean = true
+  ): Promise<number> {
+    const user = await this.getAuthenticatedUser();
+
+    let query = supabase
+      .from('flashcards')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('deck_id', deckId)
+      .neq('status', 'suspended');
+
+    if (dueOnly) {
+      query = query.lte('next_review', new Date().toISOString());
+    }
+
+    if (tags && tags.length > 0) {
+      query = query.overlaps('tags', tags);
+    }
+
+    const { count, error } = await query;
+    if (error) throw error;
+    return count || 0;
+  }
+
+  /**
+   * Get all unique tags used in user's flashcards
+   * For autocomplete in custom study modal
+   */
+  static async getFlashcardTags(): Promise<string[]> {
+    const user = await this.getAuthenticatedUser();
+
+    const { data, error } = await supabase
+      .from('flashcards')
+      .select('tags')
+      .eq('user_id', user.id);
+
+    if (error) throw error;
+
+    // Flatten and deduplicate tags
+    const allTags = data?.flatMap(card => card.tags || []) || [];
+    const uniqueTags = Array.from(new Set(allTags)).sort();
+
+    return uniqueTags;
   }
 
   static async getStudyCards(deckId?: string, maxDue: number = 30, maxNew: number = 10): Promise<Flashcard[]> {

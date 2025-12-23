@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import type { CreateFlashcardRequest, FlashcardSearchFilters } from '@/types/flashcard';
+import { mergeTags } from '@/lib/utils/tagUtils';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -102,6 +103,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Deck not found or access denied' }, { status: 404 });
     }
 
+    // Fetch note tags if note_id is provided
+    let finalTags = body.tags || [];
+
+    if (body.note_id) {
+      const { data: note } = await supabase
+        .from('notes')
+        .select('tags')
+        .eq('id', body.note_id)
+        .eq('user_id', user.id)
+        .single();
+
+      if (note?.tags) {
+        finalTags = mergeTags(finalTags, note.tags);
+      }
+    }
+
     const { data, error } = await supabase
       .from('flashcards')
       .insert({
@@ -112,7 +129,7 @@ export async function POST(request: NextRequest) {
         front_content: body.front_content,
         back_content: body.back_content,
         cloze_content: body.cloze_content,
-        tags: body.tags || [],
+        tags: finalTags,  // Use merged tags (note tags + custom tags)
         status: 'new',
         ease_factor: 2.5,
         interval_days: 0,

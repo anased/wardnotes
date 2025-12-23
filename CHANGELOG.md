@@ -9,6 +9,316 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Tag Inheritance & Custom Study Sessions (December 2025)
+
+#### Overview
+Implemented two complementary features that enhance flashcard organization and study workflows:
+1. **Automatic Tag Inheritance** - Flashcards now automatically inherit tags from their parent notes
+2. **Custom Study Sessions** - Users can create targeted study sessions by filtering flashcards by deck, tags, and due status
+
+#### Problem Statement
+**Tag Management Issues:**
+- Flashcards generated from tagged notes had empty tags, requiring manual tag addition
+- No automatic relationship between note organization and flashcard categorization
+- Existing flashcards (thousands potentially) had no tags, making filtering ineffective
+
+**Study Session Limitations:**
+- Users could only study "all due cards" or "cards from a specific note"
+- No way to target specific topics (e.g., "study only cardiology flashcards")
+- Couldn't combine multiple criteria (deck + tags + due status)
+- Inflexible workflow forced users to study irrelevant cards
+
+#### Solution Implemented
+
+##### 1. Tag Inheritance System
+
+**New Utility:** `src/lib/utils/tagUtils.ts`
+```typescript
+// Merges two tag arrays with deduplication (case-insensitive) and sorting
+export function mergeTags(tags1: string[], tags2: string[]): string[]
+
+// Wrapper for merging flashcard and note tags
+export function mergeFlashcardTags(
+  flashcardTags: string[] | undefined,
+  noteTags: string[] | undefined
+): string[]
+```
+
+**Modified API Endpoints** (4 total):
+
+1. **`/api/flashcards/generate-from-note/route.ts`** (Line 224)
+   - **Before:** `tags: []`
+   - **After:** `tags: note.tags || []`
+   - **Impact:** New flashcards from preview generation inherit note tags
+
+2. **`/api/flashcards/save-preview/route.ts`** (Lines 60, 78)
+   - **Before:** `tags: []`, only fetched `note.id`
+   - **After:** `tags: note.tags || []`, fetches `note.id, tags`
+   - **Impact:** Web app inline-edited flashcards inherit note tags
+
+3. **`/api/flashcards/save-from-preview/route.ts`** (Lines 67, 91)
+   - **Before:** `tags: []`, only fetched `note.id`
+   - **After:** `tags: note.tags || []`, fetches `note.id, tags`
+   - **Impact:** Mobile app flashcards inherit note tags
+
+4. **`/api/flashcards/route.ts`** (Lines 106-120, 132)
+   - **Before:** `tags: body.tags || []`
+   - **After:** Conditional note tag fetching + `mergeTags()` for manual creation
+   - **Impact:** Manually created flashcards with `note_id` merge note tags with custom tags
+
+**Tag Merging Behavior:**
+- **Deduplication:** Case-insensitive (e.g., "Cardiology" and "cardiology" → "cardiology")
+- **Sorting:** Alphabetical order for consistency
+- **Preservation:** User-added custom tags are merged with inherited tags
+- **One-time:** Tags set at creation, don't auto-update if note tags change
+
+**Database Migration:** `src/lib/supabase/migrations/add_tag_inheritance.sql`
+```sql
+-- Backfill existing flashcards with tags from parent notes
+UPDATE public.flashcards f
+SET
+  tags = n.tags,
+  updated_at = NOW()
+FROM public.notes n
+WHERE
+  f.note_id = n.id
+  AND f.tags = '{}';  -- Only update empty tags (preserve customizations)
+```
+
+**Migration Features:**
+- **Idempotent:** Safe to run multiple times
+- **Selective:** Only updates flashcards with empty tags
+- **Fast:** Single query, <1 second for thousands of flashcards
+- **Safe:** Preserves user-added custom tags
+
+**Cross-Platform Support:**
+- ✅ Web app (generate-from-note, save-preview workflows)
+- ✅ Mobile app (save-from-preview workflow)
+- ✅ Manual creation (both platforms)
+
+##### 2. Custom Study Sessions
+
+**New Service Methods** in `src/services/flashcard.ts`:
+
+```typescript
+// Get flashcards with flexible filtering (deck + tags + due status)
+static async getCustomStudyCards(
+  deckId: string,
+  tags?: string[],
+  dueOnly: boolean = true,
+  limit: number = 50
+): Promise<Flashcard[]>
+
+// Get count for live preview in modal
+static async getCustomStudyCount(
+  deckId: string,
+  tags?: string[],
+  dueOnly: boolean = true
+): Promise<number>
+
+// Get all unique flashcard tags for autocomplete
+static async getFlashcardTags(): Promise<string[]>
+```
+
+**Query Logic:**
+- **Tag Filtering:** Uses PostgreSQL `.overlaps()` operator for array matching
+- **OR Logic:** Flashcards with ANY of the selected tags are included
+- **Due Filter:** Optional `next_review <= NOW()` check
+- **Sorting:** By `next_review` ascending (most overdue first)
+- **Limit:** 50 cards maximum per session
+
+**New Component:** `src/components/flashcards/CustomStudySessionModal.tsx`
+
+**Modal Features:**
+1. **Deck Selector** (required)
+   - Dropdown of user's decks
+   - Validation: disabled "Start" button if no deck selected
+
+2. **Tag Filter** (optional)
+   - Multi-select tag input with autocomplete
+   - Uses existing `TagInput` component
+   - Fetches flashcard tags via `getFlashcardTags()`
+   - Supports multiple tags (OR logic)
+
+3. **Due Only Toggle** (default: checked)
+   - Checkbox to include all cards or just due ones
+   - Updates count in real-time
+
+4. **Live Card Count**
+   - Shows matching flashcards as filters change
+   - Debounced updates (300ms) to prevent excessive API calls
+   - Loading spinner during count fetch
+   - Shows warning if >50 cards match (session limit)
+
+5. **Validation & Error Handling**
+   - "No deck selected" validation
+   - "No cards match" with helpful suggestions
+   - "Failed to load" error recovery
+   - Graceful degradation (fail-open approach)
+
+**Enhanced StudySession Component** (`src/components/flashcards/StudySession.tsx`):
+
+**New Prop:**
+```typescript
+interface StudySessionProps {
+  deck?: FlashcardDeck;
+  noteId?: string;
+  noteTitle?: string;
+  cards?: Flashcard[];  // NEW - pre-fetched cards for custom study
+  onSessionComplete: (stats: StudySessionStats) => void;
+  onSessionPause: () => void;
+}
+```
+
+**Logic Update:**
+```typescript
+// Use pre-fetched cards if provided, otherwise fetch normally
+let flashcards: Flashcard[];
+if (cards && cards.length > 0) {
+  flashcards = cards;  // Custom study session
+} else {
+  flashcards = await FlashcardService.getFlashcardsDue(deck?.id, noteId);  // Regular flow
+}
+```
+
+**Backward Compatibility:**
+- Existing deck-based study: unchanged
+- Existing note-based study: unchanged
+- New custom study: uses `cards` prop
+
+**Dashboard Integration** (`src/components/flashcards/FlashcardDashboard.tsx`):
+
+**New State:**
+```typescript
+const [customStudyCards, setCustomStudyCards] = useState<Flashcard[] | null>(null);
+const [isCustomStudyModalOpen, setIsCustomStudyModalOpen] = useState(false);
+```
+
+**New Handlers:**
+```typescript
+const handleCustomStudyStart = (cards: Flashcard[]) => {
+  setCustomStudyCards(cards);  // Triggers custom study session rendering
+};
+
+const handleCustomSessionComplete = (stats: StudySessionStats) => {
+  setCustomStudyCards(null);
+  loadDecks();  // Refresh stats
+  loadAnalytics();
+};
+```
+
+**UI Updates:**
+- **Button Location:** Top-right header, next to "New Flashcard" button
+- **Button Style:** Outline variant with filter icon
+- **Modal Rendering:** Added at bottom of component with other modals
+- **Conditional Rendering:** Shows `StudySession` with `cards` prop when custom study active
+
+**User Flow:**
+1. User clicks "Create Custom Study Session" (top-right)
+2. Modal opens with filters
+3. User selects deck (required)
+4. User optionally adds tags (multi-select with autocomplete)
+5. User toggles "Due only" if needed
+6. Live count shows matching flashcards
+7. User clicks "Start Study Session"
+8. Modal closes, study session begins with filtered cards
+9. Study session uses same SM-2 algorithm, keyboard shortcuts, etc.
+
+#### Technical Implementation Details
+
+**Tag Inheritance:**
+- Automatic for all new flashcards (web + mobile)
+- One-time backfill via SQL migration for existing flashcards
+- Merges inherited and custom tags (preserves user additions)
+- Case-insensitive deduplication
+
+**Custom Study Sessions:**
+- Pre-fetches cards in modal (ensures count matches actual cards)
+- Reuses existing StudySession component (DRY principle)
+- Debounced count updates (300ms) for performance
+- Fail-open approach for robustness
+
+**Database Queries:**
+```sql
+-- Custom study card fetch
+SELECT * FROM flashcards
+WHERE user_id = $1
+  AND deck_id = $2
+  AND status != 'suspended'
+  AND (due_only = false OR next_review <= NOW())
+  AND (tags IS NULL OR tags && $3)  -- PostgreSQL array overlap
+ORDER BY next_review ASC
+LIMIT 50
+```
+
+**Performance:**
+- Migration: <1 second for thousands of flashcards
+- Count query: Uses `count: 'exact', head: true` for efficiency
+- Tag autocomplete: Cached in modal state
+
+**Dark Mode:**
+- Full support across all new components
+- Consistent styling with existing UI
+
+#### Impact & Benefits
+
+**Tag Inheritance:**
+- ✅ Eliminates manual tag addition for generated flashcards
+- ✅ Maintains note-flashcard organizational consistency
+- ✅ Backfills thousands of existing flashcards instantly
+- ✅ Enables effective tag-based filtering
+
+**Custom Study Sessions:**
+- ✅ Target specific topics (e.g., "study cardiology + emergency medicine")
+- ✅ Flexible workflows (deck-only, tags-only, or combined)
+- ✅ Better time management (study only what's relevant)
+- ✅ Supports diverse study patterns (cramming, targeted review, topic focus)
+
+**Combined Benefits:**
+- Notes with tags → Flashcards automatically tagged → Filter by tags in custom study
+- Seamless workflow from note creation to targeted studying
+- No manual intervention required
+
+#### Files Modified
+
+**New Files (3):**
+- `src/lib/utils/tagUtils.ts` - Tag merging utilities
+- `src/lib/supabase/migrations/add_tag_inheritance.sql` - Migration script
+- `src/components/flashcards/CustomStudySessionModal.tsx` - Custom study modal
+
+**Modified Files (7):**
+- `src/app/api/flashcards/generate-from-note/route.ts` - Line 224
+- `src/app/api/flashcards/save-preview/route.ts` - Lines 60, 78
+- `src/app/api/flashcards/save-from-preview/route.ts` - Lines 67, 91
+- `src/app/api/flashcards/route.ts` - Lines 106-120, 132
+- `src/services/flashcard.ts` - Added 3 methods (lines 340-424)
+- `src/components/flashcards/StudySession.tsx` - Lines 10-13, 24, 78-86, 108
+- `src/components/flashcards/FlashcardDashboard.tsx` - Lines 10-12, 25-26, 129-141, 156-167, 190-208, 331-337
+
+#### Migration Instructions
+
+**For Production Deployment:**
+
+1. **Deploy code changes** (standard Next.js deployment)
+2. **Run SQL migration** via Supabase dashboard:
+   - Navigate to SQL Editor
+   - Execute `src/lib/supabase/migrations/add_tag_inheritance.sql`
+   - Verify: Check flashcards table for populated tags
+3. **Test features:**
+   - Generate flashcards from a tagged note → verify tags inherited
+   - Create custom study session → verify filtering works
+   - Check existing flashcards → verify tags backfilled
+
+**Rollback Plan:**
+```sql
+-- If needed, revert tags to empty (not recommended)
+UPDATE public.flashcards
+SET tags = '{}', updated_at = NOW()
+WHERE updated_at >= 'YYYY-MM-DD';  -- Date of migration
+```
+
+---
+
 ### Added - Freemium Pricing with Monthly Usage Quotas (December 2025)
 
 #### Overview

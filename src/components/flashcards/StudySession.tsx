@@ -10,6 +10,7 @@ interface StudySessionProps {
   deck?: FlashcardDeck; // Now optional to support note-based study
   noteId?: string; // NEW - for note-based study
   noteTitle?: string; // NEW - for display
+  cards?: Flashcard[]; // NEW - for custom study sessions with pre-fetched cards
   onSessionComplete: (stats: StudySessionStats) => void;
   onSessionPause: () => void;
 }
@@ -20,7 +21,7 @@ interface StudyCard {
   totalClozes?: number;  // Total number of clozes in the original card
 }
 
-export function StudySession({ deck, noteId, noteTitle, onSessionComplete, onSessionPause }: StudySessionProps) {
+export function StudySession({ deck, noteId, noteTitle, cards, onSessionComplete, onSessionPause }: StudySessionProps) {
   const [studyCards, setStudyCards] = useState<StudyCard[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showAnswer, setShowAnswer] = useState(false);
@@ -69,18 +70,25 @@ export function StudySession({ deck, noteId, noteTitle, onSessionComplete, onSes
     const initializeSession = async () => {
       try {
         setIsLoading(true);
-        
+
         // Start the session
         const session = await FlashcardService.startStudySession(deck?.id, 'review');
         setSessionId(session.id);
 
-        // Get cards due for review
-        const flashcards = await FlashcardService.getFlashcardsDue(deck?.id, noteId);
-        
+        // Get cards - use pre-fetched if provided, otherwise fetch
+        let flashcards: Flashcard[];
+        if (cards && cards.length > 0) {
+          // Use pre-fetched cards from custom study session
+          flashcards = cards;
+        } else {
+          // Original flow: fetch cards for deck/note-based study
+          flashcards = await FlashcardService.getFlashcardsDue(deck?.id, noteId);
+        }
+
         // Convert to study cards and shuffle
         const studyCards = createStudyCards(flashcards);
         const shuffledCards = [...studyCards].sort(() => Math.random() - 0.5);
-        
+
         setStudyCards(shuffledCards);
         
         if (shuffledCards.length === 0) {
@@ -97,7 +105,7 @@ export function StudySession({ deck, noteId, noteTitle, onSessionComplete, onSes
     };
 
     initializeSession();
-  }, [deck?.id, noteId, onSessionComplete, createStudyCards]);
+  }, [deck?.id, noteId, cards, onSessionComplete, createStudyCards]);
 
   const currentStudyCard = useMemo(() => {
     return studyCards[currentIndex] || null;

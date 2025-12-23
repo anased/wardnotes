@@ -61,10 +61,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Deck not found or unauthorized' }, { status: 404 });
     }
 
-    // Step 2: Verify the note exists and belongs to the user (optional but good practice)
+    // Step 2: Verify the note exists and belongs to the user and fetch tags
     const { data: note, error: noteError } = await supabase
       .from('notes')
-      .select('id')
+      .select('id, tags')
       .eq('id', body.note_id)
       .eq('user_id', user.id)
       .single();
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
         next_review: new Date().toISOString(),
         total_reviews: 0,
         correct_reviews: 0,
-        tags: []
+        tags: note.tags || []  // Inherit tags from parent note
       };
 
       if (body.card_type === 'cloze') {

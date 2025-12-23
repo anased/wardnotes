@@ -221,7 +221,7 @@ export async function POST(request: NextRequest) {
       front_content: card_type === 'front_back' ? card.front : undefined,
       back_content: card_type === 'front_back' ? card.back : undefined,
       cloze_content: card_type === 'cloze' ? card.cloze : undefined,
-      tags: [],
+      tags: note.tags || [],  // Inherit tags from parent note
       status: 'new' as const,
       ease_factor: 2.5,
       interval_days: 0,
