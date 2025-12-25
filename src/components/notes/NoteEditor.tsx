@@ -15,8 +15,21 @@ import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
 import Typography from '@tiptap/extension-typography';
 import Placeholder from '@tiptap/extension-placeholder';
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useMemo, useRef } from 'react';
 import { /* BoldIcon, ItalicIcon, UnderlineIcon, ListBulletIcon */ } from '@heroicons/react/24/outline';
+
+// Selection information interface
+export interface SelectionInfo {
+  text: string;
+  from: number;
+  to: number;
+  coordinates: {
+    top: number;
+    left: number;
+    bottom: number;
+    right: number;
+  };
+}
 
 
 // Define menu button interface
@@ -46,6 +59,7 @@ interface NoteEditorProps {
   onChange: (content: Record<string, unknown>) => void;
   editable?: boolean;
   placeholder?: string;
+  onSelectionChange?: (selection: SelectionInfo | null) => void;
 }
 
 export default function NoteEditor({
@@ -53,10 +67,64 @@ export default function NoteEditor({
   onChange,
   editable = true,
   placeholder = 'Start writing your medical note...',
+  onSelectionChange,
 }: NoteEditorProps) {
   const [showLinkMenu, setShowLinkMenu] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
-  
+
+  // Ref to store debounce timer
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Handle selection changes with debouncing
+  const handleSelectionChange = useCallback((editor: any) => {
+    if (!onSelectionChange) return;
+
+    // Clear previous debounce timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    // Debounce the selection update
+    debounceTimerRef.current = setTimeout(() => {
+      const { from, to } = editor.state.selection;
+
+      // Only proceed if there's actual selection
+      if (from === to) {
+        onSelectionChange(null);
+        return;
+      }
+
+      // Extract plain text
+      const text = editor.state.doc.textBetween(from, to, ' ');
+
+      if (!text.trim()) {
+        onSelectionChange(null);
+        return;
+      }
+
+      // Get DOM coordinates for positioning
+      try {
+        const coords = editor.view.coordsAtPos(from);
+        const endCoords = editor.view.coordsAtPos(to);
+
+        onSelectionChange({
+          text: text.trim(),
+          from,
+          to,
+          coordinates: {
+            top: coords.top,
+            left: coords.left,
+            bottom: endCoords.bottom,
+            right: endCoords.right,
+          },
+        });
+      } catch (error) {
+        // If coordinate calculation fails, clear selection
+        onSelectionChange(null);
+      }
+    }, 150);
+  }, [onSelectionChange]);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -100,7 +168,19 @@ export default function NoteEditor({
     onUpdate: ({ editor }) => {
       onChange(editor.getJSON());
     },
+    onSelectionUpdate: ({ editor }) => {
+      handleSelectionChange(editor);
+    },
   });
+
+  // Cleanup debounce timer on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, []);
 
   // Add this useEffect to update content when it changes externally
   useEffect(() => {
@@ -110,7 +190,7 @@ export default function NoteEditor({
       const editorContent = editor.getJSON();
       const newContentStr = JSON.stringify(content);
       const editorContentStr = JSON.stringify(editorContent);
-      
+
       // Only update if they're different and editor isn't already focused
       // This prevents disrupting user typing
       if (newContentStr !== editorContentStr && !editor.isFocused) {

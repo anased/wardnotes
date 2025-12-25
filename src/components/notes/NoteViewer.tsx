@@ -1,6 +1,6 @@
 // src/components/notes/NoteViewer.tsx - Updated
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Note } from '@/lib/supabase/client';
 import useNotes from '@/lib/hooks/useNotes';
@@ -8,11 +8,15 @@ import { useSubscription } from '@/lib/hooks/useSubscription'; // Add this impor
 
 import Button from '../ui/Button';
 import CategoryBadge from '../ui/CategoryBadge';
-import NoteEditor from './NoteEditor';
+import NoteEditor, { SelectionInfo } from './NoteEditor';
 import { EnhancedFlashcardGeneratorModal } from './EnhancedFlashcardGeneratorModal';
 import PremiumFeatureGate from '../premium/PremiumFeatureGate'; // Import the premium gate
 import { FlashcardIntegrationButton } from './FlashcardIntegrationButton';
 import NoteFlashcardsSection from './NoteFlashcardsSection';
+import SelectionFloatingButton from './SelectionFloatingButton';
+import { CreateFlashcardModal } from '../flashcards/CreateFlashCardModal';
+import { FlashcardService } from '@/services/flashcard';
+import type { FlashcardDeck } from '@/types/flashcard';
 
 interface NoteViewerProps {
   note: Note;
@@ -26,12 +30,59 @@ export default function NoteViewer({ note }: NoteViewerProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showFlashcardModal, setShowFlashcardModal] = useState(false);
 
+  // Manual flashcard creation state
+  const [selection, setSelection] = useState<SelectionInfo | null>(null);
+  const [showFloatingButton, setShowFloatingButton] = useState(false);
+  const [showManualFlashcardModal, setShowManualFlashcardModal] = useState(false);
+  const [flashcardDecks, setFlashcardDecks] = useState<FlashcardDeck[]>([]);
+  const [deckRefreshTrigger, setDeckRefreshTrigger] = useState(0);
+
   // Format the date (e.g., "May 2, 2025")
   const formattedDate = new Date(note.created_at).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
   });
+
+  // Load flashcard decks for manual creation
+  useEffect(() => {
+    const loadDecks = async () => {
+      try {
+        const decks = await FlashcardService.getDecks();
+        setFlashcardDecks(decks);
+      } catch (error) {
+        console.error('Failed to load flashcard decks:', error);
+      }
+    };
+
+    loadDecks();
+  }, [deckRefreshTrigger]);
+
+  // Handle selection changes from editor
+  const handleSelectionChange = (selectionInfo: SelectionInfo | null) => {
+    setSelection(selectionInfo);
+    setShowFloatingButton(!!selectionInfo);
+  };
+
+  // Open manual flashcard creation modal
+  const handleCreateFlashcard = () => {
+    setShowManualFlashcardModal(true);
+    setShowFloatingButton(false);
+  };
+
+  // Close manual flashcard modal
+  const handleManualModalClose = () => {
+    setShowManualFlashcardModal(false);
+    setSelection(null);
+  };
+
+  // Handle flashcard created successfully
+  const handleFlashcardCreated = () => {
+    // Trigger refresh of flashcard list and decks
+    setDeckRefreshTrigger(prev => prev + 1);
+    handleManualModalClose();
+  };
+
   const handleEdit = () => {
     router.push(`/notes/${note.id}/edit`); // Add this function
   };
@@ -117,7 +168,12 @@ export default function NoteViewer({ note }: NoteViewerProps) {
       
       {/* Note content */}
       <div className="p-4 bg-white rounded-lg shadow dark:bg-gray-800">
-        <NoteEditor content={note.content} onChange={() => {}} editable={false} />
+        <NoteEditor
+          content={note.content}
+          onChange={() => {}}
+          editable={false}
+          onSelectionChange={handleSelectionChange}
+        />
       </div>
 
       {/* Flashcards Section */}
@@ -125,6 +181,28 @@ export default function NoteViewer({ note }: NoteViewerProps) {
         noteId={note.id}
         noteTitle={note.title}
       />
+
+      {/* Floating button for manual flashcard creation */}
+      {showFloatingButton && selection && (
+        <SelectionFloatingButton
+          coordinates={selection.coordinates}
+          onClick={handleCreateFlashcard}
+          onDismiss={() => setShowFloatingButton(false)}
+        />
+      )}
+
+      {/* Manual flashcard creation modal */}
+      {showManualFlashcardModal && (
+        <CreateFlashcardModal
+          isOpen={showManualFlashcardModal}
+          onClose={handleManualModalClose}
+          decks={flashcardDecks}
+          noteId={note.id}
+          noteTags={note.tags || []}
+          referenceText={selection?.text}
+          onFlashcardCreated={handleFlashcardCreated}
+        />
+      )}
 
       {/* Delete confirmation modal */}
       {showDeleteConfirm && (

@@ -9,6 +9,101 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Manual Flashcard Creation from Note Selections (December 2025)
+
+#### Overview
+Implemented a new workflow that allows users to manually create flashcards directly from selected text in notes, making the flashcard creation process more intuitive and efficient.
+
+#### Problem Statement
+- Users could only create flashcards through:
+  1. AI generation (requires quota usage)
+  2. Manual creation from dashboard (requires copy-paste, no note context)
+- No quick way to convert specific note passages into flashcards
+- Manual flashcards created from dashboard weren't automatically linked to source notes
+- Workflow required multiple steps: select text → copy → navigate to dashboard → create flashcard → paste
+
+#### Solution Implemented
+
+##### User Workflow
+1. User views a note in read-only mode
+2. User selects text in the note editor
+3. **Floating button appears** near the selection
+4. User clicks "Create Flashcard" button
+5. **Modal opens** showing:
+   - Selected text as reference (blue info banner)
+   - Card type selector (Front/Back or Cloze)
+   - Full editing controls (deck, tags, content fields)
+6. User structures the flashcard manually
+7. Flashcard is saved with **automatic note linkage**
+8. New flashcard appears in "Flashcards from this note" section
+
+##### Technical Implementation
+
+**1. Selection Detection** (`src/components/notes/NoteEditor.tsx`)
+- Added `SelectionInfo` interface with text, position, and coordinates
+- Implemented `onSelectionUpdate` handler in TipTap editor
+- Debounced selection updates (150ms) to prevent performance issues
+- Extracts plain text using `editor.state.doc.textBetween(from, to)`
+- Calculates DOM coordinates using `editor.view.coordsAtPos()`
+- Edge case handling: empty selections, editor blur events
+
+**2. Floating Button Component** (`src/components/notes/SelectionFloatingButton.tsx`)
+- **Desktop:** Positioned below selection, centered horizontally
+- **Mobile:** Fixed bottom position (<768px) for easier tapping
+- Auto-adjusts positioning to prevent viewport overflow
+- Fade-in animation on appearance
+- Auto-dismiss on scroll or editor blur
+- Accessible with ARIA labels
+
+**3. Modal Extension** (`src/components/flashcards/CreateFlashCardModal.tsx`)
+- New props: `noteId`, `noteTags`, `referenceText`, `initialCardType`
+- **Reference text banner:** Blue info box displaying selected text
+- **Auto-population:**
+  - Pre-fills cloze content when card type is Cloze
+  - Inherits tags from parent note
+  - Auto-links flashcard to note via `note_id`
+- **Tag behavior:** Merges note tags with user-added custom tags
+
+**4. Integration** (`src/components/notes/NoteViewer.tsx`)
+- State management for selection, floating button, and modal
+- Handlers for selection changes, modal open/close, flashcard creation
+- Loads flashcard decks via `FlashcardService.getDecks()`
+- Refreshes flashcard list after creation
+
+##### Files Modified
+- `src/components/notes/NoteEditor.tsx` - Selection detection
+- `src/components/notes/NoteViewer.tsx` - Workflow orchestration
+- `src/components/flashcards/CreateFlashCardModal.tsx` - Note context support
+
+##### Files Created
+- `src/components/notes/SelectionFloatingButton.tsx` - Floating action button
+
+##### Features
+- ✅ **Text Selection Detection** - Detects when user selects text in note viewer
+- ✅ **Floating Button** - Context-aware button appears near selection
+- ✅ **Reference Text Display** - Shows selected text in modal for reference
+- ✅ **Card Type Choice** - User chooses Front/Back or Cloze for each flashcard
+- ✅ **Auto-population** - Pre-fills cloze content with selected text
+- ✅ **Note Linking** - Automatically links flashcard to source note
+- ✅ **Tag Inheritance** - Inherits tags from parent note
+- ✅ **Responsive Design** - Works on desktop and mobile
+- ✅ **Accessibility** - Keyboard navigation, ARIA labels, screen reader support
+
+##### Benefits
+1. **Faster workflow:** 3 steps instead of 6+ steps
+2. **Better context:** Flashcards automatically linked to source notes
+3. **No quota usage:** Manual creation doesn't consume AI generation quota
+4. **Flexible:** Works alongside AI generation, not as replacement
+5. **Mobile-friendly:** Fixed bottom positioning on mobile devices
+
+##### Future Enhancements (Not Implemented)
+- Batch creation (select multiple passages at once)
+- AI-assisted suggestions for card structure
+- Keyboard shortcuts (e.g., Cmd+Shift+F)
+- Context menu integration (right-click to create)
+
+---
+
 ### Added - Tag Inheritance & Custom Study Sessions (December 2025)
 
 #### Overview

@@ -1,5 +1,5 @@
 // Updated src/components/flashcards/CreateFlashCardModal.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { FlashcardService } from '@/services/flashcard';
@@ -13,25 +13,47 @@ interface CreateFlashcardModalProps {
   decks: FlashcardDeck[];
   selectedDeckId?: string;
   onFlashcardCreated: () => void;
+  noteId?: string;
+  noteTags?: string[];
+  referenceText?: string;
+  initialCardType?: FlashcardType;
 }
 
-export function CreateFlashcardModal({ 
-  isOpen, 
-  onClose, 
-  decks, 
-  selectedDeckId, 
-  onFlashcardCreated 
+export function CreateFlashcardModal({
+  isOpen,
+  onClose,
+  decks,
+  selectedDeckId,
+  onFlashcardCreated,
+  noteId,
+  noteTags = [],
+  referenceText,
+  initialCardType,
 }: CreateFlashcardModalProps) {
-  const [cardType, setCardType] = useState<FlashcardType>('front_back');
+  const [cardType, setCardType] = useState<FlashcardType>(initialCardType || 'front_back');
   const [deckId, setDeckId] = useState(selectedDeckId || '');
   const [frontContent, setFrontContent] = useState('');
   const [backContent, setBackContent] = useState('');
   const [clozeContent, setClozeContent] = useState('');
-  const [tags, setTags] = useState<string[]>([]);
+  const [tags, setTags] = useState<string[]>(noteTags);
   const [tagInput, setTagInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [showDeckManagement, setShowDeckManagement] = useState(false);
+
+  // Pre-fill cloze content when reference text is provided and card type is cloze
+  useEffect(() => {
+    if (referenceText && cardType === 'cloze' && !clozeContent) {
+      setClozeContent(referenceText);
+    }
+  }, [referenceText, cardType, clozeContent]);
+
+  // Pre-fill front content when reference text is provided and card type is front_back
+  useEffect(() => {
+    if (referenceText && cardType === 'front_back' && !frontContent) {
+      setFrontContent(referenceText);
+    }
+  }, [referenceText, cardType, frontContent]);
 
   const handleAddTag = () => {
     if (tagInput.trim() && !tags.includes(tagInput.trim())) {
@@ -71,14 +93,15 @@ export function CreateFlashcardModal({
     try {
       setIsLoading(true);
       setError('');
-      
+
       await FlashcardService.createFlashcard({
         deck_id: deckId,
+        note_id: noteId,
         card_type: cardType,
         front_content: cardType === 'front_back' ? frontContent : undefined,
         back_content: cardType === 'front_back' ? backContent : undefined,
         cloze_content: cardType === 'cloze' ? clozeContent : undefined,
-        tags
+        tags: tags.length > 0 ? tags : noteTags,
       });
 
       onFlashcardCreated();
@@ -119,6 +142,38 @@ export function CreateFlashcardModal({
           {error && (
             <div className="p-3 text-red-700 bg-red-100 rounded-lg dark:bg-red-900 dark:text-red-200">
               {error}
+            </div>
+          )}
+
+          {/* Reference Text Display */}
+          {referenceText && (
+            <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="flex items-start gap-2">
+                <svg
+                  className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">
+                    Selected text reference:
+                  </p>
+                  <p className="text-sm text-blue-700 dark:text-blue-300 italic">
+                    &quot;{referenceText}&quot;
+                  </p>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                    Use this text as a reference when creating your flashcard
+                  </p>
+                </div>
+              </div>
             </div>
           )}
 
