@@ -26,25 +26,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { showNotification } = useNotification();
 
+  // Use refs to avoid effect re-running when router/showNotification change
+  const routerRef = React.useRef(router);
+  const showNotificationRef = React.useRef(showNotification);
+  const currentUserIdRef = React.useRef<string | null>(null);
+
+  // Keep refs up to date
+  React.useEffect(() => {
+    routerRef.current = router;
+    showNotificationRef.current = showNotification;
+    currentUserIdRef.current = user?.id || null;
+  });
+
   useEffect(() => {
     let mounted = true;
 
     // Get initial session
     const initSession = async () => {
       if (!mounted) return;
-      
+
       setLoading(true);
       const { data, error } = await supabase.auth.getSession();
-      
+
       if (!mounted) return;
-      
+
       if (error) {
         console.error('Error getting session:', error);
       } else {
+        const userId = data.session?.user?.id || null;
         setSession(data.session);
         setUser(data.session?.user ?? null);
+        currentUserIdRef.current = userId; // Set ref immediately
       }
-      
+
       setLoading(false);
     };
 
@@ -54,33 +68,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
         if (!mounted) return;
-        
-        console.log('🔑 Global auth state change:', event);
+
+        // Check if the USER actually changed (not just the token)
+        // Use ref instead of state to get the ACTUAL current user ID (state might be stale during async operations)
+        const newUserId = newSession?.user?.id || null;
+        const currentUserId = currentUserIdRef.current;
+        const userChanged = newUserId !== currentUserId;
+
+        // If it's a SIGNED_IN event and the user hasn't changed, it's just a token refresh
+        // Update session silently without touching user state to avoid triggering context refetches
+        if (event === 'SIGNED_IN' && !userChanged && currentUserId !== null) {
+          // Token refresh - update session for new token, but don't update user
+          setSession(newSession);
+          return;
+        }
+
+        // Update both session and user for actual auth changes
         setSession(newSession);
         setUser(newSession?.user ?? null);
+        currentUserIdRef.current = newUserId; // Update ref immediately
         setLoading(false);
-        
-        // On sign-in, redirect to dashboard ONLY if currently on auth page
-        if (event === 'SIGNED_IN' && newSession) {
+
+        // On INITIAL sign-in (not token refresh), redirect to dashboard ONLY if on auth page
+        if (event === 'SIGNED_IN' && newSession && !session) {
           console.log('User signed in, checking current route');
-          
+
           // Only redirect if we're on an auth-related page
           const currentPath = window.location.pathname;
           if (currentPath.startsWith('/auth') || currentPath === '/') {
             console.log('Redirecting from auth page to dashboard');
-            showNotification('Successfully signed in!', 'success');
+            showNotificationRef.current('Successfully signed in!', 'success');
             setTimeout(() => {
-              router.push('/dashboard');
+              routerRef.current.push('/dashboard');
             }, 100);
           } else {
             console.log('User already on protected page, not redirecting');
           }
         }
-        
+
         // On sign-out, redirect to home
         if (event === 'SIGNED_OUT') {
           console.log('User signed out, redirecting to home');
-          router.push('/');
+          currentUserIdRef.current = null; // Clear ref on sign out
+          routerRef.current.push('/');
         }
       }
     );
@@ -89,7 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mounted = false;
       authListener.subscription.unsubscribe();
     };
-  }, [router]);
+  }, []); // Empty deps - only run once on mount
 
   // Sign up with email and password
   const signUp = async (email: string, password: string) => {
@@ -99,14 +129,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email,
         password,
       });
-  
+
       if (error) throw error;
-      
+
       // Check if user already exists
       if (data.user && data.user.identities && data.user.identities.length === 0) {
         throw new Error('This email is already in use. Please use a different email or try signing in.');
       }
-      
+
       return data;
     } catch (error) {
       console.error('Error signing up:', error);
@@ -126,7 +156,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (error) throw error;
-      
+
       // The onAuthStateChange listener will handle redirection
       return data;
     } catch (error) {
@@ -141,10 +171,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signInWithGoogle = async () => {
     try {
       setLoading(true);
-      
+
       // Get current origin for the redirectTo
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
-      
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -153,7 +183,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (error) throw error;
-      
+
       // No need to redirect here - the OAuth flow will handle it
     } catch (error) {
       console.error('Error signing in with Google:', error);
@@ -169,7 +199,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
-      
+
       // The onAuthStateChange listener will handle redirection
     } catch (error) {
       console.error('Error signing out:', error);

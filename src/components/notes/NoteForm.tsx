@@ -5,6 +5,7 @@ import { Note } from '@/lib/supabase/client';
 import useNotes from '@/lib/hooks/useNotes';
 import useCategories from '@/lib/hooks/useCategories';
 import useTags from '@/lib/hooks/useTags';
+import { useDraftPersistence } from '@/lib/hooks/useDraftPersistence';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import Select from '../ui/Select';
@@ -77,16 +78,28 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
   const { tags, addTag } = useTags(); // Make sure we have the addTag function
   const { track } = useAnalytics();
   const { subscription } = useSubscription();
-  
+
   const [title, setTitle] = useState(initialData.title || '');
   const [content, setContent] = useState<Record<string, unknown>>(initialData.content || EMPTY_CONTENT);
   const [selectedTags, setSelectedTags] = useState<string[]>(initialData.tags || []);
   const [category, setCategory] = useState<string>(initialData.category || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
-  
+
   // State for the category creation modal
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+
+  // Draft persistence hook
+  const { loadDraft, clearDraft } = useDraftPersistence(
+    initialData.id,
+    {
+      title,
+      content,
+      category,
+      tags: selectedTags,
+    },
+    true // Enable draft persistence
+  );
 
   // Generate category options from the database, adding the "Add new category" option
   const categoryOptions = [
@@ -111,11 +124,37 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
   const tagSuggestions = tags.map(tag => tag.name);
 
   // Set a default category if none was selected and options are available
+  // Only run this ONCE on mount, not on every re-render
   useEffect(() => {
-    if (!category && categories.length > 0) {
+    if (!category && categories.length > 0 && !initialData.category) {
       setCategory(categories[0].name);
     }
-  }, [category, categories]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categories.length]); // Only when categories are loaded, not on every change
+
+  // Automatically load and restore draft on component mount (silently)
+  useEffect(() => {
+    const draft = loadDraft();
+
+    // Automatically restore draft if it exists and is different from initial data
+    if (draft) {
+      // Check if draft is different from initial data
+      const isDraftDifferent =
+        draft.title !== (initialData.title || '') ||
+        JSON.stringify(draft.content) !== JSON.stringify(initialData.content || EMPTY_CONTENT) ||
+        draft.category !== (initialData.category || '') ||
+        JSON.stringify(draft.tags) !== JSON.stringify(initialData.tags || []);
+
+      // Silently restore the draft if it's different
+      if (isDraftDifferent) {
+        setTitle(draft.title);
+        setContent(draft.content);
+        setCategory(draft.category);
+        setSelectedTags(draft.tags);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount
 
   // Handle category change with special handling for "Add new category" option
   const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -363,18 +402,18 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!category) {
       setError(categories.length === 0 ? 'Please create a category first' : 'Please select a category');
       return;
     }
-    
+
     // Generate title if not provided
     const finalTitle = title.trim() || generateTitleFromContent(content);
-    
+
     try {
       setIsSubmitting(true);
-      
+
       if (isEditing && initialData.id) {
         // Update existing note
         await editNote(initialData.id, {
@@ -383,7 +422,10 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
           tags: selectedTags,
           category,
         });
-        
+
+        // Clear draft after successful save
+        clearDraft();
+
         router.push(`/notes/${initialData.id}`);
       } else {
         // Create new note
@@ -393,14 +435,17 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
           tags: selectedTags,
           category,
         });
-        
+
+        // Clear draft after successful save
+        clearDraft();
+
         // Track note creation
         track('note_created', {
           note_category: category,
           tag_count: selectedTags.length,
           subscription_status: subscription?.subscription_status === 'active' ? 'premium' : 'free'
         });
-        
+
         // Check if this is their first note with tags (onboarding completion)
         if (selectedTags.length > 0) {
           // This could be enhanced to check if it's truly their first note
@@ -408,7 +453,7 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
             subscription_status: subscription?.subscription_status === 'active' ? 'premium' : 'free'
           });
         }
-        
+
         router.push(`/notes/${newNote.id}`);
       }
     } catch (err) {

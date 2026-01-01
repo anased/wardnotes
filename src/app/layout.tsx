@@ -5,6 +5,10 @@ import { GoogleAnalytics } from '@next/third-parties/google'
 import { WebVitals } from '@/components/WebVitals'
 import { NotificationProvider } from '@/lib/context/NotificationContext';
 import { AuthProvider } from '@/lib/context/AuthContext';
+import { SubscriptionProvider } from '@/lib/context/SubscriptionContext';
+import { TagsProvider } from '@/lib/context/TagsContext';
+import { NotesProvider } from '@/lib/context/NotesContext';
+import { CategoriesProvider } from '@/lib/context/CategoriesContext';
 import AuthRedirectHandler from '@/components/auth/AuthRedirectHandler';
 import { AnalyticsProvider } from '@/components/AnalyticsProvider';
 
@@ -93,10 +97,18 @@ export default function RootLayout({
       <body>
         <NotificationProvider>
           <AuthProvider>
-            <AnalyticsProvider />
-            <AuthRedirectHandler />
-            <WebVitals />
-            {children}
+            <SubscriptionProvider>
+              <TagsProvider>
+                <NotesProvider>
+                  <CategoriesProvider>
+                    <AnalyticsProvider />
+                    <AuthRedirectHandler />
+                    <WebVitals />
+                    {children}
+                  </CategoriesProvider>
+                </NotesProvider>
+              </TagsProvider>
+            </SubscriptionProvider>
           </AuthProvider>
         </NotificationProvider>
       </body>

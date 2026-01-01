@@ -126,6 +126,7 @@ export default function NoteEditor({
   }, [onSelectionChange]);
 
   const editor = useEditor({
+    immediatelyRender: false, // Prevent SSR hydration mismatches
     extensions: [
       StarterKit.configure({
         // We'll explicitly configure these to ensure they work properly
