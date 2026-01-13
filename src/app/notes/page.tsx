@@ -18,14 +18,15 @@ import { useSubscription } from '@/lib/hooks/useSubscription';
 
 export default function NotesPage() {
   const { user, loading: authLoading } = useAuth();
-  const { 
-    notes, 
-    loading: notesLoading, 
-    error, 
+  const {
+    notes,
+    loading: notesLoading,
+    error,
     fetchNotes,
     search,
     filterByCategory,
-    filterByTag // Make sure this function exists in useNotes hook
+    filterByTag,
+    filterByCategoryAndTag
   } = useNotes();
   const { categories } = useCategories();
   const { tags } = useTags(); // Get tags from the hook
@@ -95,36 +96,46 @@ export default function NotesPage() {
     }
   };
 
+  const applyFilters = async (categoryFilter: string, tagFilter: string) => {
+    try {
+      // If both filters are "All", fetch all notes
+      if (categoryFilter === 'All' && tagFilter === 'All') {
+        await fetchNotes();
+        return;
+      }
+
+      // If only category is selected
+      if (categoryFilter !== 'All' && tagFilter === 'All') {
+        await filterByCategory(categoryFilter);
+        return;
+      }
+
+      // If only tag is selected
+      if (categoryFilter === 'All' && tagFilter !== 'All') {
+        await filterByTag(tagFilter);
+        return;
+      }
+
+      // If both filters are selected, use combined filter
+      if (categoryFilter !== 'All' && tagFilter !== 'All') {
+        await filterByCategoryAndTag(categoryFilter, tagFilter);
+        return;
+      }
+    } catch (err) {
+      console.error('Filter error:', err);
+    }
+  };
+
   const handleCategoryChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newCategory = e.target.value;
     setCategory(newCategory);
-    // Reset tag filter when changing category
-    setSelectedTag('All');
-    
-    try {
-      await filterByCategory(newCategory);
-    } catch (err) {
-      console.error('Category filter error:', err);
-    }
+    await applyFilters(newCategory, selectedTag);
   };
 
   const handleTagChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newTag = e.target.value;
     setSelectedTag(newTag);
-    // Reset category filter when changing tag
-    setCategory('All');
-    
-    try {
-      if (newTag === 'All') {
-        // Fetch all notes when "All Tags" is selected
-        await fetchNotes();
-      } else {
-        // Filter by selected tag
-        await filterByTag(newTag);
-      }
-    } catch (err) {
-      console.error('Tag filter error:', err);
-    }
+    await applyFilters(category, newTag);
   };
 
   const handleClearFilters = () => {
