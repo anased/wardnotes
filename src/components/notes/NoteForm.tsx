@@ -13,9 +13,12 @@ import TagInput from '../ui/TagInput';
 import NoteEditor from './NoteEditor';
 import CategoryCreationModal from '../ui/CategoryCreationModal';
 import NoteImprover from './NoteImprover'; // Add this import
+import LearningQuestionsInput from './LearningQuestionsInput';
 import PremiumFeatureGate from '../premium/PremiumFeatureGate'; // Import the premium gate
 import { useAnalytics } from '@/lib/analytics/useAnalytics';
 import { useSubscription } from '@/lib/hooks/useSubscription';
+import { useQuota } from '@/lib/hooks/useQuota';
+import { supabase } from '@/lib/supabase/client';
 
 interface NoteFormProps {
   initialData?: Partial<Note>;
@@ -78,8 +81,16 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
   const { tags, addTag } = useTags(); // Make sure we have the addTag function
   const { track } = useAnalytics();
   const { subscription } = useSubscription();
+  const { refreshQuota } = useQuota();
 
   const [title, setTitle] = useState(initialData.title || '');
+
+  // Learning questions section state
+  const [showLearningSection, setShowLearningSection] = useState(false);
+  const [clinicalContext, setClinicalContext] = useState('');
+  const [learningQuestions, setLearningQuestions] = useState<string[]>(['']);
+  const [isAnsweringQuestions, setIsAnsweringQuestions] = useState(false);
+  const [learningError, setLearningError] = useState<string | null>(null);
   const [content, setContent] = useState<Record<string, unknown>>(initialData.content || EMPTY_CONTENT);
   const [selectedTags, setSelectedTags] = useState<string[]>(initialData.tags || []);
   const [category, setCategory] = useState<string>(initialData.category || '');
@@ -129,7 +140,7 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
     if (!category && categories.length > 0 && !initialData.category) {
       setCategory(categories[0].name);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [categories.length]); // Only when categories are loaded, not on every change
 
   // Automatically load and restore draft on component mount (silently)
@@ -153,7 +164,7 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
         setSelectedTags(draft.tags);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []); // Only run on mount
 
   // Handle category change with special handling for "Add new category" option
@@ -279,6 +290,13 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
           content: [{ type: 'text', text: line.substring(2).trim() }]
         });
       } 
+      else if (line.startsWith('### ')) {
+        newContentNodes.push({
+          type: 'heading',
+          attrs: { level: 3 },
+          content: [{ type: 'text', text: line.substring(4).trim() }]
+        });
+      }
       else if (line.startsWith('## ')) {
         newContentNodes.push({
           type: 'heading',
@@ -359,6 +377,108 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
     
     console.log("Converted TipTap content:", newContent);
     setContent(newContent as unknown as Record<string, unknown>);
+  };
+
+  // Helper to format Q&A as Markdown for TipTap
+  const formatAnswersAsMarkdown = (
+    context: string,
+    answers: Array<{ question: string; answer: string }>
+  ): string => {
+    let markdown = `## Clinical Context\n${context}\n\n## Learning Questions & Answers\n\n`;
+
+    answers.forEach((qa, index) => {
+      markdown += `### Q${index + 1}: ${qa.question}\n\n${qa.answer}\n\n`;
+    });
+
+    return markdown;
+  };
+
+  // Handler for answering learning questions
+  const handleAnswerQuestions = async () => {
+    // Validate inputs
+    const validQuestions = learningQuestions.filter(q => q.trim().length > 0);
+
+    if (!clinicalContext.trim()) {
+      setLearningError('Please enter clinical context');
+      return;
+    }
+
+    if (validQuestions.length === 0) {
+      setLearningError('Please enter at least one question');
+      return;
+    }
+
+    try {
+      setIsAnsweringQuestions(true);
+      setLearningError(null);
+
+      // Track event started
+      track('learning_questions_started', {
+        question_count: validQuestions.length,
+        subscription_status: subscription?.subscription_status === 'active' ? 'premium' : 'free'
+      });
+
+      // Get session token
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError || !session) {
+        throw new Error('You must be logged in');
+      }
+
+      // Call API
+      const response = await fetch('/api/answer-questions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          clinicalContext: clinicalContext.trim(),
+          questions: validQuestions
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+
+        if (response.status === 429) {
+          setLearningError(errorData.message || 'Monthly limit reached. Upgrade to Premium for unlimited access.');
+          return;
+        }
+
+        throw new Error(errorData.error || 'Failed to answer questions');
+      }
+
+      const data = await response.json();
+
+      // Convert answers to Markdown and inject into editor
+      const markdownContent = formatAnswersAsMarkdown(
+        clinicalContext.trim(),
+        data.answers
+      );
+
+      handleImprovedContent(markdownContent);
+
+      // Refresh quota
+      await refreshQuota();
+
+      // Track completion
+      track('learning_questions_answered', {
+        question_count: validQuestions.length,
+        generation_time: data.metadata.generationTime,
+        subscription_status: subscription?.subscription_status === 'active' ? 'premium' : 'free'
+      });
+
+      // Reset form and collapse section
+      setShowLearningSection(false);
+      setClinicalContext('');
+      setLearningQuestions(['']);
+
+    } catch (err) {
+      setLearningError(err instanceof Error ? err.message : 'An unexpected error occurred');
+    } finally {
+      setIsAnsweringQuestions(false);
+    }
   };
 
   // Helper function to generate a title from content if none provided
@@ -494,7 +614,95 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
           suggestions={tagSuggestions}
         />
       </div>
-      
+
+      {/* Learning Questions Section - Collapsible */}
+      <div className="border border-blue-200 dark:border-blue-800 rounded-lg overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setShowLearningSection(!showLearningSection)}
+          className="w-full flex items-center justify-between px-4 py-3 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+        >
+          <span className="flex items-center text-sm font-medium text-blue-700 dark:text-blue-300">
+            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+            Learn from this encounter
+          </span>
+          <svg
+            className={`w-5 h-5 text-blue-600 dark:text-blue-400 transition-transform ${showLearningSection ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+
+        {showLearningSection && (
+          <div className="p-4 space-y-4 bg-white dark:bg-gray-900">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Enter a brief clinical context and ask questions about what you want to learn. AI will generate educational answers that populate the note editor.
+            </p>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Clinical Context
+              </label>
+              <textarea
+                value={clinicalContext}
+                onChange={(e) => setClinicalContext(e.target.value)}
+                placeholder="e.g., 65-year-old patient with newly diagnosed glioma presenting with first-time generalized seizure after missing ASM doses..."
+                rows={3}
+                disabled={isAnsweringQuestions}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg
+                  dark:border-gray-600 dark:bg-gray-800 dark:text-white
+                  focus:ring-2 focus:ring-primary-500 focus:border-transparent
+                  disabled:opacity-50 disabled:cursor-not-allowed resize-none
+                  placeholder:text-gray-400 dark:placeholder:text-gray-500"
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {clinicalContext.length}/2000 characters
+              </p>
+            </div>
+
+            <LearningQuestionsInput
+              questions={learningQuestions}
+              onQuestionsChange={setLearningQuestions}
+              maxQuestions={5}
+              disabled={isAnsweringQuestions}
+            />
+
+            {learningError && (
+              <div className="p-3 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-900/50 dark:text-red-200">
+                {learningError}
+              </div>
+            )}
+
+            <div className="pt-2">
+              <PremiumFeatureGate
+                featureName="Learning Questions"
+                description="Get AI-powered answers to your clinical learning questions."
+                featureType="note_improvement"
+              >
+                <Button
+                  type="button"
+                  onClick={handleAnswerQuestions}
+                  isLoading={isAnsweringQuestions}
+                  disabled={!clinicalContext.trim() || learningQuestions.every(q => !q.trim())}
+                  variant="primary"
+                  className="flex items-center"
+                >
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  Answer My Questions
+                </Button>
+              </PremiumFeatureGate>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="space-y-2">
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
           Note Content

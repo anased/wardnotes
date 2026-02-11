@@ -33,6 +33,8 @@ export type AnalyticsEvent =
   | 'ai_note_improve_completed'
   | 'ai_flashcard_generate_started'
   | 'ai_flashcard_generate_completed'
+  | 'learning_questions_started'
+  | 'learning_questions_answered'
   
   // Subscription events
   | 'paywall_viewed'
@@ -91,6 +93,11 @@ export interface QuotaLimitReachedProperties extends BaseEventProperties {
   days_until_reset?: number;
 }
 
+export interface LearningQuestionsProperties extends BaseEventProperties {
+  question_count: number;
+  generation_time?: number;
+}
+
 // Union type for all event properties
 export type EventProperties =
   | BaseEventProperties
@@ -101,7 +108,8 @@ export type EventProperties =
   | FlashcardGenerateProperties
   | PaywallProperties
   | SubscriptionProperties
-  | QuotaLimitReachedProperties;
+  | QuotaLimitReachedProperties
+  | LearningQuestionsProperties;
 
 export interface Analytics {
   init: (config: AnalyticsConfig) => void;
