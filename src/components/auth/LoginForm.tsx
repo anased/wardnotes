@@ -1,3 +1,5 @@
+'use client';
+
 import { useState } from 'react';
 import useAuth from '@/lib/hooks/useAuth';
 import Button from '../ui/Button';
@@ -36,7 +38,11 @@ export default function LoginForm() {
     } catch (err: unknown) {
       const error = err as Error;
       console.error('Login error:', error);
-      setError(error.message || 'Failed to sign in');
+      if (error instanceof TypeError || error.message === 'Failed to fetch') {
+        setError('Unable to connect to the authentication server. Please check your internet connection and try again.');
+      } else {
+        setError(error.message || 'Failed to sign in');
+      }
     } finally {
       setIsLoading(false);
     }
