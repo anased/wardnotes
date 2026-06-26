@@ -9,6 +9,142 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Learning Questions from Clinical Encounters (February 2026)
+
+#### Overview
+Implemented a new feature that allows users to ask learning questions about clinical encounters. Users enter a brief clinical context and up to 5 questions, and AI generates detailed, evidence-based educational answers that are automatically injected into the note editor.
+
+#### Problem Statement
+- Medical residents and learners often encounter cases that raise questions they want to explore
+- Manually researching questions after clinical encounters is time-consuming
+- Generic search results don't apply to the specific patient context
+- No way to capture learning moments while creating notes
+
+#### Solution Implemented
+
+##### User Workflow
+1. User creates or edits a note
+2. User expands the "Learn from this encounter" collapsible section
+3. User enters brief clinical context (up to 2000 characters)
+4. User adds 1-5 learning questions
+5. User clicks "Answer My Questions" button
+6. AI generates detailed answers tailored to the specific case
+7. Answers are formatted as Markdown and injected into the note editor
+8. Section collapses and resets for next use
+
+##### Technical Implementation
+
+**1. LearningQuestionsInput Component** (`src/components/notes/LearningQuestionsInput.tsx`)
+- Renders 1-5 numbered question inputs
+- Add/remove question functionality
+- Enter key adds new question (if not at limit)
+- Counter shows valid questions / max (e.g., "3/5 questions")
+- Disabled state during answer generation
+
+**2. API Endpoint** (`src/app/api/answer-questions/route.ts`)
+- Authentication via Bearer token
+- Quota check (shares quota with `note_improvement`)
+- Validation:
+  - Clinical context required (max 2000 chars)
+  - 1-5 questions required (max 500 chars each)
+- Calls GPT-4o with specialized medical education prompt
+- Parses numbered response into individual Q&A pairs
+- Logs API usage for cost tracking
+
+**3. System Prompt Design**
+The AI is instructed to answer like an experienced subspecialty fellow teaching during a case debrief:
+- **Direct answers with real criteria:** Includes actual diagnostic criteria with sources (e.g., "MDS Clinical Diagnostic Criteria, 2015")
+- **Application to the patient:** Walks through how criteria apply (or don't) to this specific case
+- **Actionable specifics:** Drug doses with frequencies, test sensitivities, scoring calculations
+- **Differentials and next steps:** What else to consider given the full clinical picture
+- **Pearl or pitfall:** Ends each answer with a high-yield teaching point
+
+**4. NoteForm Integration** (`src/components/notes/NoteForm.tsx`)
+- Collapsible "Learn from this encounter" section with lightbulb icon
+- Clinical context textarea with character counter
+- Integrates LearningQuestionsInput component
+- PremiumFeatureGate with `note_improvement` quota
+- Converts AI response to Markdown and injects into editor
+- Analytics tracking for started/completed events
+
+##### Files Created
+- `src/components/notes/LearningQuestionsInput.tsx` - Question input component
+- `src/app/api/answer-questions/route.ts` - API endpoint
+
+##### Files Modified
+- `src/components/notes/NoteForm.tsx` - Added collapsible learning section
+- `src/types/analytics.ts` - Added learning questions event types
+
+##### Features
+- ✅ **Collapsible UI** - "Learn from this encounter" toggle with smooth expand/collapse
+- ✅ **Clinical Context** - 2000 character textarea with live counter
+- ✅ **Multiple Questions** - Up to 5 questions with add/remove controls
+- ✅ **Enter Key Support** - Press Enter to add new question line
+- ✅ **AI-Powered Answers** - GPT-4o generates detailed, case-specific responses
+- ✅ **Evidence-Based** - Answers include real criteria, doses, and sources
+- ✅ **Auto-Injection** - Answers formatted as Markdown and added to note editor
+- ✅ **Quota Integration** - Shares quota with note improvement feature
+- ✅ **Error Handling** - Validates inputs, handles quota limits, displays errors
+- ✅ **Analytics** - Tracks question started/answered events
+- ✅ **Dark Mode** - Full dark mode support
+
+##### Benefits
+1. **Contextual learning:** Answers tailored to the specific patient presentation
+2. **Efficiency:** Learn while documenting, not after
+3. **Depth:** 200-400 word answers with real clinical criteria
+4. **Actionable:** Specific doses, thresholds, and calculations
+5. **Integrated:** Learning content saved directly in notes for future reference
+
+##### API Response Format
+```typescript
+interface QuestionAnswer {
+  question: string;
+  answer: string;
+}
+
+// Response
+{
+  answers: QuestionAnswer[];
+  metadata: {
+    generationTime: number;
+    questionCount: number;
+  };
+  quota: {
+    used: number;
+    limit: number;
+    remaining: number;
+  }
+}
+```
+
+##### Output Format in Note Editor
+```markdown
+## Clinical Context
+[User's clinical context]
+
+## Learning Questions & Answers
+
+### Q1: [Question text]
+[AI-generated answer with criteria, application, specifics, and pearl]
+
+### Q2: [Question text]
+[AI-generated answer...]
+```
+
+##### Validation Rules
+- Clinical context: Required, max 2000 characters
+- Questions: 1-5 required, each max 500 characters
+- Empty questions filtered before submission
+- Both context and at least one question required to enable submit button
+
+##### Cost & Quota
+- Uses `note_improvement` quota (shared with note improvement feature)
+- Estimated cost: ~$0.015 per generation
+- Free users: Limited monthly usage
+- Premium users: Unlimited access
+
+---
+
 ### Added - Global Data Caching with Context Providers (December 2025)
 
 #### Overview
