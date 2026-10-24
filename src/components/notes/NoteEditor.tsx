@@ -16,6 +16,8 @@ import Link from '@tiptap/extension-link';
 import Typography from '@tiptap/extension-typography';
 import Placeholder from '@tiptap/extension-placeholder';
 import { useCallback, useState, useMemo, useRef } from 'react';
+import type { EditorView } from '@tiptap/pm/view';
+import { uploadNoteImage } from '@/lib/utils/imageUpload';
 import { /* BoldIcon, ItalicIcon, UnderlineIcon, ListBulletIcon */ } from '@heroicons/react/24/outline';
 
 // Selection information interface
@@ -125,6 +127,26 @@ export default function NoteEditor({
     }, 150);
   }, [onSelectionChange]);
 
+  // Upload pasted/dropped image files and insert them at the given position
+  // (or the current cursor position when none is given)
+  const insertImageFiles = useCallback((view: EditorView, files: File[], pos?: number) => {
+    files.forEach(async (file) => {
+      try {
+        const src = await uploadNoteImage(file);
+        const { state } = view;
+        const node = state.schema.nodes.image?.create({ src, alt: file.name });
+        if (!node) return;
+        const insertPos = pos ?? state.selection.from;
+        view.dispatch(state.tr.insert(Math.min(insertPos, state.doc.content.size), node));
+      } catch (error) {
+        console.error('Failed to insert image:', error);
+      }
+    });
+  }, []);
+
+  const getImageFiles = (fileList?: FileList | null) =>
+    Array.from(fileList ?? []).filter((file) => file.type.startsWith('image/'));
+
   const editor = useEditor({
     immediatelyRender: false, // Prevent SSR hydration mismatches
     extensions: [
@@ -166,6 +188,24 @@ export default function NoteEditor({
     ],
     content,
     editable,
+    editorProps: {
+      handlePaste: (view, event) => {
+        const files = getImageFiles(event.clipboardData?.files);
+        if (files.length === 0) return false;
+        event.preventDefault();
+        insertImageFiles(view, files);
+        return true;
+      },
+      handleDrop: (view, event, _slice, moved) => {
+        if (moved) return false;
+        const files = getImageFiles(event.dataTransfer?.files);
+        if (files.length === 0) return false;
+        event.preventDefault();
+        const pos = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
+        insertImageFiles(view, files, pos);
+        return true;
+      },
+    },
     onUpdate: ({ editor }) => {
       onChange(editor.getJSON());
     },
