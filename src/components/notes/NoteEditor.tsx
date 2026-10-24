@@ -11,7 +11,7 @@ import Table from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
-import Image from '@tiptap/extension-image';
+import NoteImage from './NoteImage';
 import Link from '@tiptap/extension-link';
 import Typography from '@tiptap/extension-typography';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -177,7 +177,7 @@ export default function NoteEditor({
       TableRow,
       TableCell,
       TableHeader,
-      Image,
+      NoteImage,
       Link.configure({
         openOnClick: true,
       }),
