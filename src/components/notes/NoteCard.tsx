@@ -1,16 +1,16 @@
 import Link from 'next/link';
-import { useRouter } from 'next/navigation'; // Import useRouter
+import { useRouter } from 'next/navigation';
 import { Note } from '@/lib/supabase/client';
 import CategoryBadge from '../ui/CategoryBadge';
-import useNotes from '@/lib/hooks/useNotes'; // Import useNotes hook
 
 interface NoteCardProps {
   note: Note;
+  /** Called when a tag is clicked. Without it, clicking a tag opens the notes page filtered by that tag. */
+  onTagClick?: (tag: string) => void;
 }
 
-export default function NoteCard({ note }: NoteCardProps) {
-  const router = useRouter(); // Add router
-  const { filterByTag } = useNotes(); // Add filterByTag from useNotes
+export default function NoteCard({ note, onTagClick }: NoteCardProps) {
+  const router = useRouter();
 
   // Format the date (e.g., "May 2, 2025")
   const formattedDate = new Date(note.created_at).toLocaleDateString('en-US', {
@@ -20,22 +20,14 @@ export default function NoteCard({ note }: NoteCardProps) {
   });
 
   // Handle tag click
-  const handleTagClick = async (e: React.MouseEvent, tag: string) => {
+  const handleTagClick = (e: React.MouseEvent, tag: string) => {
     e.preventDefault(); // Prevent navigating to the note
     e.stopPropagation(); // Stop event propagation
-    
-    try {
-      await filterByTag(tag);
-      
-      // Optionally navigate to notes page if we're not already there
-      const currentPath = window.location.pathname;
-      if (!currentPath.includes('/notes') || currentPath.includes('/notes/')) {
-        router.push('/notes');
-      }
-      
-      // You could also use a state management solution to set the selected tag in the filter dropdown
-    } catch (err) {
-      console.error('Error filtering by tag:', err);
+
+    if (onTagClick) {
+      onTagClick(tag);
+    } else {
+      router.push(`/notes?tag=${encodeURIComponent(tag)}`);
     }
   };
 
@@ -56,6 +48,8 @@ export default function NoteCard({ note }: NoteCardProps) {
             {note.tags.map((tag) => (
               <button
                 key={tag}
+                type="button"
+                aria-label={`Show notes tagged ${tag}`}
                 className="tag hover:bg-gray-200 dark:hover:bg-gray-600 cursor-pointer"
                 onClick={(e) => handleTagClick(e, tag)}
               >

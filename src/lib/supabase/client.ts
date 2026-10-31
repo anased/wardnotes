@@ -1,5 +1,6 @@
 // src/lib/supabase/client.ts
 import { createClient } from '@supabase/supabase-js';
+import { hasTag, normalizeTagName, validateTagName } from '../utils/tagUtils';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -302,27 +303,32 @@ export const getTags = async () => {
 
 // Create a new tag
 export const createTag = async (name: string) => {
+  const validationError = validateTagName(name);
+  if (validationError) {
+    throw new Error(validationError);
+  }
+
   // Get the current user
   const { data: { user } } = await supabase.auth.getUser();
-  
+
   if (!user) {
     throw new Error('User not authenticated');
   }
-  
+
   // Create the tag
   const { data, error } = await supabase
     .from('tags')
     .insert({
       user_id: user.id,
-      name
+      name: normalizeTagName(name)
     })
     .select();
 
   if (error) {
     console.error('Error creating tag:', error);
-    throw error;
+    throw tagError(error);
   }
-  
+
   if (!data || data.length === 0) {
     throw new Error('Failed to create tag - no data returned');
   }
@@ -330,69 +336,60 @@ export const createTag = async (name: string) => {
   return data[0] as Tag;
 };
 
-// Update a tag
+// Rename a tag. Also renames it on every note and flashcard that uses it.
 export const updateTag = async (id: string, name: string) => {
-  const { data, error } = await supabase
-    .from('tags')
-    .update({ name })
-    .eq('id', id)
-    .select()
-    .single();
+  const validationError = validateTagName(name);
+  if (validationError) {
+    throw new Error(validationError);
+  }
+
+  const { data, error } = await supabase.rpc('rename_tag', {
+    p_tag_id: id,
+    p_new_name: normalizeTagName(name),
+  });
 
   if (error) {
-    console.error('Error updating tag:', error);
-    throw error;
+    console.error('Error renaming tag:', error);
+    throw tagError(error);
   }
 
   return data as Tag;
 };
 
-// Delete a tag
+// Delete a tag. Also removes it from every note and flashcard that uses it.
+// Returns the number of notes the tag was removed from.
 export const deleteTag = async (id: string) => {
-  // First check if this tag is used by any notes
-  const { data: tagData, error: tagError } = await supabase
-    .from('tags')
-    .select('name')
-    .eq('id', id)
-    .single();
-
-  if (tagError) {
-    console.error('Error fetching tag name:', tagError);
-    throw tagError;
-  }
-
-  const tagName = tagData?.name;
-
-  // Check if this tag is used in any notes
-  const { data: notes, error: notesError } = await supabase
-    .from('notes')
-    .select('id')
-    .contains('tags', [tagName])
-    .limit(1);
-
-  if (notesError) {
-    console.error('Error checking if tag is in use:', notesError);
-    throw notesError;
-  }
-
-  // If tag is in use, don't delete it
-  if (notes && notes.length > 0) {
-    throw new Error('Cannot delete tag that is in use by notes');
-  }
-
-  // Delete the tag
-  const { error } = await supabase
-    .from('tags')
-    .delete()
-    .eq('id', id);
+  const { data, error } = await supabase.rpc('delete_tag', { p_tag_id: id });
 
   if (error) {
     console.error('Error deleting tag:', error);
+    throw tagError(error);
+  }
+
+  return (data as number) ?? 0;
+};
+
+// Count the notes that use a tag (case-insensitive).
+export const countNotesWithTag = async (name: string) => {
+  const { data, error } = await supabase
+    .from('notes')
+    .select('tags');
+
+  if (error) {
+    console.error('Error counting notes with tag:', error);
     throw error;
   }
 
-  return true;
+  return (data || []).filter(note => hasTag(note.tags as string[], name)).length;
 };
+
+// Turn database errors into messages that can be shown to the user.
+function tagError(error: { code?: string; message?: string }) {
+  if (error.code === '23505') {
+    return new Error('A tag with this name already exists');
+  }
+  return new Error(error.message || 'Something went wrong with this tag');
+}
 
 
 // ======================

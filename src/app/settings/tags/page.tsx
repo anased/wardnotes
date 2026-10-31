@@ -5,7 +5,9 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import useAuth from '@/lib/hooks/useAuth';
 import useTags from '@/lib/hooks/useTags';
-import { Tag } from '@/lib/supabase/client';
+import useNotes from '@/lib/hooks/useNotes';
+import { Tag, countNotesWithTag } from '@/lib/supabase/client';
+import { MAX_TAG_LENGTH, normalizeTagName, tagsEqual, validateTagName } from '@/lib/utils/tagUtils';
 import PageContainer from '@/components/layout/PageContainer';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -14,6 +16,7 @@ import Spinner from '@/components/ui/Spinner';
 export default function TagsPage() {
   const { user, loading: authLoading } = useAuth();
   const { tags, loading: tagsLoading, error, addTag, editTag, removeTag } = useTags();
+  const { fetchNotes } = useNotes();
   const router = useRouter();
 
   const [newTagName, setNewTagName] = useState('');
@@ -31,12 +34,15 @@ export default function TagsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!newTagName.trim()) {
-      setFormError('Tag name is required');
+    const validationError = validateTagName(newTagName);
+    if (validationError) {
+      setFormError(validationError);
       return;
     }
-    
-    if (tags.some(tag => tag.name.toLowerCase() === newTagName.toLowerCase() && 
+
+    const name = normalizeTagName(newTagName);
+
+    if (tags.some(tag => tagsEqual(tag.name, name) &&
         (!editingTag || tag.id !== editingTag.id))) {
       setFormError('A tag with this name already exists');
       return;
@@ -47,12 +53,14 @@ export default function TagsPage() {
       setFormError('');
       
       if (editingTag) {
-        // Update existing tag
-        await editTag(editingTag.id, newTagName);
+        // Rename the tag everywhere it's used
+        await editTag(editingTag.id, name);
         setEditingTag(null);
+        // Notes in memory still have the old name
+        await fetchNotes();
       } else {
         // Create new tag
-        await addTag(newTagName);
+        await addTag(name);
       }
       
       // Reset form
@@ -71,10 +79,26 @@ export default function TagsPage() {
     setNewTagName(tag.name);
   };
   
-  const handleDelete = async (tagId: string) => {
-    if (confirm('Are you sure you want to delete this tag? This cannot be undone.')) {
+  const handleDelete = async (tag: Tag) => {
+    let message = `Delete the tag "${tag.name}"? This cannot be undone.`;
+    try {
+      const noteCount = await countNotesWithTag(tag.name);
+      if (noteCount > 0) {
+        message = `Delete the tag "${tag.name}"? It will be removed from ${noteCount} ${noteCount === 1 ? 'note' : 'notes'} and their flashcards. This cannot be undone.`;
+      }
+    } catch {
+      message = `Delete the tag "${tag.name}"? It will be removed from any notes and flashcards that use it. This cannot be undone.`;
+    }
+
+    if (confirm(message)) {
       try {
-        await removeTag(tagId);
+        const affectedNotes = await removeTag(tag.id);
+        if (editingTag?.id === tag.id) {
+          handleCancel();
+        }
+        if (affectedNotes > 0) {
+          await fetchNotes();
+        }
       } catch (err) {
         const error = err as Error;
         alert(error.message || 'Failed to delete tag');
@@ -108,6 +132,11 @@ export default function TagsPage() {
           <h2 className="mb-4 text-xl font-semibold">
             {editingTag ? 'Edit Tag' : 'Add New Tag'}
           </h2>
+          {editingTag && (
+            <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+              Renaming updates every note and flashcard that uses &quot;{editingTag.name}&quot;.
+            </p>
+          )}
           
           <form onSubmit={handleSubmit} className="space-y-4">
             {formError && (
@@ -121,6 +150,7 @@ export default function TagsPage() {
               value={newTagName}
               onChange={(e) => setNewTagName(e.target.value)}
               placeholder="Enter tag name"
+              maxLength={MAX_TAG_LENGTH}
               required
             />
             
@@ -171,6 +201,7 @@ export default function TagsPage() {
                   <div className="flex space-x-2">
                     <button
                       onClick={() => handleEdit(tag)}
+                      aria-label={`Rename tag ${tag.name}`}
                       className="p-1 text-primary-600 hover:text-primary-900 dark:text-primary-400 dark:hover:text-primary-300"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -178,7 +209,8 @@ export default function TagsPage() {
                       </svg>
                     </button>
                     <button
-                      onClick={() => handleDelete(tag.id)}
+                      onClick={() => handleDelete(tag)}
+                      aria-label={`Delete tag ${tag.name}`}
                       className="p-1 text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

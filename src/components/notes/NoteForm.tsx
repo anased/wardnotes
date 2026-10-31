@@ -19,6 +19,7 @@ import { useAnalytics } from '@/lib/analytics/useAnalytics';
 import { useSubscription } from '@/lib/hooks/useSubscription';
 import { useQuota } from '@/lib/hooks/useQuota';
 import { supabase } from '@/lib/supabase/client';
+import { canonicalTagName, dedupeTags, hasTag } from '@/lib/utils/tagUtils';
 
 interface NoteFormProps {
   initialData?: Partial<Note>;
@@ -78,7 +79,7 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
   const router = useRouter();
   const { addNote, editNote } = useNotes();
   const { categories, addCategory } = useCategories();
-  const { tags, addTag } = useTags(); // Make sure we have the addTag function
+  const { tags, addTag } = useTags();
   const { track } = useAnalytics();
   const { subscription } = useSubscription();
   const { refreshQuota } = useQuota();
@@ -192,38 +193,29 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
     }
   };
 
-  // New function to handle tag changes and auto-create new tags
-  const handleTagsChange = async (newTags: string[]) => {
-    try {
-      // Find tags that are new (not in the existing tags list)
-      const existingTagNames = tags.map(tag => tag.name);
-      const newTagNames = newTags.filter(tag => !existingTagNames.includes(tag));
-      
-      // Create new tags in the database
-      for (const newTagName of newTagNames) {
-        try {
-          await addTag(newTagName);
-          console.log(`Created new tag: ${newTagName}`);
-          
-          // Track tag added event
-          track('tag_added', {
-            tag_name: newTagName,
-            note_id: initialData.id || 'new',
-            subscription_status: subscription?.subscription_status === 'active' ? 'premium' : 'free'
-          });
-        } catch (err) {
-          // If tag creation fails (e.g., duplicate), just log it and continue
-          console.warn(`Failed to create tag "${newTagName}":`, err);
-        }
+  // Create any tags on the note that aren't in the user's tag list yet.
+  // Runs when the note is saved, so tags typed and removed again aren't kept.
+  // Returns the note's tags using the saved spelling of existing tags.
+  const saveNewTags = async (noteTags: string[]): Promise<string[]> => {
+    const finalTags = dedupeTags(noteTags.map(tag => canonicalTagName(tag, tagSuggestions)));
+    const newTagNames = finalTags.filter(tag => !hasTag(tagSuggestions, tag));
+
+    for (const newTagName of newTagNames) {
+      try {
+        await addTag(newTagName);
+
+        track('tag_added', {
+          tag_name: newTagName,
+          note_id: initialData.id || 'new',
+          subscription_status: subscription?.subscription_status === 'active' ? 'premium' : 'free'
+        });
+      } catch (err) {
+        // The note still saves with this tag; it can be managed later in settings
+        console.warn(`Failed to create tag "${newTagName}":`, err);
       }
-      
-      // Update the selected tags
-      setSelectedTags(newTags);
-    } catch (err) {
-      console.error('Error handling tag changes:', err);
-      // Still update the selected tags even if some tag creation failed
-      setSelectedTags(newTags);
     }
+
+    return finalTags;
   };
 
   // Helper function to parse text with bold and italic marks
@@ -534,12 +526,14 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
     try {
       setIsSubmitting(true);
 
+      const finalTags = await saveNewTags(selectedTags);
+
       if (isEditing && initialData.id) {
         // Update existing note
         await editNote(initialData.id, {
           title: finalTitle,
           content,
-          tags: selectedTags,
+          tags: finalTags,
           category,
         });
 
@@ -552,7 +546,7 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
         const newNote = await addNote({
           title: finalTitle,
           content,
-          tags: selectedTags,
+          tags: finalTags,
           category,
         });
 
@@ -562,12 +556,12 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
         // Track note creation
         track('note_created', {
           note_category: category,
-          tag_count: selectedTags.length,
+          tag_count: finalTags.length,
           subscription_status: subscription?.subscription_status === 'active' ? 'premium' : 'free'
         });
 
         // Check if this is their first note with tags (onboarding completion)
-        if (selectedTags.length > 0) {
+        if (finalTags.length > 0) {
           // This could be enhanced to check if it's truly their first note
           track('onboarding_completed', {
             subscription_status: subscription?.subscription_status === 'active' ? 'premium' : 'free'
@@ -610,7 +604,7 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
         <TagInput
           label="Tags"
           value={selectedTags}
-          onChange={handleTagsChange} // Use the new handler
+          onChange={setSelectedTags}
           suggestions={tagSuggestions}
         />
       </div>
