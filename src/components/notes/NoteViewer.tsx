@@ -14,6 +14,7 @@ import PremiumFeatureGate from '../premium/PremiumFeatureGate'; // Import the pr
 import { FlashcardIntegrationButton } from './FlashcardIntegrationButton';
 import NoteFlashcardsSection from './NoteFlashcardsSection';
 import SelectionFloatingButton from './SelectionFloatingButton';
+import RelatedNotes from './RelatedNotes';
 import { CreateFlashcardModal } from '../flashcards/CreateFlashCardModal';
 import { FlashcardService } from '@/services/flashcard';
 import type { FlashcardDeck } from '@/types/flashcard';
@@ -108,7 +109,13 @@ export default function NoteViewer({ note }: NoteViewerProps) {
             <span className="text-sm text-gray-500 dark:text-gray-400">
               {formattedDate}
             </span>
-            <CategoryBadge category={note.category} />
+            <Link
+              href={`/notes?category=${encodeURIComponent(note.category)}`}
+              aria-label={`Show notes in ${note.category}`}
+              className="rounded-full transition hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+            >
+              <CategoryBadge category={note.category} />
+            </Link>
           </div>
         </div>
         
@@ -159,9 +166,14 @@ export default function NoteViewer({ note }: NoteViewerProps) {
       {note.tags && note.tags.length > 0 && (
         <div className="flex flex-wrap gap-2 mt-4">
           {note.tags.map((tag) => (
-            <span key={tag} className="tag">
+            <Link
+              key={tag}
+              href={`/notes?tag=${encodeURIComponent(tag)}`}
+              aria-label={`Show notes tagged ${tag}`}
+              className="tag hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+            >
               {tag}
-            </span>
+            </Link>
           ))}
         </div>
       )}
@@ -181,6 +193,9 @@ export default function NoteViewer({ note }: NoteViewerProps) {
         noteId={note.id}
         noteTitle={note.title}
       />
+
+      {/* Related notes (shared tags / same category) */}
+      <RelatedNotes note={note} />
 
       {/* Floating button for manual flashcard creation */}
       {showFloatingButton && selection && (

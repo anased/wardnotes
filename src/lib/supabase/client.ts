@@ -182,6 +182,49 @@ export const filterNotesByTag = async (tag: string) => {
   return data as Note[];
 };
 
+// Fetch notes that could be related to `note`: any that share a tag, plus
+// the most recent ones in the same category. Ranking happens client-side
+// (see rankRelatedNotes); this only narrows the candidate pool.
+export const getRelatedNoteCandidates = async (
+  note: Pick<Note, 'id' | 'tags' | 'category'>,
+  { tagLimit = 50, categoryLimit = 20 }: { tagLimit?: number; categoryLimit?: number } = {}
+) => {
+  const tags = (note.tags || []).filter(Boolean);
+
+  const byTags = tags.length
+    ? supabase
+        .from('notes')
+        .select('*')
+        .overlaps('tags', tags)
+        .neq('id', note.id)
+        .order('created_at', { ascending: false })
+        .limit(tagLimit)
+    : null;
+
+  const byCategory = note.category
+    ? supabase
+        .from('notes')
+        .select('*')
+        .eq('category', note.category)
+        .neq('id', note.id)
+        .order('created_at', { ascending: false })
+        .limit(categoryLimit)
+    : null;
+
+  const [tagResult, categoryResult] = await Promise.all([byTags, byCategory]);
+
+  const error = tagResult?.error || categoryResult?.error;
+  if (error) {
+    console.error('Error fetching related notes:', error);
+    throw error;
+  }
+
+  return [
+    ...((tagResult?.data as Note[] | null) ?? []),
+    ...((categoryResult?.data as Note[] | null) ?? []),
+  ];
+};
+
 // ======================
 // Category Operations
 // ======================
