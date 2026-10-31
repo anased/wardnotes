@@ -6,7 +6,7 @@ import Link from 'next/link';
 import useAuth from '@/lib/hooks/useAuth';
 import useNotes from '@/lib/hooks/useNotes';
 import useCategories from '@/lib/hooks/useCategories';
-import useTags from '@/lib/hooks/useTags'; // Add this import
+import useTags from '@/lib/hooks/useTags';
 import PageContainer from '@/components/layout/PageContainer';
 import NoteCard from '@/components/notes/NoteCard';
 import Input from '@/components/ui/Input';
@@ -65,10 +65,19 @@ export default function NotesPage() {
   }, [user, authLoading, router]);
 
   useEffect(() => {
-    if (user) {
+    if (!user) return;
+
+    // A tag clicked elsewhere (e.g. the dashboard) arrives as /notes?tag=...
+    const tagFromUrl = new URLSearchParams(window.location.search).get('tag');
+    if (tagFromUrl) {
+      window.history.replaceState(null, '', window.location.pathname);
+      setCategory('All');
+      setSelectedTag(tagFromUrl);
+      filterByTag(tagFromUrl);
+    } else {
       fetchNotes();
     }
-  }, [user, fetchNotes]);
+  }, [user, fetchNotes, filterByTag]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -136,6 +145,13 @@ export default function NotesPage() {
     const newTag = e.target.value;
     setSelectedTag(newTag);
     await applyFilters(category, newTag);
+  };
+
+  // Clicking a tag on a note card filters by that tag and updates the dropdown
+  const handleNoteTagClick = async (tag: string) => {
+    setSearchQuery('');
+    setSelectedTag(tag);
+    await applyFilters(category, tag);
   };
 
   const handleClearFilters = () => {
@@ -210,7 +226,10 @@ export default function NotesPage() {
               <div className="flex items-center px-3 py-1 text-sm bg-blue-100 rounded-full dark:bg-blue-900">
                 <span className="mr-1">Category: {category}</span>
                 <button
-                  onClick={() => setCategory('All')}
+                  onClick={() => {
+                    setCategory('All');
+                    applyFilters('All', selectedTag);
+                  }}
                   className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                 >
                   &times;
@@ -221,7 +240,10 @@ export default function NotesPage() {
               <div className="flex items-center px-3 py-1 text-sm bg-green-100 rounded-full dark:bg-green-900">
                 <span className="mr-1">Tag: {selectedTag}</span>
                 <button
-                  onClick={() => setSelectedTag('All')}
+                  onClick={() => {
+                    setSelectedTag('All');
+                    applyFilters(category, 'All');
+                  }}
                   className="text-green-500 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
                 >
                   &times;
@@ -270,7 +292,7 @@ export default function NotesPage() {
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
               {notes.map((note) => (
-                <NoteCard key={note.id} note={note} />
+                <NoteCard key={note.id} note={note} onTagClick={handleNoteTagClick} />
               ))}
             </div>
           )}

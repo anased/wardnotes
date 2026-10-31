@@ -13,6 +13,7 @@ import {
   Note
 } from '../supabase/client';
 import { useAuth } from './AuthContext';
+import { hasTag } from '../utils/tagUtils';
 
 interface NotesContextType {
   notes: Note[];
@@ -213,7 +214,7 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
 
       // Filter by tag if specified
       if (tag && tag !== 'All') {
-        results = results.filter(note => note.tags && note.tags.includes(tag));
+        results = results.filter(note => hasTag(note.tags, tag));
       }
 
       setNotes(results);

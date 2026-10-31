@@ -17,8 +17,12 @@ interface TagsContextType {
   fetchTags: () => Promise<void>;
   addTag: (name: string) => Promise<Tag>;
   editTag: (id: string, name: string) => Promise<Tag>;
-  removeTag: (id: string) => Promise<boolean>;
+  /** Deletes a tag and removes it from all notes. Resolves to the number of notes it was removed from. */
+  removeTag: (id: string) => Promise<number>;
 }
+
+const sortTags = (list: Tag[]) =>
+  [...list].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
 
 const TagsContext = createContext<TagsContextType | undefined>(undefined);
 
@@ -40,7 +44,7 @@ export function TagsProvider({ children }: { children: React.ReactNode }) {
     try {
       setLoading(true);
       const data = await getTags();
-      setTags(data);
+      setTags(sortTags(data));
       setError(null);
     } catch (err) {
       setError(err as Error);
@@ -67,7 +71,7 @@ export function TagsProvider({ children }: { children: React.ReactNode }) {
   const addTag = useCallback(async (name: string) => {
     try {
       const newTag = await createTag(name);
-      setTags((prevTags) => [...prevTags, newTag]);
+      setTags((prevTags) => sortTags([...prevTags, newTag]));
       return newTag;
     } catch (err) {
       setError(err as Error);
@@ -81,7 +85,7 @@ export function TagsProvider({ children }: { children: React.ReactNode }) {
     try {
       const updatedTag = await updateTag(id, name);
       setTags((prevTags) =>
-        prevTags.map((tag) => (tag.id === id ? updatedTag : tag))
+        sortTags(prevTags.map((tag) => (tag.id === id ? updatedTag : tag)))
       );
       return updatedTag;
     } catch (err) {
@@ -94,9 +98,9 @@ export function TagsProvider({ children }: { children: React.ReactNode }) {
   // Delete a tag
   const removeTag = useCallback(async (id: string) => {
     try {
-      await deleteTag(id);
+      const affectedNotes = await deleteTag(id);
       setTags((prevTags) => prevTags.filter((tag) => tag.id !== id));
-      return true;
+      return affectedNotes;
     } catch (err) {
       setError(err as Error);
       console.error(`Error deleting tag with ID ${id}:`, err);
