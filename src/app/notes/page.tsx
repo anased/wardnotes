@@ -67,17 +67,28 @@ export default function NotesPage() {
   useEffect(() => {
     if (!user) return;
 
-    // A tag clicked elsewhere (e.g. the dashboard) arrives as /notes?tag=...
-    const tagFromUrl = new URLSearchParams(window.location.search).get('tag');
-    if (tagFromUrl) {
+    // A tag or category clicked elsewhere (e.g. the dashboard or a note page)
+    // arrives as /notes?tag=... and/or /notes?category=...
+    const params = new URLSearchParams(window.location.search);
+    const tagFromUrl = params.get('tag');
+    const categoryFromUrl = params.get('category');
+
+    if (tagFromUrl || categoryFromUrl) {
       window.history.replaceState(null, '', window.location.pathname);
-      setCategory('All');
-      setSelectedTag(tagFromUrl);
-      filterByTag(tagFromUrl);
+      setCategory(categoryFromUrl || 'All');
+      setSelectedTag(tagFromUrl || 'All');
+
+      if (tagFromUrl && categoryFromUrl) {
+        filterByCategoryAndTag(categoryFromUrl, tagFromUrl);
+      } else if (tagFromUrl) {
+        filterByTag(tagFromUrl);
+      } else if (categoryFromUrl) {
+        filterByCategory(categoryFromUrl);
+      }
     } else {
       fetchNotes();
     }
-  }, [user, fetchNotes, filterByTag]);
+  }, [user, fetchNotes, filterByTag, filterByCategory, filterByCategoryAndTag]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
