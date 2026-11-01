@@ -20,6 +20,11 @@ jest.mock('@/lib/hooks/useNotes', () => ({
   default: jest.fn(),
 }));
 
+// Mocked so the real Supabase client (which needs env vars) is never loaded
+jest.mock('@/lib/hooks/useSubscription', () => ({
+  useSubscription: () => ({ subscription: null, isPremium: false }),
+}));
+
 jest.mock('@/components/layout/PageContainer', () => ({
     __esModule: true,
     default: ({ children, title }: { children: React.ReactNode; title?: string }) => (
@@ -79,10 +84,13 @@ describe('ProfilePage Component', () => {
   test('handles dark mode toggle', async () => {
     render(<ProfilePage />);
     
-    const toggleButton = screen.getByRole('button', { name: /dark mode/i });
-    
-    await userEvent.click(toggleButton);
-    
+    const toggle = screen.getByRole('switch', { name: /dark mode/i });
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+
+    await userEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+
     // Check if localStorage was updated
     expect(localStorage.getItem('darkMode')).toBe('true');
   });

@@ -11,31 +11,32 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    
+    - uses: actions/checkout@v4
+
     - name: Set up Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
-        node-version: '18'
+        # Next 16 requires Node >= 20.9
+        node-version: '22'
         cache: 'npm'
-    
+
     - name: Install dependencies
       run: npm ci
-    
+
+    - name: Type check
+      run: npm run typecheck
+
     - name: Run Jest tests
       run: npm run test:coverage
-    
-    - name: Install Playwright browsers
-      run: npx playwright install --with-deps
-    
-    - name: Run Playwright tests
-      run: npm run test:e2e
-    
-    - name: Upload test results
-      uses: actions/upload-artifact@v3
+
+    # Playwright e2e tests are not run here: there is no `test:e2e` script,
+    # the config is parked at playwright.config.ts.backup, and the specs need
+    # a live Supabase project. Re-add the steps once those are in place.
+
+    - name: Upload coverage
+      uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: test-results
-        path: |
-          playwright-report/
-          coverage/
+        name: coverage
+        path: coverage/
+        if-no-files-found: ignore

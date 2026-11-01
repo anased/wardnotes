@@ -180,6 +180,10 @@ export default function ProfilePage() {
           <div className="flex items-center justify-between">
             <span className="text-gray-900 dark:text-gray-100">Dark Mode</span>
             <button
+              type="button"
+              role="switch"
+              aria-checked={darkMode}
+              aria-label="Dark mode"
               onClick={handleToggleDarkMode}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${darkMode ? 'bg-primary-600' : 'bg-gray-200'
                 }`}

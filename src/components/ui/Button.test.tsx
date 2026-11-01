@@ -21,7 +21,8 @@ describe('Button Component', () => {
     render(<Button isLoading={true}>Click me</Button>);
     
     expect(screen.getByText('Click me')).toBeInTheDocument();
-    expect(screen.getByRole('presentation')).toBeInTheDocument(); // The SVG spinner
+    expect(screen.getByTestId('button-spinner')).toBeInTheDocument();
+    expect(screen.getByRole('button')).toHaveAttribute('aria-busy', 'true');
   });
   
   test('disables button when isLoading or disabled is true', () => {
