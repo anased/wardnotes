@@ -37,12 +37,15 @@ export default function Button({
         ${className}
       `}
       disabled={disabled || isLoading}
+      aria-busy={isLoading || undefined}
       {...props}
     >
       {isLoading ? (
         <div className="flex items-center justify-center">
           <svg
             className="w-5 h-5 mr-2 animate-spin"
+            aria-hidden="true"
+            data-testid="button-spinner"
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
             viewBox="0 0 24 24"
