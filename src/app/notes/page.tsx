@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import useAuth from '@/lib/hooks/useAuth';
@@ -13,6 +13,9 @@ import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import Button from '@/components/ui/Button';
 import Spinner from '@/components/ui/Spinner';
+import TagFilterCombobox, { TagFilterOption } from '@/components/ui/TagFilterCombobox';
+import { getTagUsage, TagUsage } from '@/lib/supabase/client';
+import { canonicalTagName, hasTag, tagsEqual } from '@/lib/utils/tagUtils';
 import { useAnalytics } from '@/lib/analytics/useAnalytics';
 import { useSubscription } from '@/lib/hooks/useSubscription';
 
@@ -24,9 +27,7 @@ export default function NotesPage() {
     error,
     fetchNotes,
     search,
-    filterByCategory,
-    filterByTag,
-    filterByCategoryAndTag
+    filterNotes
   } = useNotes();
   const { categories } = useCategories();
   const { tags } = useTags(); // Get tags from the hook
@@ -36,8 +37,9 @@ export default function NotesPage() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [category, setCategory] = useState('All');
-  const [selectedTag, setSelectedTag] = useState('All'); // Add state for tag filtering
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [tagUsage, setTagUsage] = useState<TagUsage[]>([]);
 
   // Create dynamic category options including "All Categories" option
   const categoryOptions = [
@@ -48,14 +50,45 @@ export default function NotesPage() {
     }))
   ];
 
-  // Create dynamic tag options including "All Tags" option
-  const tagOptions = [
-    { value: 'All', label: 'All Tags' },
-    ...tags.map(tag => ({
-      value: tag.name,
-      label: tag.name
-    }))
-  ];
+  // Tag usage counts; refetched when the tag list changes (add/rename/delete)
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    getTagUsage()
+      .then((usage) => {
+        if (!cancelled) setTagUsage(usage);
+      })
+      .catch((err) => console.error('Error loading tag usage:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [user, tags]);
+
+  const tagOptions: TagFilterOption[] = useMemo(() => {
+    if (tagUsage.length > 0) {
+      return tagUsage.map((t) => ({ name: t.name, count: t.note_count }));
+    }
+    return tags.map((t) => ({ name: t.name, count: null }));
+  }, [tagUsage, tags]);
+
+  // Keep the active filters in the URL (?category=...&tag=a&tag=b) so views
+  // can be shared and survive a refresh.
+  const syncUrl = useCallback((categoryFilter: string, tagFilters: string[]) => {
+    const params = new URLSearchParams();
+    if (categoryFilter !== 'All') params.set('category', categoryFilter);
+    tagFilters.forEach((t) => params.append('tag', t));
+    const qs = params.toString();
+    window.history.replaceState(null, '', qs ? `${window.location.pathname}?${qs}` : window.location.pathname);
+  }, []);
+
+  const applyFilters = useCallback(async (categoryFilter: string, tagFilters: string[]) => {
+    syncUrl(categoryFilter, tagFilters);
+    try {
+      await filterNotes({ category: categoryFilter, tags: tagFilters });
+    } catch (err) {
+      console.error('Filter error:', err);
+    }
+  }, [filterNotes, syncUrl]);
 
   useEffect(() => {
     // If not logged in, redirect to login page
@@ -64,31 +97,37 @@ export default function NotesPage() {
     }
   }, [user, authLoading, router]);
 
+  // Initial filters come from the URL, e.g. a tag or category clicked on the
+  // dashboard or a note page: /notes?tag=...&category=...
   useEffect(() => {
     if (!user) return;
 
-    // A tag or category clicked elsewhere (e.g. the dashboard or a note page)
-    // arrives as /notes?tag=... and/or /notes?category=...
     const params = new URLSearchParams(window.location.search);
-    const tagFromUrl = params.get('tag');
-    const categoryFromUrl = params.get('category');
+    const tagsFromUrl = params.getAll('tag').filter(Boolean);
+    const categoryFromUrl = params.get('category') || 'All';
 
-    if (tagFromUrl || categoryFromUrl) {
-      window.history.replaceState(null, '', window.location.pathname);
-      setCategory(categoryFromUrl || 'All');
-      setSelectedTag(tagFromUrl || 'All');
+    setCategory(categoryFromUrl);
+    setSelectedTags(tagsFromUrl);
 
-      if (tagFromUrl && categoryFromUrl) {
-        filterByCategoryAndTag(categoryFromUrl, tagFromUrl);
-      } else if (tagFromUrl) {
-        filterByTag(tagFromUrl);
-      } else if (categoryFromUrl) {
-        filterByCategory(categoryFromUrl);
-      }
+    if (tagsFromUrl.length > 0 || categoryFromUrl !== 'All') {
+      applyFilters(categoryFromUrl, tagsFromUrl);
     } else {
       fetchNotes();
     }
-  }, [user, fetchNotes, filterByTag, filterByCategory, filterByCategoryAndTag]);
+    // Only on login / first load; later changes go through the handlers
+  }, [user]);
+
+  // Tags in the URL may use another spelling ("stroke"); once the tag list
+  // has loaded, switch to the stored spelling so the filter matches.
+  useEffect(() => {
+    if (tags.length === 0 || selectedTags.length === 0) return;
+    const known = tags.map((t) => t.name);
+    const canonical = selectedTags.map((t) => canonicalTagName(t, known));
+    if (canonical.some((t, i) => t !== selectedTags[i])) {
+      setSelectedTags(canonical);
+      applyFilters(category, canonical);
+    }
+  }, [tags]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,7 +138,8 @@ export default function NotesPage() {
       
       // Reset filters when searching
       setCategory('All');
-      setSelectedTag('All');
+      setSelectedTags([]);
+      syncUrl('All', []);
       
       // Track search usage after search completes
       setTimeout(() => {
@@ -116,61 +156,33 @@ export default function NotesPage() {
     }
   };
 
-  const applyFilters = async (categoryFilter: string, tagFilter: string) => {
-    try {
-      // If both filters are "All", fetch all notes
-      if (categoryFilter === 'All' && tagFilter === 'All') {
-        await fetchNotes();
-        return;
-      }
-
-      // If only category is selected
-      if (categoryFilter !== 'All' && tagFilter === 'All') {
-        await filterByCategory(categoryFilter);
-        return;
-      }
-
-      // If only tag is selected
-      if (categoryFilter === 'All' && tagFilter !== 'All') {
-        await filterByTag(tagFilter);
-        return;
-      }
-
-      // If both filters are selected, use combined filter
-      if (categoryFilter !== 'All' && tagFilter !== 'All') {
-        await filterByCategoryAndTag(categoryFilter, tagFilter);
-        return;
-      }
-    } catch (err) {
-      console.error('Filter error:', err);
-    }
-  };
-
   const handleCategoryChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newCategory = e.target.value;
     setCategory(newCategory);
-    await applyFilters(newCategory, selectedTag);
+    await applyFilters(newCategory, selectedTags);
   };
 
-  const handleTagChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newTag = e.target.value;
-    setSelectedTag(newTag);
-    await applyFilters(category, newTag);
-  };
-
-  // Clicking a tag on a note card filters by that tag and updates the dropdown
-  const handleNoteTagClick = async (tag: string) => {
+  const handleTagsChange = async (newTags: string[]) => {
     setSearchQuery('');
-    setSelectedTag(tag);
-    await applyFilters(category, tag);
+    setSelectedTags(newTags);
+    await applyFilters(category, newTags);
+  };
+
+  // Clicking a tag on a note card adds it to the tag filter
+  const handleNoteTagClick = async (tag: string) => {
+    if (hasTag(selectedTags, tag)) return;
+    await handleTagsChange([...selectedTags, tag]);
   };
 
   const handleClearFilters = () => {
     setSearchQuery('');
     setCategory('All');
-    setSelectedTag('All');
+    setSelectedTags([]);
+    syncUrl('All', []);
     fetchNotes();
   };
+
+  const hasActiveFilters = category !== 'All' || selectedTags.length > 0;
 
   const loading = authLoading || notesLoading || isSearching;
 
@@ -199,13 +211,11 @@ export default function NotesPage() {
                 />
               </div>
               
-              {/* Add Tag filter dropdown */}
-              <div className="w-full md:w-48">
-                <Select
+              <div className="w-full md:w-72">
+                <TagFilterCombobox
                   options={tagOptions}
-                  value={selectedTag}
-                  onChange={handleTagChange}
-                  fullWidth
+                  value={selectedTags}
+                  onChange={handleTagsChange}
                 />
               </div>
               
@@ -228,7 +238,7 @@ export default function NotesPage() {
         </div>
         
         {/* Filter indicators */}
-        {(category !== 'All' || selectedTag !== 'All') && (
+        {hasActiveFilters && (
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm text-gray-600 dark:text-gray-400">
               Filtering by:
@@ -239,27 +249,29 @@ export default function NotesPage() {
                 <button
                   onClick={() => {
                     setCategory('All');
-                    applyFilters('All', selectedTag);
+                    applyFilters('All', selectedTags);
                   }}
+                  aria-label={`Remove category filter ${category}`}
                   className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                 >
                   &times;
                 </button>
               </div>
             )}
-            {selectedTag !== 'All' && (
-              <div className="flex items-center px-3 py-1 text-sm bg-green-100 rounded-full dark:bg-green-900">
-                <span className="mr-1">Tag: {selectedTag}</span>
+            {selectedTags.map((tag) => (
+              <div key={tag} className="flex items-center px-3 py-1 text-sm bg-green-100 rounded-full dark:bg-green-900">
+                <span className="mr-1">Tag: {tag}</span>
                 <button
-                  onClick={() => {
-                    setSelectedTag('All');
-                    applyFilters(category, 'All');
-                  }}
+                  onClick={() => handleTagsChange(selectedTags.filter((t) => !tagsEqual(t, tag)))}
+                  aria-label={`Remove tag filter ${tag}`}
                   className="text-green-500 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
                 >
                   &times;
                 </button>
               </div>
+            ))}
+            {selectedTags.length > 1 && (
+              <span className="text-xs text-gray-500 dark:text-gray-400">(notes with all of these tags)</span>
             )}
             <button
               onClick={handleClearFilters}
@@ -283,12 +295,12 @@ export default function NotesPage() {
           ) : notes.length === 0 ? (
             <div className="p-8 text-center bg-white rounded-lg shadow dark:bg-gray-800">
               <p className="mb-4 text-gray-600 dark:text-gray-400">
-                {searchQuery || category !== 'All' || selectedTag !== 'All'
+                {searchQuery || hasActiveFilters
                   ? 'No notes match your search criteria.'
                   : "You haven't created any notes yet."}
               </p>
               
-              {searchQuery || category !== 'All' || selectedTag !== 'All' ? (
+              {searchQuery || hasActiveFilters ? (
                 <Button onClick={handleClearFilters} variant="outline">
                   Clear Filters
                 </Button>
