@@ -1,6 +1,7 @@
 // src/lib/supabase/client.ts
 import { createClient } from '@supabase/supabase-js';
 import { hasTag, normalizeTagName, validateTagName } from '../utils/tagUtils';
+import type { ContentType, NoteStatus } from '../utils/noteFields';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -20,8 +21,16 @@ export type Note = {
   content: Record<string, unknown>; // TipTap JSON content
   tags: string[];
   category: string; // Changed from enum to string type
+  /** 'unanswered' marks an open question; everything else is 'answered'. */
+  status: NoteStatus;
+  /** What kind of note this is (question, article, trial, ...), if set. */
+  content_type: ContentType | null;
   created_at: string;
 };
+
+/** Fields a caller provides when creating a note; status/type default in the database. */
+export type NoteInput = Omit<Note, 'id' | 'user_id' | 'created_at' | 'status' | 'content_type'> &
+  Partial<Pick<Note, 'status' | 'content_type'>>;
 
 export type Category = {
   id: string;
@@ -74,7 +83,7 @@ export const getNoteById = async (id: string) => {
 };
 
 // Create a new note
-export const createNote = async (note: Omit<Note, 'id' | 'user_id' | 'created_at'>) => {
+export const createNote = async (note: NoteInput) => {
   // Get the current user
   const { data: { user } } = await supabase.auth.getUser();
   
@@ -155,12 +164,14 @@ export type NoteFilters = {
   category?: string;
   /** Notes must have ALL of these tags. */
   tags?: string[];
+  status?: NoteStatus;
+  contentType?: ContentType;
 };
 
-// Filter notes by category and/or tags. Tag matching is AND: a note must
+// Filter notes by category, tags, status and/or content type. Tag matching is AND: a note must
 // carry every selected tag. Tag names are canonical in the database, so
 // an exact array containment check is enough.
-export const filterNotes = async ({ category, tags = [] }: NoteFilters) => {
+export const filterNotes = async ({ category, tags = [], status, contentType }: NoteFilters) => {
   let query = supabase.from('notes').select('*');
 
   if (category && category !== 'All') {
@@ -169,6 +180,14 @@ export const filterNotes = async ({ category, tags = [] }: NoteFilters) => {
 
   if (tags.length > 0) {
     query = query.contains('tags', tags);
+  }
+
+  if (status) {
+    query = query.eq('status', status);
+  }
+
+  if (contentType) {
+    query = query.eq('content_type', contentType);
   }
 
   const { data, error } = await query.order('created_at', { ascending: false });

@@ -5,6 +5,9 @@ interface DraftData {
   content: Record<string, unknown>;
   category: string;
   tags: string[];
+  /** Added later; older drafts don't have these. */
+  status?: string;
+  content_type?: string;
   timestamp: number;
 }
 
@@ -96,7 +99,7 @@ export function useDraftPersistence(
     if (enabled) {
       saveDraft(data);
     }
-  }, [data.title, data.content, data.category, data.tags, enabled, saveDraft]);
+  }, [data.title, data.content, data.category, data.tags, data.status, data.content_type, enabled, saveDraft]);
 
   // Cleanup debounce timer on unmount
   useEffect(() => {

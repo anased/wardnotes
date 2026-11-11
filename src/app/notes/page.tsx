@@ -16,8 +16,30 @@ import Spinner from '@/components/ui/Spinner';
 import TagFilterCombobox, { TagFilterOption } from '@/components/ui/TagFilterCombobox';
 import { getTagUsage, TagUsage } from '@/lib/supabase/client';
 import { canonicalTagName, hasTag, tagsEqual } from '@/lib/utils/tagUtils';
+import {
+  CONTENT_TYPE_LABELS,
+  STATUS_LABELS,
+  contentTypeOptions,
+  isContentType,
+  isNoteStatus,
+} from '@/lib/utils/noteFields';
+import {
+  EMPTY_FILTERS,
+  LibraryFilters,
+  buildLibraryQuery,
+  hasFieldFilters,
+  parseLibraryParams,
+} from '@/lib/utils/libraryFilters';
 import { useAnalytics } from '@/lib/analytics/useAnalytics';
 import { useSubscription } from '@/lib/hooks/useSubscription';
+
+const STATUS_OPTIONS = [
+  { value: '', label: 'Any status' },
+  { value: 'answered', label: STATUS_LABELS.answered },
+  { value: 'unanswered', label: STATUS_LABELS.unanswered },
+];
+
+const TYPE_OPTIONS = contentTypeOptions('Any type');
 
 export default function NotesPage() {
   const { user, loading: authLoading } = useAuth();
@@ -30,18 +52,17 @@ export default function NotesPage() {
     filterNotes
   } = useNotes();
   const { categories } = useCategories();
-  const { tags } = useTags(); // Get tags from the hook
+  const { tags } = useTags();
   const { track } = useAnalytics();
   const { subscription } = useSubscription();
   const router = useRouter();
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [category, setCategory] = useState('All');
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  // Applied filters (mirrored in the URL) and the text currently in the search box
+  const [filters, setFilters] = useState<LibraryFilters>(EMPTY_FILTERS);
+  const [searchInput, setSearchInput] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [tagUsage, setTagUsage] = useState<TagUsage[]>([]);
 
-  // Create dynamic category options including "All Categories" option
   const categoryOptions = [
     { value: 'All', label: 'All Categories' },
     ...categories.map(cat => ({
@@ -71,24 +92,38 @@ export default function NotesPage() {
     return tags.map((t) => ({ name: t.name, count: null }));
   }, [tagUsage, tags]);
 
-  // Keep the active filters in the URL (?category=...&tag=a&tag=b) so views
-  // can be shared and survive a refresh.
-  const syncUrl = useCallback((categoryFilter: string, tagFilters: string[]) => {
-    const params = new URLSearchParams();
-    if (categoryFilter !== 'All') params.set('category', categoryFilter);
-    tagFilters.forEach((t) => params.append('tag', t));
-    const qs = params.toString();
+  /**
+   * Applies filters: updates state and the URL (so views can be shared and
+   * survive a refresh), then loads the matching notes.
+   */
+  const applyFilters = useCallback(async (next: LibraryFilters) => {
+    setFilters(next);
+    const qs = buildLibraryQuery(next);
     window.history.replaceState(null, '', qs ? `${window.location.pathname}?${qs}` : window.location.pathname);
-  }, []);
 
-  const applyFilters = useCallback(async (categoryFilter: string, tagFilters: string[]) => {
-    syncUrl(categoryFilter, tagFilters);
     try {
-      await filterNotes({ category: categoryFilter, tags: tagFilters });
+      if (next.q) {
+        await search(next.q);
+      } else if (hasFieldFilters(next)) {
+        await filterNotes({
+          category: next.category,
+          tags: next.tags,
+          status: next.status || undefined,
+          contentType: next.contentType || undefined,
+        });
+      } else {
+        await fetchNotes();
+      }
     } catch (err) {
       console.error('Filter error:', err);
     }
-  }, [filterNotes, syncUrl]);
+  }, [search, filterNotes, fetchNotes]);
+
+  const updateFilters = (changes: Partial<LibraryFilters>) => {
+    // Changing a filter ends a text search
+    setSearchInput('');
+    return applyFilters({ ...filters, q: '', ...changes });
+  };
 
   useEffect(() => {
     // If not logged in, redirect to login page
@@ -101,176 +136,182 @@ export default function NotesPage() {
   // dashboard or a note page: /notes?tag=...&category=...
   useEffect(() => {
     if (!user) return;
-
-    const params = new URLSearchParams(window.location.search);
-    const tagsFromUrl = params.getAll('tag').filter(Boolean);
-    const categoryFromUrl = params.get('category') || 'All';
-
-    setCategory(categoryFromUrl);
-    setSelectedTags(tagsFromUrl);
-
-    if (tagsFromUrl.length > 0 || categoryFromUrl !== 'All') {
-      applyFilters(categoryFromUrl, tagsFromUrl);
-    } else {
-      fetchNotes();
-    }
+    const fromUrl = parseLibraryParams(window.location.search);
+    setSearchInput(fromUrl.q);
+    applyFilters(fromUrl);
     // Only on login / first load; later changes go through the handlers
   }, [user]);
 
   // Tags in the URL may use another spelling ("stroke"); once the tag list
   // has loaded, switch to the stored spelling so the filter matches.
   useEffect(() => {
-    if (tags.length === 0 || selectedTags.length === 0) return;
+    if (tags.length === 0 || filters.tags.length === 0) return;
     const known = tags.map((t) => t.name);
-    const canonical = selectedTags.map((t) => canonicalTagName(t, known));
-    if (canonical.some((t, i) => t !== selectedTags[i])) {
-      setSelectedTags(canonical);
-      applyFilters(category, canonical);
+    const canonical = filters.tags.map((t) => canonicalTagName(t, known));
+    if (canonical.some((t, i) => t !== filters.tags[i])) {
+      applyFilters({ ...filters, tags: canonical });
     }
   }, [tags]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    const q = searchInput.trim();
+
     try {
       setIsSearching(true);
-      await search(searchQuery);
-      
-      // Reset filters when searching
-      setCategory('All');
-      setSelectedTags([]);
-      syncUrl('All', []);
-      
-      // Track search usage after search completes
-      setTimeout(() => {
-        track('search_used', {
-          search_query: searchQuery,
-          results_count: notes.length,
-          subscription_status: subscription?.subscription_status === 'active' ? 'premium' : 'free'
-        });
-      }, 100);
-    } catch (err) {
-      console.error('Search error:', err);
+      // A search replaces the other filters
+      await applyFilters({ ...EMPTY_FILTERS, q });
+
+      if (q) {
+        // Track search usage after search completes
+        setTimeout(() => {
+          track('search_used', {
+            search_query: q,
+            results_count: notes.length,
+            subscription_status: subscription?.subscription_status === 'active' ? 'premium' : 'free'
+          });
+        }, 100);
+      }
     } finally {
       setIsSearching(false);
     }
   };
 
-  const handleCategoryChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newCategory = e.target.value;
-    setCategory(newCategory);
-    await applyFilters(newCategory, selectedTags);
-  };
-
-  const handleTagsChange = async (newTags: string[]) => {
-    setSearchQuery('');
-    setSelectedTags(newTags);
-    await applyFilters(category, newTags);
-  };
-
   // Clicking a tag on a note card adds it to the tag filter
   const handleNoteTagClick = async (tag: string) => {
-    if (hasTag(selectedTags, tag)) return;
-    await handleTagsChange([...selectedTags, tag]);
+    if (hasTag(filters.tags, tag)) return;
+    await updateFilters({ tags: [...filters.tags, tag] });
   };
 
   const handleClearFilters = () => {
-    setSearchQuery('');
-    setCategory('All');
-    setSelectedTags([]);
-    syncUrl('All', []);
-    fetchNotes();
+    setSearchInput('');
+    applyFilters(EMPTY_FILTERS);
   };
 
-  const hasActiveFilters = category !== 'All' || selectedTags.length > 0;
-
+  const hasActiveFilters = hasFieldFilters(filters);
   const loading = authLoading || notesLoading || isSearching;
+
+  const chipButtonClass =
+    'ml-1 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500';
 
   return (
     <PageContainer title="Notes Library">
       <div className="space-y-6">
         {/* Search and filter section */}
         <div className="p-4 bg-white rounded-lg shadow dark:bg-gray-800">
-          <form onSubmit={handleSearch} className="space-y-4">
-            <div className="flex flex-col gap-4 md:flex-row">
-              <div className="flex-1">
-                <Input
-                  placeholder="Search notes..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  fullWidth
-                />
-              </div>
-              
-              <div className="w-full md:w-48">
-                <Select
-                  options={categoryOptions}
-                  value={category}
-                  onChange={handleCategoryChange}
-                  fullWidth
-                />
-              </div>
-              
-              <div className="w-full md:w-72">
-                <TagFilterCombobox
-                  options={tagOptions}
-                  value={selectedTags}
-                  onChange={handleTagsChange}
-                />
-              </div>
-              
-              <div className="flex gap-2">
-                <Button type="submit" isLoading={isSearching}>
-                  Search
-                </Button>
-                
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleClearFilters}
-                  disabled={loading}
-                >
-                  Clear
-                </Button>
-              </div>
+          <form onSubmit={handleSearch} role="search" className="flex flex-col gap-3 sm:flex-row">
+            <div className="flex-1">
+              <Input
+                aria-label="Search notes"
+                placeholder="Search notes..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                fullWidth
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button type="submit" isLoading={isSearching}>
+                Search
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleClearFilters}
+                disabled={loading}
+              >
+                Clear
+              </Button>
             </div>
           </form>
+
+          <div className="grid grid-cols-1 mt-3 gap-x-3 sm:grid-cols-3 lg:grid-cols-[repeat(3,minmax(0,11rem))_1fr]">
+            <Select
+              aria-label="Category"
+              options={categoryOptions}
+              value={filters.category}
+              onChange={(e) => updateFilters({ category: e.target.value })}
+            />
+            <Select
+              aria-label="Type"
+              options={TYPE_OPTIONS}
+              value={filters.contentType}
+              onChange={(e) =>
+                updateFilters({ contentType: isContentType(e.target.value) ? e.target.value : '' })
+              }
+            />
+            <Select
+              aria-label="Status"
+              options={STATUS_OPTIONS}
+              value={filters.status}
+              onChange={(e) =>
+                updateFilters({ status: isNoteStatus(e.target.value) ? e.target.value : '' })
+              }
+            />
+            <div className="mb-4 sm:col-span-3 lg:col-span-1">
+              <TagFilterCombobox
+                options={tagOptions}
+                value={filters.tags}
+                onChange={(next) => updateFilters({ tags: next })}
+              />
+            </div>
+          </div>
         </div>
-        
+
         {/* Filter indicators */}
         {hasActiveFilters && (
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm text-gray-600 dark:text-gray-400">
               Filtering by:
             </span>
-            {category !== 'All' && (
+            {filters.category !== 'All' && (
               <div className="flex items-center px-3 py-1 text-sm bg-blue-100 rounded-full dark:bg-blue-900">
-                <span className="mr-1">Category: {category}</span>
+                <span>Category: {filters.category}</span>
                 <button
-                  onClick={() => {
-                    setCategory('All');
-                    applyFilters('All', selectedTags);
-                  }}
-                  aria-label={`Remove category filter ${category}`}
-                  className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                  onClick={() => updateFilters({ category: 'All' })}
+                  aria-label={`Remove category filter ${filters.category}`}
+                  className={`${chipButtonClass} text-blue-600 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-100`}
                 >
                   &times;
                 </button>
               </div>
             )}
-            {selectedTags.map((tag) => (
-              <div key={tag} className="flex items-center px-3 py-1 text-sm bg-green-100 rounded-full dark:bg-green-900">
-                <span className="mr-1">Tag: {tag}</span>
+            {filters.contentType && (
+              <div className="flex items-center px-3 py-1 text-sm bg-gray-100 rounded-full dark:bg-gray-700">
+                <span>Type: {CONTENT_TYPE_LABELS[filters.contentType]}</span>
                 <button
-                  onClick={() => handleTagsChange(selectedTags.filter((t) => !tagsEqual(t, tag)))}
+                  onClick={() => updateFilters({ contentType: '' })}
+                  aria-label="Remove type filter"
+                  className={`${chipButtonClass} text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white`}
+                >
+                  &times;
+                </button>
+              </div>
+            )}
+            {filters.status && (
+              <div className="flex items-center px-3 py-1 text-sm rounded-full bg-amber-100 dark:bg-amber-900/60">
+                <span>Status: {STATUS_LABELS[filters.status]}</span>
+                <button
+                  onClick={() => updateFilters({ status: '' })}
+                  aria-label="Remove status filter"
+                  className={`${chipButtonClass} text-amber-700 hover:text-amber-900 dark:text-amber-200 dark:hover:text-white`}
+                >
+                  &times;
+                </button>
+              </div>
+            )}
+            {filters.tags.map((tag) => (
+              <div key={tag} className="flex items-center px-3 py-1 text-sm bg-green-100 rounded-full dark:bg-green-900">
+                <span>Tag: {tag}</span>
+                <button
+                  onClick={() => updateFilters({ tags: filters.tags.filter((t) => !tagsEqual(t, tag)) })}
                   aria-label={`Remove tag filter ${tag}`}
-                  className="text-green-500 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
+                  className={`${chipButtonClass} text-green-600 hover:text-green-800 dark:text-green-300 dark:hover:text-green-100`}
                 >
                   &times;
                 </button>
               </div>
             ))}
-            {selectedTags.length > 1 && (
+            {filters.tags.length > 1 && (
               <span className="text-xs text-gray-500 dark:text-gray-400">(notes with all of these tags)</span>
             )}
             <button
@@ -281,7 +322,7 @@ export default function NotesPage() {
             </button>
           </div>
         )}
-        
+
         {/* Notes list */}
         <div>
           {loading ? (
@@ -295,12 +336,12 @@ export default function NotesPage() {
           ) : notes.length === 0 ? (
             <div className="p-8 text-center bg-white rounded-lg shadow dark:bg-gray-800">
               <p className="mb-4 text-gray-600 dark:text-gray-400">
-                {searchQuery || hasActiveFilters
+                {filters.q || hasActiveFilters
                   ? 'No notes match your search criteria.'
                   : "You haven't created any notes yet."}
               </p>
-              
-              {searchQuery || hasActiveFilters ? (
+
+              {filters.q || hasActiveFilters ? (
                 <Button onClick={handleClearFilters} variant="outline">
                   Clear Filters
                 </Button>
@@ -320,7 +361,7 @@ export default function NotesPage() {
             </div>
           )}
         </div>
-        
+
         {/* Create new note button */}
         {notes.length > 0 && (
           <div className="flex justify-center mt-6">

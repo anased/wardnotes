@@ -9,6 +9,8 @@ function makeNote(id: string, overrides: Partial<Note> = {}): Note {
     content: {},
     tags: [],
     category: 'General',
+    status: 'answered',
+    content_type: null,
     created_at: '2026-01-01T00:00:00Z',
     ...overrides,
   };

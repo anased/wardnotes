@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Note } from '@/lib/supabase/client';
 import CategoryBadge from '../ui/CategoryBadge';
+import NoteFieldBadges from './NoteFieldBadges';
 
 interface NoteCardProps {
   note: Note;
@@ -36,12 +37,18 @@ export default function NoteCard({ note, onTagClick, highlightTags }: NoteCardPr
 
   return (
     <Link href={`/notes/${note.id}`} className="block">
-      <div className="card p-4 transition hover:shadow-md hover:border-primary-200 dark:hover:border-primary-800">
+      <div
+        className={`card p-4 transition hover:shadow-md hover:border-primary-200 dark:hover:border-primary-800 ${
+          note.status === 'unanswered' ? 'border-dashed border-amber-400 dark:border-amber-600' : ''
+        }`}
+      >
         <div className="flex items-start justify-between mb-2">
           <h3 className="font-medium text-gray-900 dark:text-gray-100">{note.title}</h3>
           <CategoryBadge category={note.category} size="sm" />
         </div>
         
+        <NoteFieldBadges note={note} className="mb-2" />
+
         <div className="text-sm text-gray-500 dark:text-gray-400 mb-3">
           {formattedDate}
         </div>
