@@ -72,7 +72,7 @@ export default function RelatedNotes({ note, limit = DEFAULT_RELATED_LIMIT }: Re
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">
           {related.map(item => (
-            <li key={item.note.id} className="space-y-1">
+            <li key={item.note.id} className="flex flex-col gap-1">
               <NoteCard note={item.note} highlightTags={item.sharedTags} />
               <p className="px-1 text-xs text-gray-500 dark:text-gray-400">{describeMatch(item)}</p>
             </li>

@@ -48,6 +48,12 @@
     @apply bg-white rounded-lg shadow dark:bg-gray-800 border border-gray-200 dark:border-gray-700;
   }
   
+  /* Grid of note cards: as many >=16rem columns as fit, equal row heights.
+     Works from a narrow side panel (one column) up to desktop. */
+  .note-grid {
+    @apply grid gap-4 grid-cols-[repeat(auto-fill,minmax(min(100%,16rem),1fr))];
+  }
+
   /* Tag Components */
   .tag {
     @apply px-2.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-800 rounded-full dark:bg-gray-700 dark:text-gray-300;
