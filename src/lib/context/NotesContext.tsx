@@ -8,12 +8,11 @@ import {
   updateNote,
   deleteNote,
   searchNotes,
-  filterNotesByCategory,
-  filterNotesByTag,
-  Note
+  filterNotes as filterNotesQuery,
+  Note,
+  NoteFilters
 } from '../supabase/client';
 import { useAuth } from './AuthContext';
-import { hasTag } from '../utils/tagUtils';
 
 interface NotesContextType {
   notes: Note[];
@@ -25,9 +24,8 @@ interface NotesContextType {
   editNote: (id: string, note: Partial<Omit<Note, 'id' | 'user_id' | 'created_at'>>) => Promise<Note>;
   removeNote: (id: string) => Promise<void>;
   search: (query: string) => Promise<void>;
-  filterByCategory: (category: string) => Promise<void>;
-  filterByTag: (tag: string) => Promise<void>;
-  filterByCategoryAndTag: (category: string, tag: string) => Promise<void>;
+  /** Filter by category and/or tags (a note must have all the tags). */
+  filterNotes: (filters: NoteFilters) => Promise<void>;
 }
 
 const NotesContext = createContext<NotesContextType | undefined>(undefined);
@@ -39,6 +37,9 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
   const [isFiltered, setIsFiltered] = useState(false);
   const { user } = useAuth();
   const lastUserIdRef = useRef<string | null>(null);
+  // List requests (fetch/search/filter) can overlap, e.g. the initial load and
+  // a filter from the URL. Only the most recent one may update the list.
+  const listRequestRef = useRef(0);
 
   // Fetch all notes
   const fetchNotes = useCallback(async () => {
@@ -48,17 +49,20 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    const requestId = ++listRequestRef.current;
     try {
       setLoading(true);
       const data = await getNotes();
+      if (requestId !== listRequestRef.current) return;
       setNotes(data);
       setError(null);
       setIsFiltered(false);
     } catch (err) {
+      if (requestId !== listRequestRef.current) return;
       setError(err as Error);
       console.error('Error fetching notes:', err);
     } finally {
-      setLoading(false);
+      if (requestId === listRequestRef.current) setLoading(false);
     }
   }, [user]);
 
@@ -141,92 +145,50 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
 
   // Search notes by text (calls backend, maintains existing behavior)
   const search = useCallback(async (query: string) => {
+    if (!query.trim()) {
+      return fetchNotes();
+    }
+    const requestId = ++listRequestRef.current;
     try {
       setLoading(true);
-      if (!query.trim()) {
-        return fetchNotes();
-      }
       const results = await searchNotes(query);
+      if (requestId !== listRequestRef.current) return;
       setNotes(results);
       setError(null);
       setIsFiltered(true);
     } catch (err) {
+      if (requestId !== listRequestRef.current) return;
       setError(err as Error);
       console.error(`Error searching notes with query "${query}":`, err);
     } finally {
-      setLoading(false);
+      if (requestId === listRequestRef.current) setLoading(false);
     }
   }, [fetchNotes]);
 
-  // Filter notes by category (calls backend, maintains existing behavior)
-  const filterByCategory = useCallback(async (category: string) => {
+  // Filter notes by category and/or tags in the database
+  const filterNotes = useCallback(async (filters: NoteFilters) => {
+    const hasCategory = !!filters.category && filters.category !== 'All';
+    const hasTags = (filters.tags?.length ?? 0) > 0;
+    if (!hasCategory && !hasTags) {
+      return fetchNotes();
+    }
+
+    const requestId = ++listRequestRef.current;
     try {
       setLoading(true);
-      if (!category || category === 'All') {
-        return fetchNotes();
-      }
-      const results = await filterNotesByCategory(category);
+      const results = await filterNotesQuery(filters);
+      if (requestId !== listRequestRef.current) return;
       setNotes(results);
       setError(null);
       setIsFiltered(true);
     } catch (err) {
+      if (requestId !== listRequestRef.current) return;
       setError(err as Error);
-      console.error(`Error filtering notes by category "${category}":`, err);
+      console.error('Error filtering notes:', filters, err);
     } finally {
-      setLoading(false);
+      if (requestId === listRequestRef.current) setLoading(false);
     }
   }, [fetchNotes]);
-
-  // Filter notes by tag (calls backend, maintains existing behavior)
-  const filterByTag = useCallback(async (tag: string) => {
-    try {
-      setLoading(true);
-      if (!tag.trim() || tag === 'All') {
-        return fetchNotes();
-      }
-      const results = await filterNotesByTag(tag);
-      setNotes(results);
-      setError(null);
-      setIsFiltered(true);
-    } catch (err) {
-      setError(err as Error);
-      console.error(`Error filtering notes by tag "${tag}":`, err);
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchNotes]);
-
-  // Filter notes by both category and tag
-  const filterByCategoryAndTag = useCallback(async (category: string, tag: string) => {
-    try {
-      setLoading(true);
-
-      // Fetch all notes first
-      const allNotes = await getNotes();
-
-      // Apply filters client-side
-      let results = allNotes;
-
-      // Filter by category if specified
-      if (category && category !== 'All') {
-        results = results.filter(note => note.category === category);
-      }
-
-      // Filter by tag if specified
-      if (tag && tag !== 'All') {
-        results = results.filter(note => hasTag(note.tags, tag));
-      }
-
-      setNotes(results);
-      setError(null);
-      setIsFiltered(true);
-    } catch (err) {
-      setError(err as Error);
-      console.error(`Error filtering notes by category "${category}" and tag "${tag}":`, err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   const value = {
     notes,
@@ -238,9 +200,7 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
     editNote,
     removeNote,
     search,
-    filterByCategory,
-    filterByTag,
-    filterByCategoryAndTag,
+    filterNotes,
   };
 
   return (

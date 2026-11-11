@@ -150,32 +150,31 @@ export const searchNotes = async (query: string) => {
   return data as Note[];
 };
 
-// Filter notes by category
-export const filterNotesByCategory = async (category: string) => {
-  const { data, error } = await supabase
-    .from('notes')
-    .select('*')
-    .eq('category', category)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    console.error('Error filtering notes by category:', error);
-    throw error;
-  }
-
-  return data as Note[];
+export type NoteFilters = {
+  /** Category name; omit (or 'All') for every category. */
+  category?: string;
+  /** Notes must have ALL of these tags. */
+  tags?: string[];
 };
 
-// Filter notes by tag
-export const filterNotesByTag = async (tag: string) => {
-  const { data, error } = await supabase
-    .from('notes')
-    .select('*')
-    .contains('tags', [tag])
-    .order('created_at', { ascending: false });
+// Filter notes by category and/or tags. Tag matching is AND: a note must
+// carry every selected tag. Tag names are canonical in the database, so
+// an exact array containment check is enough.
+export const filterNotes = async ({ category, tags = [] }: NoteFilters) => {
+  let query = supabase.from('notes').select('*');
+
+  if (category && category !== 'All') {
+    query = query.eq('category', category);
+  }
+
+  if (tags.length > 0) {
+    query = query.contains('tags', tags);
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false });
 
   if (error) {
-    console.error('Error filtering notes by tag:', error);
+    console.error('Error filtering notes:', error);
     throw error;
   }
 
@@ -258,14 +257,14 @@ export const createCategory = async (name: string, color: string = 'blue') => {
     .from('categories')
     .insert({
       user_id: user.id,
-      name,
+      name: normalizeTagName(name),
       color
     })
     .select();
 
   if (error) {
     console.error('Error creating category:', error);
-    throw error;
+    throw categoryError(error);
   }
   
   if (!data || data.length === 0) {
@@ -275,18 +274,27 @@ export const createCategory = async (name: string, color: string = 'blue') => {
   return data[0] as Category;
 };
 
+// Category names are unique per user ignoring case (enforced in the database).
+const categoryError = (error: { code?: string; message: string }) =>
+  error.code === '23505'
+    ? new Error('A category with this name already exists')
+    : error;
+
 // Update a category
 export const updateCategory = async (id: string, updates: { name?: string; color?: string }) => {
+  const normalized =
+    updates.name === undefined ? updates : { ...updates, name: normalizeTagName(updates.name) };
+
   const { data, error } = await supabase
     .from('categories')
-    .update(updates)
+    .update(normalized)
     .eq('id', id)
     .select()
     .single();
 
   if (error) {
     console.error('Error updating category:', error);
-    throw error;
+    throw categoryError(error);
   }
 
   return data as Category;
@@ -438,6 +446,31 @@ function tagError(error: { code?: string; message?: string }) {
 // ======================
 // Daily Activity Operations
 // ======================
+
+export type TagUsage = {
+  id: string;
+  name: string;
+  /** Number of notes with this tag, or null if counts are unavailable. */
+  note_count: number | null;
+};
+
+// Tags with how many notes use each. Falls back to plain tags (no counts)
+// if the get_tag_usage database function hasn't been installed yet.
+export const getTagUsage = async (): Promise<TagUsage[]> => {
+  const { data, error } = await supabase.rpc('get_tag_usage');
+
+  if (!error) {
+    return (data as { id: string; name: string; note_count: number | string }[]).map((row) => ({
+      id: row.id,
+      name: row.name,
+      note_count: Number(row.note_count),
+    }));
+  }
+
+  console.warn('get_tag_usage unavailable, showing tags without counts:', error.message);
+  const tags = await getTags();
+  return tags.map((tag) => ({ id: tag.id, name: tag.name, note_count: null }));
+};
 
 export type DailyActivity = {
   id: string;
