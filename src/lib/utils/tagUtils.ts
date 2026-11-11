@@ -110,3 +110,20 @@ export function mergeFlashcardTags(
 ): string[] {
   return mergeTags(flashcardTags || [], noteTags || []);
 }
+
+/**
+ * Splits tags into the ones to show on a compact card and the overflow.
+ * Tags listed in `priority` (e.g. tags shared with another note) come first;
+ * otherwise the original order is kept.
+ */
+export function splitVisibleTags(
+  tags: string[] | undefined,
+  max: number,
+  priority: string[] = []
+): { visible: string[]; hidden: string[] } {
+  const list = tags || [];
+  const first = list.filter((t) => hasTag(priority, t));
+  const rest = list.filter((t) => !hasTag(priority, t));
+  const ordered = [...first, ...rest];
+  return { visible: ordered.slice(0, max), hidden: ordered.slice(max) };
+}
