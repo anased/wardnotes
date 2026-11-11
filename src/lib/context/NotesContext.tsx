@@ -10,7 +10,8 @@ import {
   searchNotes,
   filterNotes as filterNotesQuery,
   Note,
-  NoteFilters
+  NoteFilters,
+  NoteInput
 } from '../supabase/client';
 import { useAuth } from './AuthContext';
 
@@ -20,11 +21,11 @@ interface NotesContextType {
   error: Error | null;
   fetchNotes: () => Promise<void>;
   fetchNoteById: (id: string) => Promise<Note>;
-  addNote: (note: Omit<Note, 'id' | 'user_id' | 'created_at'>) => Promise<Note>;
+  addNote: (note: NoteInput) => Promise<Note>;
   editNote: (id: string, note: Partial<Omit<Note, 'id' | 'user_id' | 'created_at'>>) => Promise<Note>;
   removeNote: (id: string) => Promise<void>;
   search: (query: string) => Promise<void>;
-  /** Filter by category and/or tags (a note must have all the tags). */
+  /** Filter by category, tags (a note must have all of them), status and content type. */
   filterNotes: (filters: NoteFilters) => Promise<void>;
 }
 
@@ -95,7 +96,7 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Create a new note
-  const addNote = useCallback(async (note: Omit<Note, 'id' | 'user_id' | 'created_at'>) => {
+  const addNote = useCallback(async (note: NoteInput) => {
     try {
       setLoading(true);
       const newNote = await createNote(note);
@@ -169,7 +170,7 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
   const filterNotes = useCallback(async (filters: NoteFilters) => {
     const hasCategory = !!filters.category && filters.category !== 'All';
     const hasTags = (filters.tags?.length ?? 0) > 0;
-    if (!hasCategory && !hasTags) {
+    if (!hasCategory && !hasTags && !filters.status && !filters.contentType) {
       return fetchNotes();
     }
 

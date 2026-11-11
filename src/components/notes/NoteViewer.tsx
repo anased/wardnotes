@@ -8,6 +8,7 @@ import { useSubscription } from '@/lib/hooks/useSubscription'; // Add this impor
 
 import Button from '../ui/Button';
 import CategoryBadge from '../ui/CategoryBadge';
+import NoteFieldBadges from './NoteFieldBadges';
 import NoteEditor, { SelectionInfo } from './NoteEditor';
 import { EnhancedFlashcardGeneratorModal } from './EnhancedFlashcardGeneratorModal';
 import PremiumFeatureGate from '../premium/PremiumFeatureGate'; // Import the premium gate
@@ -116,6 +117,7 @@ export default function NoteViewer({ note }: NoteViewerProps) {
             >
               <CategoryBadge category={note.category} />
             </Link>
+            <NoteFieldBadges note={note} />
           </div>
         </div>
         

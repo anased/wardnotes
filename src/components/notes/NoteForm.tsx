@@ -20,6 +20,15 @@ import { useSubscription } from '@/lib/hooks/useSubscription';
 import { useQuota } from '@/lib/hooks/useQuota';
 import { supabase } from '@/lib/supabase/client';
 import { canonicalTagName, dedupeTags, hasTag } from '@/lib/utils/tagUtils';
+import {
+  ContentType,
+  NoteStatus,
+  STATUS_LABELS,
+  NOTE_STATUSES,
+  contentTypeOptions,
+  isContentType,
+  isNoteStatus,
+} from '@/lib/utils/noteFields';
 
 interface NoteFormProps {
   initialData?: Partial<Note>;
@@ -95,6 +104,12 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
   const [content, setContent] = useState<Record<string, unknown>>(initialData.content || EMPTY_CONTENT);
   const [selectedTags, setSelectedTags] = useState<string[]>(initialData.tags || []);
   const [category, setCategory] = useState<string>(initialData.category || '');
+  const [status, setStatus] = useState<NoteStatus>(
+    isNoteStatus(initialData.status) ? initialData.status : 'answered'
+  );
+  const [contentType, setContentType] = useState<ContentType | ''>(
+    isContentType(initialData.content_type) ? initialData.content_type : ''
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -109,6 +124,8 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
       content,
       category,
       tags: selectedTags,
+      status,
+      content_type: contentType,
     },
     true // Enable draft persistence
   );
@@ -155,7 +172,9 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
         draft.title !== (initialData.title || '') ||
         JSON.stringify(draft.content) !== JSON.stringify(initialData.content || EMPTY_CONTENT) ||
         draft.category !== (initialData.category || '') ||
-        JSON.stringify(draft.tags) !== JSON.stringify(initialData.tags || []);
+        JSON.stringify(draft.tags) !== JSON.stringify(initialData.tags || []) ||
+        (draft.status !== undefined && draft.status !== (initialData.status || 'answered')) ||
+        (draft.content_type !== undefined && draft.content_type !== (initialData.content_type || ''));
 
       // Silently restore the draft if it's different
       if (isDraftDifferent) {
@@ -163,6 +182,10 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
         setContent(draft.content);
         setCategory(draft.category);
         setSelectedTags(draft.tags);
+        if (isNoteStatus(draft.status)) setStatus(draft.status);
+        if (draft.content_type === '' || isContentType(draft.content_type)) {
+          setContentType(draft.content_type);
+        }
       }
     }
      
@@ -535,6 +558,8 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
           content,
           tags: finalTags,
           category,
+          status,
+          content_type: contentType || null,
         });
 
         // Clear draft after successful save
@@ -548,6 +573,8 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
           content,
           tags: finalTags,
           category,
+          status,
+          content_type: contentType || null,
         });
 
         // Clear draft after successful save
@@ -606,6 +633,22 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
           value={selectedTags}
           onChange={setSelectedTags}
           suggestions={tagSuggestions}
+        />
+
+        <Select
+          label="Type"
+          value={contentType}
+          onChange={(e) => setContentType(isContentType(e.target.value) ? e.target.value : '')}
+          options={contentTypeOptions('No type')}
+        />
+
+        <Select
+          label="Status"
+          value={status}
+          onChange={(e) => {
+            if (isNoteStatus(e.target.value)) setStatus(e.target.value);
+          }}
+          options={NOTE_STATUSES.map((value) => ({ value, label: STATUS_LABELS[value] }))}
         />
       </div>
 
