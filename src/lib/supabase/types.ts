@@ -5,6 +5,35 @@ export type NoteCategory = string; // Changed from enum to string to support cus
 export type SubscriptionStatus = 'active' | 'canceled' | 'past_due' | 'trialing' | 'unpaid' | 'free';
 export type SubscriptionPlan = 'free' | 'premium';
 
+// Topic / trial / link enums (CHECK constraints in add_topics.sql)
+export type LinkEndpointType = 'note' | 'trial';
+export type LinkRelation = 'answers' | 'supports' | 'cites' | 'critiques' | 'illustrates' | 'related';
+
+/** A row from search_topics(): the topic plus the alias that matched, if any. */
+export interface TopicSearchResult {
+  id: string;
+  name: string;
+  aliases: string[];
+  description: string | null;
+  /** The alias that matched the query, or null when the name matched. */
+  matched_alias: string | null;
+  /** 0 exact name, 1 exact alias, 2 name prefix, 3 alias prefix, 4 name contains, 5 alias contains. */
+  rank: number;
+}
+
+/** One entry of set_note_topics()'s p_links. */
+export interface NoteTopicLinkInput {
+  topic_id: string;
+  section_id: string | null;
+  is_primary: boolean;
+}
+
+/** One entry of set_trial_topics()'s p_links. */
+export interface TrialTopicLinkInput {
+  topic_id: string;
+  section_id: string | null;
+}
+
 // Define the Database schema inline
 export interface Database {
   public: {
@@ -37,6 +66,8 @@ export interface Database {
           content: Record<string, unknown>;
           tags: string[];
           category: string; // Changed from enum to string
+          status: 'answered' | 'unanswered';
+          content_type: 'question' | 'article' | 'trial' | 'review' | 'case' | 'other' | null;
           created_at: string;
           updated_at?: string;
         };
@@ -47,6 +78,8 @@ export interface Database {
           content: Record<string, unknown>;
           tags?: string[];
           category: string; // Changed from enum to string
+          status?: 'answered' | 'unanswered';
+          content_type?: 'question' | 'article' | 'trial' | 'review' | 'case' | 'other' | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -57,6 +90,8 @@ export interface Database {
           content?: Record<string, unknown>;
           tags?: string[];
           category?: string; // Changed from enum to string
+          status?: 'answered' | 'unanswered';
+          content_type?: 'question' | 'article' | 'trial' | 'review' | 'case' | 'other' | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -101,6 +136,209 @@ export interface Database {
           id?: string;
           user_id?: string;
           name?: string;
+          created_at?: string;
+        };
+      };
+      topics: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          aliases: string[];
+          description: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id?: string;
+          name: string;
+          aliases?: string[];
+          description?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          name?: string;
+          aliases?: string[];
+          description?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      topic_edges: {
+        Row: {
+          parent_id: string;
+          child_id: string;
+          user_id: string;
+          created_at: string;
+        };
+        Insert: {
+          parent_id: string;
+          child_id: string;
+          user_id?: string;
+          created_at?: string;
+        };
+        Update: {
+          parent_id?: string;
+          child_id?: string;
+          user_id?: string;
+          created_at?: string;
+        };
+      };
+      topic_sections: {
+        Row: {
+          id: string;
+          topic_id: string;
+          user_id: string;
+          name: string;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          topic_id: string;
+          user_id?: string;
+          name: string;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          topic_id?: string;
+          user_id?: string;
+          name?: string;
+          sort_order?: number;
+          created_at?: string;
+        };
+      };
+      note_topics: {
+        Row: {
+          note_id: string;
+          topic_id: string;
+          user_id: string;
+          section_id: string | null;
+          is_primary: boolean;
+          created_at: string;
+        };
+        Insert: {
+          note_id: string;
+          topic_id: string;
+          user_id?: string;
+          section_id?: string | null;
+          is_primary?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          note_id?: string;
+          topic_id?: string;
+          user_id?: string;
+          section_id?: string | null;
+          is_primary?: boolean;
+          created_at?: string;
+        };
+      };
+      trials: {
+        Row: {
+          id: string;
+          user_id: string;
+          acronym: string;
+          full_name: string | null;
+          year: number | null;
+          population: string | null;
+          intervention: string | null;
+          comparator: string | null;
+          result: string | null;
+          notes: string | null;
+          superseded_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id?: string;
+          acronym: string;
+          full_name?: string | null;
+          year?: number | null;
+          population?: string | null;
+          intervention?: string | null;
+          comparator?: string | null;
+          result?: string | null;
+          notes?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          acronym?: string;
+          full_name?: string | null;
+          year?: number | null;
+          population?: string | null;
+          intervention?: string | null;
+          comparator?: string | null;
+          result?: string | null;
+          notes?: string | null;
+          superseded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      trial_topics: {
+        Row: {
+          trial_id: string;
+          topic_id: string;
+          user_id: string;
+          section_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          trial_id: string;
+          topic_id: string;
+          user_id?: string;
+          section_id?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          trial_id?: string;
+          topic_id?: string;
+          user_id?: string;
+          section_id?: string | null;
+          created_at?: string;
+        };
+      };
+      note_links: {
+        Row: {
+          id: string;
+          user_id: string;
+          source_type: LinkEndpointType;
+          source_id: string;
+          target_type: LinkEndpointType;
+          target_id: string;
+          relation: LinkRelation;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id?: string;
+          source_type: LinkEndpointType;
+          source_id: string;
+          target_type: LinkEndpointType;
+          target_id: string;
+          relation: LinkRelation;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          source_type?: LinkEndpointType;
+          source_id?: string;
+          target_type?: LinkEndpointType;
+          target_id?: string;
+          relation?: LinkRelation;
           created_at?: string;
         };
       };
@@ -246,7 +484,19 @@ export interface Database {
         Update: Record<string, unknown>;
       };
     };
-    Functions: Record<string, unknown>;
+    Functions: {
+      topic_descendants: { Args: { p_topic_id: string }; Returns: string[] };
+      notes_in_topic: {
+        Args: { p_topic_id: string; p_include_descendants?: boolean };
+        Returns: Database['public']['Tables']['notes']['Row'][];
+      };
+      search_topics: { Args: { p_query: string; p_limit?: number }; Returns: TopicSearchResult[] };
+      topic_note_counts: { Args: Record<string, never>; Returns: { topic_id: string; note_count: number }[] };
+      set_note_topics: { Args: { p_note_id: string; p_links: NoteTopicLinkInput[] }; Returns: void };
+      set_trial_topics: { Args: { p_trial_id: string; p_links: TrialTopicLinkInput[] }; Returns: void };
+      reorder_topic_sections: { Args: { p_topic_id: string; p_section_ids: string[] }; Returns: void };
+      [key: string]: unknown;
+    };
     Enums: {
       [key: string]: string[];
     };
@@ -272,6 +522,21 @@ export type CategoryUpdate = Database['public']['Tables']['categories']['Update'
 export type TagRow = Database['public']['Tables']['tags']['Row'];
 export type TagInsert = Database['public']['Tables']['tags']['Insert'];
 export type TagUpdate = Database['public']['Tables']['tags']['Update'];
+
+// Topic, trial and link types
+export type TopicRow = Database['public']['Tables']['topics']['Row'];
+export type TopicInsert = Database['public']['Tables']['topics']['Insert'];
+export type TopicUpdate = Database['public']['Tables']['topics']['Update'];
+export type TopicEdgeRow = Database['public']['Tables']['topic_edges']['Row'];
+export type TopicSectionRow = Database['public']['Tables']['topic_sections']['Row'];
+export type TopicSectionInsert = Database['public']['Tables']['topic_sections']['Insert'];
+export type NoteTopicRow = Database['public']['Tables']['note_topics']['Row'];
+export type TrialRow = Database['public']['Tables']['trials']['Row'];
+export type TrialInsert = Database['public']['Tables']['trials']['Insert'];
+export type TrialUpdate = Database['public']['Tables']['trials']['Update'];
+export type TrialTopicRow = Database['public']['Tables']['trial_topics']['Row'];
+export type NoteLinkRow = Database['public']['Tables']['note_links']['Row'];
+export type NoteLinkInsert = Database['public']['Tables']['note_links']['Insert'];
 
 // Daily Activity types
 export type DailyActivityRow = Database['public']['Tables']['daily_activity']['Row'];

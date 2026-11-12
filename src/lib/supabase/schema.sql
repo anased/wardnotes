@@ -469,3 +469,12 @@ CREATE POLICY "Users can view their own tags" ON public.tags FOR SELECT USING (a
 CREATE POLICY "Users can create their own tags" ON public.tags FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update their own tags" ON public.tags FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "Users can delete their own tags" ON public.tags FOR DELETE USING (auth.uid() = user_id);
+--
+-- Topics, sections, trials and links (2026-11-12)
+--
+-- Tables topics, topic_edges, topic_sections, note_topics, trials,
+-- trial_topics and note_links, their RLS policies and the functions
+-- topic_descendants, notes_in_topic, search_topics, topic_note_counts,
+-- set_note_topics, set_trial_topics and reorder_topic_sections are defined in
+-- migrations/add_topics.sql (tested by scripts/db-tests/run-topics-tests.sh).
+--
