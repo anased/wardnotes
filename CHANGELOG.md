@@ -26,7 +26,8 @@ Notes are now organized by linked topics instead of a flat list of tags.
   The note editor has a topic picker that matches names and aliases first
   ("RPLS" finds PRES) before offering to create a topic.
 - **Topic tree** in the notes area (sidebar on desktop, collapsible panel on
-  mobile); filtering the Library by a topic (`?topic=`) includes subtopics.
+  mobile); clicking a topic opens its page. "View in Library" on a topic page
+  filters the Library by that topic (`?topic=`), including subtopics.
 - **Trials** (`/trials`, `/trials/[id]`): one shared record per trial
   (acronym, year, population, intervention vs comparator, result, notes,
   "superseded by"), linked from every topic that cites it.

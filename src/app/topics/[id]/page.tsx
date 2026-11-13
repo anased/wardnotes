@@ -12,7 +12,7 @@ import TopicSidebar from '@/components/topics/TopicSidebar';
 import TopicFormModal from '@/components/topics/TopicFormModal';
 import SectionManagerModal from '@/components/topics/SectionManagerModal';
 import TopicNoteRow from '@/components/topics/TopicNoteRow';
-import { PencilIcon, PlusIcon } from '@/components/topics/icons';
+import { FolderIcon, PencilIcon, PlusIcon } from '@/components/topics/icons';
 import { supabase } from '@/lib/supabase/client';
 import {
   TopicNoteLink,
@@ -235,7 +235,17 @@ export default function TopicPage() {
                   {topic.aliases.length > 0 && <> · Also known as {topic.aliases.join(', ')}</>}
                 </p>
               </div>
-              <div className="flex flex-shrink-0 gap-2">
+              <div className="flex flex-wrap flex-shrink-0 gap-2">
+                <Link
+                  href={`/notes?topic=${topic.id}`}
+                  passHref
+                  title={subtopics.length > 0 ? `Notes in ${topic.name} and its subtopics` : `Notes in ${topic.name}`}
+                >
+                  <Button variant="outline" className="inline-flex items-center">
+                    <FolderIcon className="w-4 h-4 mr-2" />
+                    View in Library
+                  </Button>
+                </Link>
                 <Button variant="outline" onClick={() => setShowEdit(true)} className="inline-flex items-center">
                   <PencilIcon className="w-4 h-4 mr-2" />
                   Edit

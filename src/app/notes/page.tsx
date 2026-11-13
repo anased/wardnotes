@@ -203,11 +203,9 @@ export default function NotesPage() {
   return (
     <PageContainer title="Notes Library">
       <div className="grid gap-6 lg:grid-cols-[16rem_minmax(0,1fr)]">
-        {/* Topic tree: a sidebar on large screens, a collapsible panel on small ones */}
-        <TopicSidebar
-          selectedId={filters.topic || null}
-          onSelect={(id) => updateFilters({ topic: id ?? '' })}
-        />
+        {/* Topic tree: a sidebar on large screens, a collapsible panel on small ones.
+            Topics open their page (which links back here, filtered). */}
+        <TopicSidebar selectedId={filters.topic || null} />
 
         <div className="space-y-6 min-w-0">
           {/* Search and filter section */}
