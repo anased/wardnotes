@@ -166,13 +166,18 @@ export type NoteFilters = {
   tags?: string[];
   status?: NoteStatus;
   contentType?: ContentType;
+  /** Topic id: notes filed under this topic or any of its subtopics. */
+  topicId?: string;
 };
 
 // Filter notes by category, tags, status and/or content type. Tag matching is AND: a note must
 // carry every selected tag. Tag names are canonical in the database, so
 // an exact array containment check is enough.
-export const filterNotes = async ({ category, tags = [], status, contentType }: NoteFilters) => {
-  let query = supabase.from('notes').select('*');
+export const filterNotes = async ({ category, tags = [], status, contentType, topicId }: NoteFilters) => {
+  // notes_in_topic returns notes rows, so the filters below still apply to it
+  let query = topicId
+    ? supabase.rpc('notes_in_topic', { p_topic_id: topicId })
+    : supabase.from('notes').select('*');
 
   if (category && category !== 'All') {
     query = query.eq('category', category);

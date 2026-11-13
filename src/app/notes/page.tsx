@@ -14,6 +14,9 @@ import Select from '@/components/ui/Select';
 import Button from '@/components/ui/Button';
 import Spinner from '@/components/ui/Spinner';
 import TagFilterCombobox, { TagFilterOption } from '@/components/ui/TagFilterCombobox';
+import TopicTree from '@/components/topics/TopicTree';
+import { ChevronDownIcon } from '@/components/topics/icons';
+import useTopics from '@/lib/hooks/useTopics';
 import { getTagUsage, TagUsage } from '@/lib/supabase/client';
 import { canonicalTagName, hasTag, tagsEqual } from '@/lib/utils/tagUtils';
 import {
@@ -53,6 +56,8 @@ export default function NotesPage() {
   } = useNotes();
   const { categories } = useCategories();
   const { tags } = useTags();
+  const { graph: topicGraph } = useTopics();
+  const [showMobileTopics, setShowMobileTopics] = useState(false);
   const { track } = useAnalytics();
   const { subscription } = useSubscription();
   const router = useRouter();
@@ -110,6 +115,7 @@ export default function NotesPage() {
           tags: next.tags,
           status: next.status || undefined,
           contentType: next.contentType || undefined,
+          topicId: next.topic || undefined,
         });
       } else {
         await fetchNotes();
@@ -189,6 +195,8 @@ export default function NotesPage() {
   };
 
   const hasActiveFilters = hasFieldFilters(filters);
+  const selectedTopic = filters.topic ? topicGraph.byId.get(filters.topic) : undefined;
+  const topicHasSubtopics = !!filters.topic && (topicGraph.children.get(filters.topic)?.length ?? 0) > 0;
   const loading = authLoading || notesLoading || isSearching;
 
   const chipButtonClass =
@@ -196,182 +204,237 @@ export default function NotesPage() {
 
   return (
     <PageContainer title="Notes Library">
-      <div className="space-y-6">
-        {/* Search and filter section */}
-        <div className="p-4 bg-white rounded-lg shadow dark:bg-gray-800">
-          <form onSubmit={handleSearch} role="search" className="flex flex-col gap-3 sm:flex-row">
-            <div className="flex-1">
-              <Input
-                aria-label="Search notes"
-                placeholder="Search notes..."
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                fullWidth
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button type="submit" isLoading={isSearching}>
-                Search
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleClearFilters}
-                disabled={loading}
-              >
-                Clear
-              </Button>
-            </div>
-          </form>
-
-          <div className="grid grid-cols-1 mt-3 gap-x-3 sm:grid-cols-3 lg:grid-cols-[repeat(3,minmax(0,11rem))_1fr]">
-            <Select
-              aria-label="Category"
-              options={categoryOptions}
-              value={filters.category}
-              onChange={(e) => updateFilters({ category: e.target.value })}
-            />
-            <Select
-              aria-label="Type"
-              options={TYPE_OPTIONS}
-              value={filters.contentType}
-              onChange={(e) =>
-                updateFilters({ contentType: isContentType(e.target.value) ? e.target.value : '' })
-              }
-            />
-            <Select
-              aria-label="Status"
-              options={STATUS_OPTIONS}
-              value={filters.status}
-              onChange={(e) =>
-                updateFilters({ status: isNoteStatus(e.target.value) ? e.target.value : '' })
-              }
-            />
-            <div className="mb-4 sm:col-span-3 lg:col-span-1">
-              <TagFilterCombobox
-                options={tagOptions}
-                value={filters.tags}
-                onChange={(next) => updateFilters({ tags: next })}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Filter indicators */}
-        {hasActiveFilters && (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm text-gray-600 dark:text-gray-400">
-              Filtering by:
-            </span>
-            {filters.category !== 'All' && (
-              <div className="flex items-center px-3 py-1 text-sm bg-blue-100 rounded-full dark:bg-blue-900">
-                <span>Category: {filters.category}</span>
-                <button
-                  onClick={() => updateFilters({ category: 'All' })}
-                  aria-label={`Remove category filter ${filters.category}`}
-                  className={`${chipButtonClass} text-blue-600 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-100`}
-                >
-                  &times;
-                </button>
-              </div>
-            )}
-            {filters.contentType && (
-              <div className="flex items-center px-3 py-1 text-sm bg-gray-100 rounded-full dark:bg-gray-700">
-                <span>Type: {CONTENT_TYPE_LABELS[filters.contentType]}</span>
-                <button
-                  onClick={() => updateFilters({ contentType: '' })}
-                  aria-label="Remove type filter"
-                  className={`${chipButtonClass} text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white`}
-                >
-                  &times;
-                </button>
-              </div>
-            )}
-            {filters.status && (
-              <div className="flex items-center px-3 py-1 text-sm rounded-full bg-amber-100 dark:bg-amber-900/60">
-                <span>Status: {STATUS_LABELS[filters.status]}</span>
-                <button
-                  onClick={() => updateFilters({ status: '' })}
-                  aria-label="Remove status filter"
-                  className={`${chipButtonClass} text-amber-700 hover:text-amber-900 dark:text-amber-200 dark:hover:text-white`}
-                >
-                  &times;
-                </button>
-              </div>
-            )}
-            {filters.tags.map((tag) => (
-              <div key={tag} className="flex items-center px-3 py-1 text-sm bg-green-100 rounded-full dark:bg-green-900">
-                <span>Tag: {tag}</span>
-                <button
-                  onClick={() => updateFilters({ tags: filters.tags.filter((t) => !tagsEqual(t, tag)) })}
-                  aria-label={`Remove tag filter ${tag}`}
-                  className={`${chipButtonClass} text-green-600 hover:text-green-800 dark:text-green-300 dark:hover:text-green-100`}
-                >
-                  &times;
-                </button>
-              </div>
-            ))}
-            {filters.tags.length > 1 && (
-              <span className="text-xs text-gray-500 dark:text-gray-400">(notes with all of these tags)</span>
-            )}
+      <div className="grid gap-6 lg:grid-cols-[16rem_minmax(0,1fr)]">
+        {/* Topic tree: a sidebar on large screens, a collapsible panel above the list on small ones */}
+        <aside className="lg:sticky lg:top-20 lg:self-start">
+          <div className="p-4 bg-white rounded-lg shadow dark:bg-gray-800 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
             <button
-              onClick={handleClearFilters}
-              className="text-sm text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-300"
+              type="button"
+              onClick={() => setShowMobileTopics((v) => !v)}
+              aria-expanded={showMobileTopics}
+              aria-controls="library-topic-tree"
+              className="flex items-center justify-between w-full text-sm font-semibold tracking-wide text-gray-500 uppercase lg:hidden dark:text-gray-400"
             >
-              Clear all filters
+              <span>
+                Topics
+                {selectedTopic && (
+                  <span className="ml-2 font-normal tracking-normal normal-case text-primary-700 dark:text-primary-300">
+                    {selectedTopic.name}
+                  </span>
+                )}
+              </span>
+              <ChevronDownIcon className={`w-4 h-4 transition-transform ${showMobileTopics ? 'rotate-180' : ''}`} />
             </button>
+            <div id="library-topic-tree" className={`${showMobileTopics ? 'mt-3' : 'hidden'} lg:block lg:mt-0`}>
+              <TopicTree
+                selectedId={filters.topic || null}
+                onSelect={(id) => updateFilters({ topic: id ?? '' })}
+                hideHeadingOnMobile
+              />
+            </div>
           </div>
-        )}
+        </aside>
 
-        {/* Notes list */}
-        <div>
-          {loading ? (
-            <div className="flex items-center justify-center h-64">
-              <Spinner size="md" color="primary" />
-            </div>
-          ) : error ? (
-            <div className="p-4 text-red-700 bg-red-100 rounded-lg dark:bg-red-900 dark:text-red-200">
-              Error loading notes: {error.message}
-            </div>
-          ) : notes.length === 0 ? (
-            <div className="p-8 text-center bg-white rounded-lg shadow dark:bg-gray-800">
-              <p className="mb-4 text-gray-600 dark:text-gray-400">
-                {filters.q || hasActiveFilters
-                  ? 'No notes match your search criteria.'
-                  : "You haven't created any notes yet."}
-              </p>
-
-              {filters.q || hasActiveFilters ? (
-                <Button onClick={handleClearFilters} variant="outline">
-                  Clear Filters
+        <div className="space-y-6 min-w-0">
+          {/* Search and filter section */}
+          <div className="p-4 bg-white rounded-lg shadow dark:bg-gray-800">
+            <form onSubmit={handleSearch} role="search" className="flex flex-col gap-3 sm:flex-row">
+              <div className="flex-1">
+                <Input
+                  aria-label="Search notes"
+                  placeholder="Search notes..."
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  fullWidth
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button type="submit" isLoading={isSearching}>
+                  Search
                 </Button>
-              ) : (
-                <Link href="/notes/new" passHref>
-                  <Button variant="primary">
-                    Create Your First Note
-                  </Button>
-                </Link>
-              )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleClearFilters}
+                  disabled={loading}
+                >
+                  Clear
+                </Button>
+              </div>
+            </form>
+
+            <div className="grid grid-cols-1 mt-3 gap-x-3 sm:grid-cols-3 lg:grid-cols-[repeat(3,minmax(0,11rem))_1fr]">
+              <Select
+                aria-label="Category"
+                options={categoryOptions}
+                value={filters.category}
+                onChange={(e) => updateFilters({ category: e.target.value })}
+              />
+              <Select
+                aria-label="Type"
+                options={TYPE_OPTIONS}
+                value={filters.contentType}
+                onChange={(e) =>
+                  updateFilters({ contentType: isContentType(e.target.value) ? e.target.value : '' })
+                }
+              />
+              <Select
+                aria-label="Status"
+                options={STATUS_OPTIONS}
+                value={filters.status}
+                onChange={(e) =>
+                  updateFilters({ status: isNoteStatus(e.target.value) ? e.target.value : '' })
+                }
+              />
+              <div className="mb-4 sm:col-span-3 lg:col-span-1">
+                <TagFilterCombobox
+                  options={tagOptions}
+                  value={filters.tags}
+                  onChange={(next) => updateFilters({ tags: next })}
+                />
+              </div>
             </div>
-          ) : (
-            <div className="note-grid">
-              {notes.map((note) => (
-                <NoteCard key={note.id} note={note} onTagClick={handleNoteTagClick} />
+          </div>
+
+          {/* Filter indicators */}
+          {hasActiveFilters && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                Filtering by:
+              </span>
+              {filters.topic && (
+                <div className="flex items-center px-3 py-1 text-sm rounded-full bg-primary-100 dark:bg-primary-900/60">
+                  <span>
+                    Topic:{' '}
+                    <Link
+                      href={`/topics/${filters.topic}`}
+                      className="underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                    >
+                      {selectedTopic?.name ?? 'Unknown topic'}
+                    </Link>
+                    {topicHasSubtopics && (
+                      <span className="text-primary-700 dark:text-primary-300"> + subtopics</span>
+                    )}
+                  </span>
+                  <button
+                    onClick={() => updateFilters({ topic: '' })}
+                    aria-label="Remove topic filter"
+                    className={`${chipButtonClass} text-primary-600 hover:text-primary-800 dark:text-primary-300 dark:hover:text-primary-100`}
+                  >
+                    &times;
+                  </button>
+                </div>
+              )}
+              {filters.category !== 'All' && (
+                <div className="flex items-center px-3 py-1 text-sm bg-blue-100 rounded-full dark:bg-blue-900">
+                  <span>Category: {filters.category}</span>
+                  <button
+                    onClick={() => updateFilters({ category: 'All' })}
+                    aria-label={`Remove category filter ${filters.category}`}
+                    className={`${chipButtonClass} text-blue-600 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-100`}
+                  >
+                    &times;
+                  </button>
+                </div>
+              )}
+              {filters.contentType && (
+                <div className="flex items-center px-3 py-1 text-sm bg-gray-100 rounded-full dark:bg-gray-700">
+                  <span>Type: {CONTENT_TYPE_LABELS[filters.contentType]}</span>
+                  <button
+                    onClick={() => updateFilters({ contentType: '' })}
+                    aria-label="Remove type filter"
+                    className={`${chipButtonClass} text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white`}
+                  >
+                    &times;
+                  </button>
+                </div>
+              )}
+              {filters.status && (
+                <div className="flex items-center px-3 py-1 text-sm rounded-full bg-amber-100 dark:bg-amber-900/60">
+                  <span>Status: {STATUS_LABELS[filters.status]}</span>
+                  <button
+                    onClick={() => updateFilters({ status: '' })}
+                    aria-label="Remove status filter"
+                    className={`${chipButtonClass} text-amber-700 hover:text-amber-900 dark:text-amber-200 dark:hover:text-white`}
+                  >
+                    &times;
+                  </button>
+                </div>
+              )}
+              {filters.tags.map((tag) => (
+                <div key={tag} className="flex items-center px-3 py-1 text-sm bg-green-100 rounded-full dark:bg-green-900">
+                  <span>Tag: {tag}</span>
+                  <button
+                    onClick={() => updateFilters({ tags: filters.tags.filter((t) => !tagsEqual(t, tag)) })}
+                    aria-label={`Remove tag filter ${tag}`}
+                    className={`${chipButtonClass} text-green-600 hover:text-green-800 dark:text-green-300 dark:hover:text-green-100`}
+                  >
+                    &times;
+                  </button>
+                </div>
               ))}
+              {filters.tags.length > 1 && (
+                <span className="text-xs text-gray-500 dark:text-gray-400">(notes with all of these tags)</span>
+              )}
+              <button
+                onClick={handleClearFilters}
+                className="text-sm text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-300"
+              >
+                Clear all filters
+              </button>
+            </div>
+          )}
+
+          {/* Notes list */}
+          <div>
+            {loading ? (
+              <div className="flex items-center justify-center h-64">
+                <Spinner size="md" color="primary" />
+              </div>
+            ) : error ? (
+              <div className="p-4 text-red-700 bg-red-100 rounded-lg dark:bg-red-900 dark:text-red-200">
+                Error loading notes: {error.message}
+              </div>
+            ) : notes.length === 0 ? (
+              <div className="p-8 text-center bg-white rounded-lg shadow dark:bg-gray-800">
+                <p className="mb-4 text-gray-600 dark:text-gray-400">
+                  {filters.q || hasActiveFilters
+                    ? 'No notes match your search criteria.'
+                    : "You haven't created any notes yet."}
+                </p>
+
+                {filters.q || hasActiveFilters ? (
+                  <Button onClick={handleClearFilters} variant="outline">
+                    Clear Filters
+                  </Button>
+                ) : (
+                  <Link href="/notes/new" passHref>
+                    <Button variant="primary">
+                      Create Your First Note
+                    </Button>
+                  </Link>
+                )}
+              </div>
+            ) : (
+              <div className="note-grid">
+                {notes.map((note) => (
+                  <NoteCard key={note.id} note={note} onTagClick={handleNoteTagClick} />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Create new note button */}
+          {notes.length > 0 && (
+            <div className="flex justify-center mt-6">
+              <Link href="/notes/new" passHref>
+                <Button>
+                  Create New Note
+                </Button>
+              </Link>
             </div>
           )}
         </div>
-
-        {/* Create new note button */}
-        {notes.length > 0 && (
-          <div className="flex justify-center mt-6">
-            <Link href="/notes/new" passHref>
-              <Button>
-                Create New Note
-              </Button>
-            </Link>
-          </div>
-        )}
       </div>
     </PageContainer>
   );

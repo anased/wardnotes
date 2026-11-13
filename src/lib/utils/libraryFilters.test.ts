@@ -19,7 +19,16 @@ describe('parseLibraryParams', () => {
       tags: ['Stroke', 'ICH'],
       status: 'unanswered',
       contentType: 'question',
+      topic: '',
     });
+  });
+
+  test('reads a topic id and ignores anything that is not one', () => {
+    const id = '0b9b7a52-3c1e-4f43-9d0e-6a1d2c3b4a5f';
+    expect(parseLibraryParams(`?topic=${id}`).topic).toBe(id);
+    expect(parseLibraryParams('?topic=PRES').topic).toBe('');
+    expect(hasFieldFilters(parseLibraryParams(`?topic=${id}`))).toBe(true);
+    expect(buildLibraryQuery({ ...EMPTY_FILTERS, topic: id })).toBe(`topic=${id}`);
   });
 
   test('keeps working with the old single ?tag= links', () => {
@@ -59,6 +68,7 @@ describe('buildLibraryQuery', () => {
       tags: ['Stroke', "Parkinson's disease"],
       status: 'answered' as const,
       contentType: 'trial' as const,
+      topic: '0b9b7a52-3c1e-4f43-9d0e-6a1d2c3b4a5f',
     };
     expect(parseLibraryParams(buildLibraryQuery(filters))).toEqual(filters);
   });

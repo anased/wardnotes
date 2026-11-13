@@ -1,5 +1,7 @@
 import { ContentType, NoteStatus, isContentType, isNoteStatus } from './noteFields';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** Everything the Notes Library list can be narrowed by. */
 export interface LibraryFilters {
   /** Full-text search. A search replaces the other filters. */
@@ -10,6 +12,8 @@ export interface LibraryFilters {
   tags: string[];
   status: NoteStatus | '';
   contentType: ContentType | '';
+  /** Topic id; matches notes filed under the topic or any of its subtopics. */
+  topic: string;
 }
 
 export const EMPTY_FILTERS: LibraryFilters = {
@@ -18,15 +22,18 @@ export const EMPTY_FILTERS: LibraryFilters = {
   tags: [],
   status: '',
   contentType: '',
+  topic: '',
 };
 
 /** True when any filter other than search is set. */
 export function hasFieldFilters(f: LibraryFilters): boolean {
-  return f.category !== 'All' || f.tags.length > 0 || f.status !== '' || f.contentType !== '';
+  return (
+    f.category !== 'All' || f.tags.length > 0 || f.status !== '' || f.contentType !== '' || f.topic !== ''
+  );
 }
 
 /**
- * Reads filters from a query string: ?q=&category=&tag=a&tag=b&status=&type=
+ * Reads filters from a query string: ?q=&category=&tag=a&tag=b&status=&type=&topic=
  * Unknown status/type values are ignored.
  */
 export function parseLibraryParams(search: string): LibraryFilters {
@@ -48,6 +55,7 @@ export function parseLibraryParams(search: string): LibraryFilters {
     tags,
     status: isNoteStatus(status) ? status : '',
     contentType: isContentType(type) ? type : '',
+    topic: UUID_RE.test(params.get('topic') || '') ? params.get('topic')! : '',
   };
 }
 
@@ -62,5 +70,6 @@ export function buildLibraryQuery(f: LibraryFilters): string {
   f.tags.forEach((t) => params.append('tag', t));
   if (f.status) params.set('status', f.status);
   if (f.contentType) params.set('type', f.contentType);
+  if (f.topic) params.set('topic', f.topic);
   return params.toString();
 }

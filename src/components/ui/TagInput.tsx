@@ -7,6 +7,8 @@ interface TagInputProps {
   onChange: (tags: string[]) => void;
   error?: string;
   suggestions?: string[];
+  /** Shown while no tags are added. */
+  placeholder?: string;
 }
 
 export interface TagInputHandle {
@@ -14,7 +16,7 @@ export interface TagInputHandle {
 }
 
 const TagInput = forwardRef<TagInputHandle, TagInputProps>(
-  ({ label, value = [], onChange, error, suggestions = [] }, ref) => {
+  ({ label, value = [], onChange, error, suggestions = [], placeholder = 'Add tags (press Enter or comma to add)' }, ref) => {
     const [inputValue, setInputValue] = useState('');
     const [showSuggestions, setShowSuggestions] = useState(false);
     // Index of the highlighted suggestion, or -1 when none is highlighted
@@ -230,7 +232,7 @@ const TagInput = forwardRef<TagInputHandle, TagInputProps>(
               onKeyDown={handleKeyDown}
               onBlur={handleBlur}
               onFocus={() => inputValue && setShowSuggestions(true)}
-              placeholder={value.length === 0 ? "Add tags (press Enter or comma to add)" : ""}
+              placeholder={value.length === 0 ? placeholder : ""}
               className="flex-1 min-w-[120px] outline-none bg-transparent"
             />
           </div>

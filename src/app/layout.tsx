@@ -9,6 +9,7 @@ import { SubscriptionProvider } from '@/lib/context/SubscriptionContext';
 import { TagsProvider } from '@/lib/context/TagsContext';
 import { NotesProvider } from '@/lib/context/NotesContext';
 import { CategoriesProvider } from '@/lib/context/CategoriesContext';
+import { TopicsProvider } from '@/lib/context/TopicsContext';
 import AuthRedirectHandler from '@/components/auth/AuthRedirectHandler';
 import { AnalyticsProvider } from '@/components/AnalyticsProvider';
 
@@ -101,10 +102,12 @@ export default function RootLayout({
               <TagsProvider>
                 <NotesProvider>
                   <CategoriesProvider>
-                    <AnalyticsProvider />
-                    <AuthRedirectHandler />
-                    <WebVitals />
-                    {children}
+                    <TopicsProvider>
+                      <AnalyticsProvider />
+                      <AuthRedirectHandler />
+                      <WebVitals />
+                      {children}
+                    </TopicsProvider>
                   </CategoriesProvider>
                 </NotesProvider>
               </TagsProvider>
