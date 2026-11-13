@@ -18,10 +18,12 @@ const PATHS: Record<string, string> = {
 interface NoteTypeIconProps {
   type: string | null | undefined;
   className?: string;
+  /** Hide from assistive tech when nearby text already says what it is. */
+  decorative?: boolean;
 }
 
 /** Icon for a note's content type (question, article, trial, ...); a plain page when unset. */
-export default function NoteTypeIcon({ type, className = 'w-4 h-4' }: NoteTypeIconProps) {
+export default function NoteTypeIcon({ type, className = 'w-4 h-4', decorative = false }: NoteTypeIconProps) {
   const key = isContentType(type) ? type : 'other';
   const label = isContentType(type) ? CONTENT_TYPE_LABELS[type] : 'Note';
   return (
@@ -31,10 +33,11 @@ export default function NoteTypeIcon({ type, className = 'w-4 h-4' }: NoteTypeIc
       stroke="currentColor"
       viewBox="0 0 24 24"
       xmlns="http://www.w3.org/2000/svg"
-      role="img"
-      aria-label={label}
+      role={decorative ? undefined : 'img'}
+      aria-label={decorative ? undefined : label}
+      aria-hidden={decorative || undefined}
     >
-      <title>{label}</title>
+      {!decorative && <title>{label}</title>}
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={PATHS[key]} />
     </svg>
   );

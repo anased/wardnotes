@@ -15,6 +15,9 @@ import TopicFormModal from './TopicFormModal';
 interface NoteTopicPickerProps {
   value: NoteTopicLink[];
   onChange: (links: NoteTopicLink[]) => void;
+  /** Let the user pick a primary topic (notes); off for trials. */
+  showPrimary?: boolean;
+  label?: string;
 }
 
 /**
@@ -22,7 +25,7 @@ interface NoteTopicPickerProps {
  * when nothing matches), pick the primary topic, and optionally a section
  * within each linked topic.
  */
-export default function NoteTopicPicker({ value, onChange }: NoteTopicPickerProps) {
+export default function NoteTopicPicker({ value, onChange, showPrimary = true, label = 'Topics' }: NoteTopicPickerProps) {
   const { graph } = useTopics();
   const [sectionsByTopic, setSectionsByTopic] = useState<Record<string, TopicSection[]>>({});
   const [createName, setCreateName] = useState<string | null>(null);
@@ -70,7 +73,7 @@ export default function NoteTopicPicker({ value, onChange }: NoteTopicPickerProp
   return (
     <div className="mb-4">
       <TopicSelect
-        label="Topics"
+        label={label}
         value={value.map((l) => l.topic_id)}
         onChange={(ids) => onChange(withTopicIds(valueRef.current, ids))}
         onCreate={handleCreate}
@@ -81,7 +84,9 @@ export default function NoteTopicPicker({ value, onChange }: NoteTopicPickerProp
 
       {rows.length === 0 ? (
         <p id={hintId} className="-mt-2 text-xs text-gray-500 dark:text-gray-400">
-          A note can be filed under several topics. The first one you add becomes its primary topic.
+          {showPrimary
+            ? 'A note can be filed under several topics. The first one you add becomes its primary topic.'
+            : 'Every topic that cites this trial links to this one record.'}
         </p>
       ) : (
         <ul
@@ -96,19 +101,19 @@ export default function NoteTopicPicker({ value, onChange }: NoteTopicPickerProp
             const path = pathLabel(link.topic_id);
             return (
               <li key={link.topic_id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
-                <label className="flex items-center flex-1 min-w-[12rem] gap-2 cursor-pointer">
-                  <input
+                <label className={`flex items-center flex-1 min-w-[12rem] gap-2 ${showPrimary ? 'cursor-pointer' : ''}`}>
+                  {showPrimary && <input
                     type="radio"
                     name={radioName}
                     checked={link.is_primary}
                     onChange={() => onChange(withPrimary(value, link.topic_id))}
                     className="w-4 h-4 accent-primary-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
                     aria-label={`Make ${name} the primary topic`}
-                  />
+                  />}
                   <span className="min-w-0">
                     <span className="block text-sm font-medium truncate">
                       {name}
-                      {link.is_primary && (
+                      {showPrimary && link.is_primary && (
                         <span className="ml-2 px-1.5 py-0.5 text-xs font-medium text-primary-800 bg-primary-50 rounded ring-1 ring-primary-200 dark:bg-primary-900/60 dark:text-primary-100 dark:ring-primary-700">
                           Primary
                         </span>

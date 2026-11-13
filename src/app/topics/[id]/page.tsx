@@ -23,6 +23,18 @@ import {
   moveNoteToSection,
 } from '@/lib/supabase/topicSections';
 import { groupBySection } from '@/lib/utils/topicSections';
+import {
+  TopicTrialLink,
+  getTopicTrials,
+  linkTrialToTopic,
+  moveTrialToSection,
+  unlinkTrialFromTopic,
+} from '@/lib/supabase/trials';
+import { trialLabel } from '@/lib/utils/trials';
+import LinkTrialModal from '@/components/trials/LinkTrialModal';
+import MoveToSectionMenu from '@/components/topics/MoveToSectionMenu';
+import NoteTypeIcon from '@/components/notes/NoteTypeIcon';
+import useTrials from '@/lib/hooks/useTrials';
 import { ancestorPaths, childIds } from '@/lib/utils/topicTree';
 
 export default function TopicPage() {
@@ -42,6 +54,9 @@ export default function TopicPage() {
   const [movingNoteId, setMovingNoteId] = useState<string | null>(null);
   const [showEdit, setShowEdit] = useState(false);
   const [showSections, setShowSections] = useState(false);
+  const [trialLinks, setTrialLinks] = useState<TopicTrialLink[]>([]);
+  const [showLinkTrial, setShowLinkTrial] = useState(false);
+  const { byId: trialsById } = useTrials();
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/auth');
@@ -53,13 +68,15 @@ export default function TopicPage() {
     try {
       if (!quiet) setLoading(true);
       setError(null);
-      const [secs, noteLinks, total] = await Promise.all([
+      const [secs, noteLinks, total, trialRows] = await Promise.all([
         getTopicSections(topicId),
         getTopicNotes(topicId),
         supabase.rpc('notes_in_topic', { p_topic_id: topicId }, { count: 'exact', head: true }),
+        getTopicTrials(topicId),
       ]);
       setSections(secs);
       setLinks(noteLinks);
+      setTrialLinks(trialRows);
       setWithSubtopicsCount(total.error ? null : total.count ?? null);
       const notPrimaryHere = noteLinks.filter((l) => !l.is_primary).map((l) => l.note.id);
       setPrimaryOf(await getPrimaryTopicIds(notPrimaryHere));
@@ -78,9 +95,33 @@ export default function TopicPage() {
   const groups = useMemo(() => groupBySection(sections, links), [sections, links]);
   const sectionCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    for (const l of links) if (l.section_id) counts[l.section_id] = (counts[l.section_id] ?? 0) + 1;
+    for (const l of [...links, ...trialLinks]) if (l.section_id) counts[l.section_id] = (counts[l.section_id] ?? 0) + 1;
     return counts;
-  }, [links]);
+  }, [links, trialLinks]);
+
+  const handleMoveTrial = async (trialId: string, sectionId: string | null) => {
+    const previous = trialLinks;
+    setTrialLinks((ts) => ts.map((t) => (t.trial.id === trialId ? { ...t, section_id: sectionId } : t)));
+    try {
+      await moveTrialToSection(trialId, topicId, sectionId);
+    } catch (err) {
+      console.error('Error moving trial:', err);
+      setTrialLinks(previous);
+      setError('Could not move the trial. Please try again.');
+    }
+  };
+
+  const handleUnlinkTrial = async (trialId: string) => {
+    const previous = trialLinks;
+    setTrialLinks((ts) => ts.filter((t) => t.trial.id !== trialId));
+    try {
+      await unlinkTrialFromTopic(trialId, topicId);
+    } catch (err) {
+      console.error('Error unlinking trial:', err);
+      setTrialLinks(previous);
+      setError('Could not remove the trial. Please try again.');
+    }
+  };
 
   const handleMove = async (noteId: string, sectionId: string | null) => {
     const previous = links;
@@ -310,8 +351,97 @@ export default function TopicPage() {
               </section>
             ))
           )}
+
+          {/* Trials cited under this topic (one shared record per trial) */}
+          <section aria-labelledby="topic-trials-heading" className="p-4 bg-white rounded-lg shadow dark:bg-gray-800">
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <h3 id="topic-trials-heading" className="flex items-baseline gap-2 text-base font-semibold md:text-base">
+                Trials
+                {trialLinks.length > 0 && (
+                  <span className="text-xs font-normal text-gray-500 tabular-nums dark:text-gray-400">
+                    {trialLinks.length}
+                  </span>
+                )}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowLinkTrial(true)}
+                className="inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-300"
+              >
+                <PlusIcon className="w-4 h-4" />
+                Link trial
+              </button>
+            </div>
+            {trialLinks.length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">No trials linked to {topic.name} yet.</p>
+            ) : (
+              <ul className="divide-y divide-gray-100 dark:divide-gray-700/60">
+                {trialLinks.map(({ trial, section_id }) => {
+                  const section = sections.find((sec) => sec.id === section_id);
+                  const replacement = trial.superseded_by ? trialsById.get(trial.superseded_by) : undefined;
+                  return (
+                    <li
+                      key={trial.id}
+                      className="flex items-start gap-3 px-2 py-2 -mx-2 rounded-md hover:bg-gray-50 focus-within:bg-gray-50 dark:hover:bg-gray-700/40 dark:focus-within:bg-gray-700/40"
+                    >
+                      <span className="flex items-center justify-center flex-shrink-0 mt-0.5 rounded-md w-7 h-7 text-primary-700 bg-primary-50 dark:bg-primary-900/60 dark:text-primary-200">
+                        <NoteTypeIcon type="trial" decorative />
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <Link
+                          href={`/trials/${trial.id}`}
+                          className="font-medium text-gray-900 hover:text-primary-700 focus:outline-none focus-visible:underline dark:text-gray-100 dark:hover:text-primary-300"
+                        >
+                          {trialLabel(trial)}
+                        </Link>
+                        {trial.full_name && (
+                          <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">{trial.full_name}</span>
+                        )}
+                        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-0.5 text-xs text-gray-600 dark:text-gray-400">
+                          <span>{section ? section.name : 'Unsorted'}</span>
+                          {replacement && (
+                            <span className="px-1.5 py-0.5 font-medium text-amber-900 bg-amber-100 rounded dark:bg-amber-900/60 dark:text-amber-100">
+                              Superseded by {replacement.acronym}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                      <MoveToSectionMenu
+                        itemLabel={trial.acronym}
+                        sections={sections}
+                        currentSectionId={section_id}
+                        onMove={(sectionId) => handleMoveTrial(trial.id, sectionId)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleUnlinkTrial(trial.id)}
+                        aria-label={`Remove ${trial.acronym} from ${topic.name}`}
+                        title="Remove from this topic"
+                        className="p-1.5 text-gray-500 rounded-md hover:bg-gray-100 hover:text-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-100"
+                      >
+                        &times;
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
         </div>
       </div>
+
+      <LinkTrialModal
+        isOpen={showLinkTrial}
+        onClose={() => setShowLinkTrial(false)}
+        topicId={topic.id}
+        topicName={topic.name}
+        linkedIds={new Set(trialLinks.map((t) => t.trial.id))}
+        onLink={async (trial) => {
+          await linkTrialToTopic(trial.id, topic.id);
+          await load(true);
+        }}
+        onCreated={() => load(true)}
+      />
 
       <TopicFormModal
         isOpen={showEdit}
