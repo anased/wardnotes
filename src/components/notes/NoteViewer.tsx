@@ -17,6 +17,7 @@ import NoteFlashcardsSection from './NoteFlashcardsSection';
 import SelectionFloatingButton from './SelectionFloatingButton';
 import RelatedNotes from './RelatedNotes';
 import NoteTopicChips from '../topics/NoteTopicChips';
+import LinksSection from '../links/LinksSection';
 import { CreateFlashcardModal } from '../flashcards/CreateFlashCardModal';
 import { FlashcardService } from '@/services/flashcard';
 import type { FlashcardDeck } from '@/types/flashcard';
@@ -197,6 +198,9 @@ export default function NoteViewer({ note }: NoteViewerProps) {
         noteId={note.id}
         noteTitle={note.title}
       />
+
+      {/* Labeled links to and from other notes and trials */}
+      <LinksSection self={{ type: 'note', id: note.id }} selfLabel="This note" />
 
       {/* Related notes (shared tags / same category) */}
       <RelatedNotes note={note} />

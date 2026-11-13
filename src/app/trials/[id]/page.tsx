@@ -11,6 +11,7 @@ import Button from '@/components/ui/Button';
 import Spinner from '@/components/ui/Spinner';
 import TopicSidebar from '@/components/topics/TopicSidebar';
 import TrialFormModal from '@/components/trials/TrialFormModal';
+import LinksSection from '@/components/links/LinksSection';
 import { PencilIcon } from '@/components/topics/icons';
 import { getTrialTopicsForDisplay } from '@/lib/supabase/trials';
 import { supersededTrials, trialLabel } from '@/lib/utils/trials';
@@ -182,6 +183,9 @@ export default function TrialPage() {
               </div>
             )}
           </section>
+
+          {/* Notes that cite, support or critique this trial (and links from it) */}
+          <LinksSection self={{ type: 'trial', id: trial.id }} selfLabel={trialLabel(trial)} />
         </div>
       </div>
 

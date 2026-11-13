@@ -19,6 +19,11 @@ import useTopics from '@/lib/hooks/useTopics';
 import { getNoteTopicLinks, saveNoteTopics } from '@/lib/supabase/noteTopics';
 import { NoteTopicLink, parseDraftLinks, sameLinks } from '@/lib/utils/noteTopicLinks';
 import { useNotification } from '@/lib/context/NotificationContext';
+import NoteLinksField, { LinkDraftWithTitle } from '../links/NoteLinksField';
+import useTrials from '@/lib/hooks/useTrials';
+import { getNoteSummaries, getOutgoingLinks, saveOutgoingNoteLinks } from '@/lib/supabase/noteLinks';
+import { draftKey, isLinkRelation } from '@/lib/utils/noteLinks';
+import { trialLabel } from '@/lib/utils/trials';
 import PremiumFeatureGate from '../premium/PremiumFeatureGate'; // Import the premium gate
 import { useAnalytics } from '@/lib/analytics/useAnalytics';
 import { useSubscription } from '@/lib/hooks/useSubscription';
@@ -125,6 +130,11 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
     initialData.id ? null : []
   );
   const topicsFromDraftRef = useRef(false);
+  const [linkDrafts, setLinkDrafts] = useState<LinkDraftWithTitle[]>([]);
+  // draftKeys of the links as stored (null until loaded)
+  const [savedLinkKeys, setSavedLinkKeys] = useState<string[] | null>(initialData.id ? null : []);
+  const linksFromDraftRef = useRef(false);
+  const { byId: trialsById } = useTrials();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -142,6 +152,7 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
       status,
       content_type: contentType,
       topics: topicLinks,
+      links: linkDrafts,
     },
     true // Enable draft persistence
   );
@@ -204,6 +215,20 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
         }
       }
 
+      if (Array.isArray(draft.links)) {
+        const restored = (draft.links as Record<string, unknown>[]).filter(
+          (l): l is Record<string, unknown> & LinkDraftWithTitle =>
+            !!l &&
+            isLinkRelation(l.relation) &&
+            (l.target_type === 'note' || l.target_type === 'trial') &&
+            typeof l.target_id === 'string'
+        ).map((l) => ({ relation: l.relation, target_type: l.target_type, target_id: l.target_id, title: String(l.title ?? '') }));
+        if (restored.length > 0 || initialData.id) {
+          linksFromDraftRef.current = true;
+          setLinkDrafts(restored);
+        }
+      }
+
       const draftTopics = parseDraftLinks(draft.topics);
       if (draftTopics && (draftTopics.length > 0 || initialData.id)) {
         topicsFromDraftRef.current = true;
@@ -212,6 +237,34 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
     }
      
   }, []); // Only run on mount
+
+  // Load an existing note's outgoing links (a restored draft keeps its own)
+  useEffect(() => {
+    if (!initialData.id) return;
+    let cancelled = false;
+    getOutgoingLinks('note', initialData.id)
+      .then(async (links) => {
+        const noteTitles = await getNoteSummaries(
+          links.filter((l) => l.target_type === 'note').map((l) => l.target_id)
+        );
+        if (cancelled) return;
+        setSavedLinkKeys(links.map(draftKey));
+        if (!linksFromDraftRef.current) {
+          setLinkDrafts(
+            links.map((l) => ({
+              relation: l.relation,
+              target_type: l.target_type,
+              target_id: l.target_id,
+              title: l.target_type === 'note' ? noteTitles[l.target_id]?.title ?? 'Note' : '',
+            }))
+          );
+        }
+      })
+      .catch((err) => console.error('Error loading note links:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [initialData.id]);
 
   // Load an existing note's topic links (a restored draft keeps its own)
   useEffect(() => {
@@ -593,6 +646,20 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
     }
   };
 
+  /** Saves outgoing links when they changed; like topics, a failure doesn't fail the note save. */
+  const saveLinks = async (noteId: string) => {
+    if (savedLinkKeys === null && !linksFromDraftRef.current) return;
+    const keys = linkDrafts.map(draftKey);
+    if (savedLinkKeys && keys.length === savedLinkKeys.length && keys.every((k) => savedLinkKeys.includes(k))) return;
+    try {
+      await saveOutgoingNoteLinks(noteId, linkDrafts);
+      setSavedLinkKeys(keys);
+    } catch (err) {
+      console.error('Error saving note links:', err);
+      showNotification('The note was saved, but its links could not be updated. Edit the note to try again.', 'error', 8000);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -620,6 +687,7 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
           content_type: contentType || null,
         });
         await saveTopicLinks(initialData.id);
+        await saveLinks(initialData.id);
 
         // Clear draft after successful save
         clearDraft();
@@ -636,6 +704,7 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
           content_type: contentType || null,
         });
         await saveTopicLinks(newNote.id);
+        await saveLinks(newNote.id);
 
         // Clear draft after successful save
         clearDraft();
@@ -713,6 +782,17 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
           options={NOTE_STATUSES.map((value) => ({ value, label: STATUS_LABELS[value] }))}
         />
       </div>
+
+      <NoteLinksField
+        noteId={initialData.id}
+        value={linkDrafts.map((l) =>
+          // Trial titles come from the trials list (always current)
+          l.target_type === 'trial' && trialsById.has(l.target_id)
+            ? { ...l, title: trialLabel(trialsById.get(l.target_id)!) }
+            : l
+        )}
+        onChange={setLinkDrafts}
+      />
 
       {/* Learning Questions Section - Collapsible */}
       <div className="border border-blue-200 dark:border-blue-800 rounded-lg overflow-hidden">

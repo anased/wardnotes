@@ -10,6 +10,8 @@ interface DraftData {
   content_type?: string;
   /** Topic links ({ topic_id, section_id, is_primary }); older drafts don't have them. */
   topics?: unknown;
+  /** Outgoing links ({ relation, target_type, target_id, title }); older drafts don't have them. */
+  links?: unknown;
   timestamp: number;
 }
 
