@@ -12,9 +12,13 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "test:scripts": "node --test scripts/tag-migration/*.test.mjs",
     "preflight": "node scripts/preflight.mjs",
     "postbuild": "next-sitemap --config next-sitemap.config.cjs",
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "tags:export": "node scripts/tag-migration/tag-migration.mjs export",
+    "tags:check": "node scripts/tag-migration/tag-migration.mjs check",
+    "tags:apply": "node scripts/tag-migration/tag-migration.mjs apply"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",

@@ -1,0 +1,12 @@
+action,tag,topic,parents,aliases,section,user_id
+drop,RITE,,,,,11111111-1111-1111-1111-111111111111
+topic,Stroke,Stroke,Neurology > Cerebrovascular,,,11111111-1111-1111-1111-111111111111
+topic,BAD,Branch atheromatous disease,Neurology > Cerebrovascular > Small vessel disease,,,11111111-1111-1111-1111-111111111111
+topic,Lacunar syndrome,Lacunar syndrome,Neurology > Cerebrovascular > Small vessel disease,,,11111111-1111-1111-1111-111111111111
+section,Pathophysiology/mechanism,,,,Pathophysiology,11111111-1111-1111-1111-111111111111
+topic,PRES,PRES,Neurology > Cerebrovascular | Neurology > NICU,Posterior reversible encephalopathy syndrome,,11111111-1111-1111-1111-111111111111
+topic,NICU,Neurocritical care,Neurology,,,11111111-1111-1111-1111-111111111111
+section,Clinical pearls,,,,Pearls and pitfalls,11111111-1111-1111-1111-111111111111
+topic,RPLS,PRES,,,Diagnosis,11111111-1111-1111-1111-111111111111
+topic,Neurology,Neurology,Cerebrovascular,,,11111111-1111-1111-1111-111111111111
+topic,Stroke,Stroke,,,,22222222-2222-2222-2222-222222222222

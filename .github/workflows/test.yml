@@ -29,6 +29,9 @@ jobs:
     - name: Run Jest tests
       run: npm run test:coverage
 
+    - name: Run script tests (tag migration)
+      run: npm run test:scripts
+
     # Playwright e2e tests are not run here: there is no `test:e2e` script,
     # the config is parked at playwright.config.ts.backup, and the specs need
     # a live Supabase project. Re-add the steps once those are in place.

@@ -47,3 +47,5 @@ wardnotes-mobile/
 CLAUDE.md
 .playwright-mcp/
 ui-improvements-tracker.md
+# Tag migration working files (inventory and mapping contain account data)
+scripts/tag-migration/out/

@@ -9,6 +9,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Topic-based knowledge organization (November 2026)
+
+Notes are now organized by linked topics instead of a flat list of tags.
+
+- **Topics** (`/topics/[id]`): first-class records with aliases and a short
+  description that nest Specialty → Domain → Topic → Subtopic. A topic can
+  have several parents (PRES under Cerebrovascular and Neurocritical care) and
+  is still one record. Topic pages show the breadcrumb and an "also in" line,
+  aliases, note count, subtopic chips, sections with their notes (type icons,
+  primary topic), Unsorted, and linked trials.
+- **Sections** belong to each topic: added from suggestions (Overview,
+  Pathophysiology, Diagnosis, …) or with a custom name, renamed, reordered and
+  deleted (their notes move to Unsorted). Only sections with notes are shown.
+- **Notes on several topics**, one primary, each with an optional section.
+  The note editor has a topic picker that matches names and aliases first
+  ("RPLS" finds PRES) before offering to create a topic.
+- **Topic tree** in the notes area (sidebar on desktop, collapsible panel on
+  mobile); filtering the Library by a topic (`?topic=`) includes subtopics.
+- **Trials** (`/trials`, `/trials/[id]`): one shared record per trial
+  (acronym, year, population, intervention vs comparator, result, notes,
+  "superseded by"), linked from every topic that cites it.
+- **Labeled links** between notes and trials (answers, supports, cites,
+  critiques, illustrates, related), shown in both directions.
+- **Tag migration** (`scripts/tag-migration/`): exports a reviewable
+  tag → topic/section/drop mapping and generates idempotent, dry-run-first SQL
+  to apply it. `notes.tags` is left in place until removal is confirmed.
+
+Database: `src/lib/supabase/migrations/add_topics.sql` (tables, RLS, cycle
+prevention, `topic_descendants`, `notes_in_topic`, `search_topics`, …) with a
+rollback and local tests in `scripts/db-tests/`.
+
+Fixed: opening the Library with a filter in the URL (e.g. `/notes?category=…`)
+showed all notes because the initial load replaced the filtered list.
+
 ### Added - Learning Questions from Clinical Encounters (February 2026)
 
 #### Overview
