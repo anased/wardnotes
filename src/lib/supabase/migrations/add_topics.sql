@@ -493,29 +493,29 @@ BEGIN
     RAISE EXCEPTION 'Note % not found', p_note_id USING ERRCODE = 'foreign_key_violation';
   END IF;
 
-  CREATE TEMP TABLE IF NOT EXISTS pg_temp.wanted_note_topics (
-    ord integer, topic_id uuid, section_id uuid, is_primary boolean
-  ) ON COMMIT DROP;
-  TRUNCATE pg_temp.wanted_note_topics;
+  -- One entry per topic (first occurrence wins), in the order given.
+  SELECT COALESCE(jsonb_agg(w ORDER BY (w->>'ord')::int), '[]'::jsonb)
+  INTO p_links
+  FROM (
+    SELECT DISTINCT ON ((l->>'topic_id')::uuid)
+           jsonb_build_object(
+             'ord', ord,
+             'topic_id', (l->>'topic_id')::uuid,
+             'section_id', NULLIF(l->>'section_id', '')::uuid,
+             'is_primary', COALESCE((l->>'is_primary')::boolean, false)) AS w
+    FROM jsonb_array_elements(COALESCE(p_links, '[]'::jsonb)) WITH ORDINALITY AS x(l, ord)
+    WHERE l ? 'topic_id'
+    ORDER BY (l->>'topic_id')::uuid, ord
+  ) d;
 
-  INSERT INTO pg_temp.wanted_note_topics
-  SELECT DISTINCT ON ((l->>'topic_id')::uuid)
-         ord::integer,
-         (l->>'topic_id')::uuid,
-         NULLIF(l->>'section_id', '')::uuid,
-         COALESCE((l->>'is_primary')::boolean, false)
-  FROM jsonb_array_elements(COALESCE(p_links, '[]'::jsonb)) WITH ORDINALITY AS x(l, ord)
-  WHERE l ? 'topic_id'
-  ORDER BY (l->>'topic_id')::uuid, ord;
-
-  SELECT topic_id INTO v_primary
-  FROM pg_temp.wanted_note_topics
-  ORDER BY is_primary DESC, ord
+  SELECT (w->>'topic_id')::uuid INTO v_primary
+  FROM jsonb_array_elements(p_links) w
+  ORDER BY (w->>'is_primary')::boolean DESC, (w->>'ord')::int
   LIMIT 1;
 
   DELETE FROM public.note_topics nt
   WHERE nt.note_id = p_note_id
-    AND nt.topic_id NOT IN (SELECT topic_id FROM pg_temp.wanted_note_topics);
+    AND nt.topic_id NOT IN (SELECT (w->>'topic_id')::uuid FROM jsonb_array_elements(p_links) w);
 
   -- Clear the old primary first so the one-primary index never sees two.
   UPDATE public.note_topics
@@ -523,9 +523,10 @@ BEGIN
   WHERE note_id = p_note_id AND is_primary AND topic_id IS DISTINCT FROM v_primary;
 
   INSERT INTO public.note_topics (note_id, topic_id, user_id, section_id, is_primary)
-  SELECT p_note_id, w.topic_id, v_user, w.section_id, w.topic_id = v_primary
-  FROM pg_temp.wanted_note_topics w
-  ORDER BY w.ord
+  SELECT p_note_id, (w->>'topic_id')::uuid, v_user, (w->>'section_id')::uuid,
+         (w->>'topic_id')::uuid = v_primary
+  FROM jsonb_array_elements(p_links) w
+  ORDER BY (w->>'ord')::int
   ON CONFLICT (note_id, topic_id) DO UPDATE
     SET section_id = EXCLUDED.section_id,
         is_primary = EXCLUDED.is_primary;
