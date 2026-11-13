@@ -8,6 +8,8 @@ interface DraftData {
   /** Added later; older drafts don't have these. */
   status?: string;
   content_type?: string;
+  /** Topic links ({ topic_id, section_id, is_primary }); older drafts don't have them. */
+  topics?: unknown;
   timestamp: number;
 }
 

@@ -1,5 +1,5 @@
 // src/components/notes/NoteForm.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Note } from '@/lib/supabase/client';
 import useNotes from '@/lib/hooks/useNotes';
@@ -14,6 +14,11 @@ import NoteEditor from './NoteEditor';
 import CategoryCreationModal from '../ui/CategoryCreationModal';
 import NoteImprover from './NoteImprover'; // Add this import
 import LearningQuestionsInput from './LearningQuestionsInput';
+import NoteTopicPicker from '../topics/NoteTopicPicker';
+import useTopics from '@/lib/hooks/useTopics';
+import { getNoteTopicLinks, saveNoteTopics } from '@/lib/supabase/noteTopics';
+import { NoteTopicLink, parseDraftLinks, sameLinks } from '@/lib/utils/noteTopicLinks';
+import { useNotification } from '@/lib/context/NotificationContext';
 import PremiumFeatureGate from '../premium/PremiumFeatureGate'; // Import the premium gate
 import { useAnalytics } from '@/lib/analytics/useAnalytics';
 import { useSubscription } from '@/lib/hooks/useSubscription';
@@ -33,6 +38,8 @@ import {
 interface NoteFormProps {
   initialData?: Partial<Note>;
   isEditing?: boolean;
+  /** Topic links for a new note, e.g. when started from a topic page. */
+  initialTopicLinks?: NoteTopicLink[];
 }
 const ENABLE_PREMIUM_FEATURES = true;
 
@@ -84,7 +91,7 @@ interface TipTapDocument {
   content: ContentNode[];
 }
 
-export default function NoteForm({ initialData = {}, isEditing = false }: NoteFormProps) {
+export default function NoteForm({ initialData = {}, isEditing = false, initialTopicLinks = [] }: NoteFormProps) {
   const router = useRouter();
   const { addNote, editNote } = useNotes();
   const { categories, addCategory } = useCategories();
@@ -92,6 +99,8 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
   const { track } = useAnalytics();
   const { subscription } = useSubscription();
   const { refreshQuota } = useQuota();
+  const { refreshCounts: refreshTopicCounts } = useTopics();
+  const { showNotification } = useNotification();
 
   const [title, setTitle] = useState(initialData.title || '');
 
@@ -110,6 +119,12 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
   const [contentType, setContentType] = useState<ContentType | ''>(
     isContentType(initialData.content_type) ? initialData.content_type : ''
   );
+  const [topicLinks, setTopicLinks] = useState<NoteTopicLink[]>(initialTopicLinks);
+  // Links as stored, to skip saving when they didn't change (null until loaded)
+  const [savedTopicLinks, setSavedTopicLinks] = useState<NoteTopicLink[] | null>(
+    initialData.id ? null : []
+  );
+  const topicsFromDraftRef = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -126,6 +141,7 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
       tags: selectedTags,
       status,
       content_type: contentType,
+      topics: topicLinks,
     },
     true // Enable draft persistence
   );
@@ -187,9 +203,31 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
           setContentType(draft.content_type);
         }
       }
+
+      const draftTopics = parseDraftLinks(draft.topics);
+      if (draftTopics && (draftTopics.length > 0 || initialData.id)) {
+        topicsFromDraftRef.current = true;
+        setTopicLinks(draftTopics);
+      }
     }
      
   }, []); // Only run on mount
+
+  // Load an existing note's topic links (a restored draft keeps its own)
+  useEffect(() => {
+    if (!initialData.id) return;
+    let cancelled = false;
+    getNoteTopicLinks(initialData.id)
+      .then((links) => {
+        if (cancelled) return;
+        setSavedTopicLinks(links);
+        if (!topicsFromDraftRef.current) setTopicLinks(links);
+      })
+      .catch((err) => console.error('Error loading note topics:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [initialData.id]);
 
   // Handle category change with special handling for "Add new category" option
   const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -535,6 +573,26 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
     }
   };
 
+  /**
+   * Saves topic links when they changed. The note itself is already saved at
+   * this point, so a failure is reported without failing the whole save
+   * (retrying would otherwise create a second copy of a new note).
+   */
+  const saveTopicLinks = async (noteId: string) => {
+    // Existing links not loaded yet (and none restored from a draft): the
+    // user can't have changed them, and saving would wipe them.
+    if (savedTopicLinks === null && !topicsFromDraftRef.current) return;
+    if (savedTopicLinks && sameLinks(topicLinks, savedTopicLinks)) return;
+    try {
+      await saveNoteTopics(noteId, topicLinks);
+      setSavedTopicLinks(topicLinks);
+      refreshTopicCounts();
+    } catch (err) {
+      console.error('Error saving note topics:', err);
+      showNotification('The note was saved, but its topics could not be updated. Edit the note to try again.', 'error', 8000);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -561,6 +619,7 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
           status,
           content_type: contentType || null,
         });
+        await saveTopicLinks(initialData.id);
 
         // Clear draft after successful save
         clearDraft();
@@ -576,6 +635,7 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
           status,
           content_type: contentType || null,
         });
+        await saveTopicLinks(newNote.id);
 
         // Clear draft after successful save
         clearDraft();
@@ -620,6 +680,8 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
         placeholder="Auto-generated from content if left empty"
       />
       
+      <NoteTopicPicker value={topicLinks} onChange={setTopicLinks} />
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Select
           label="Category"

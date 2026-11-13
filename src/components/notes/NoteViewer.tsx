@@ -16,6 +16,7 @@ import { FlashcardIntegrationButton } from './FlashcardIntegrationButton';
 import NoteFlashcardsSection from './NoteFlashcardsSection';
 import SelectionFloatingButton from './SelectionFloatingButton';
 import RelatedNotes from './RelatedNotes';
+import NoteTopicChips from '../topics/NoteTopicChips';
 import { CreateFlashcardModal } from '../flashcards/CreateFlashCardModal';
 import { FlashcardService } from '@/services/flashcard';
 import type { FlashcardDeck } from '@/types/flashcard';
@@ -119,6 +120,7 @@ export default function NoteViewer({ note }: NoteViewerProps) {
             </Link>
             <NoteFieldBadges note={note} />
           </div>
+          <NoteTopicChips noteId={note.id} />
         </div>
         
         <div className="flex space-x-3">

@@ -199,6 +199,12 @@ export default function TopicPage() {
                   <PencilIcon className="w-4 h-4 mr-2" />
                   Edit
                 </Button>
+                <Link href={`/notes/new?topic=${topic.id}`} passHref>
+                  <Button className="inline-flex items-center">
+                    <PlusIcon className="w-4 h-4 mr-2" />
+                    New note
+                  </Button>
+                </Link>
               </div>
             </div>
 
@@ -259,7 +265,7 @@ export default function TopicPage() {
                 )}
               </p>
               <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                Link a note to this topic from the note editor.
+                Use &ldquo;New note&rdquo; above, or add this topic to an existing note in the note editor.
               </p>
             </div>
           ) : (

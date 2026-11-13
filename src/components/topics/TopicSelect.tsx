@@ -17,6 +17,10 @@ interface TopicSelectProps {
   onCreate?: (name: string) => Promise<string | null>;
   /** Renders each selected chip; defaults to the topic name with a remove button. */
   renderChip?: (id: string, remove: () => void) => ReactNode;
+  /** Don't show selected topics as chips (the caller lists them itself). */
+  hideChips?: boolean;
+  /** Accessible description id (e.g. a hint below the field). */
+  describedBy?: string;
   error?: string;
 }
 
@@ -37,6 +41,8 @@ export default function TopicSelect({
   placeholder = 'Search topics…',
   onCreate,
   renderChip,
+  hideChips = false,
+  describedBy,
   error,
 }: TopicSelectProps) {
   const { topics, graph } = useTopics();
@@ -114,6 +120,8 @@ export default function TopicSelect({
     }
     setQuery('');
     setHighlightedIndex(0);
+    // Close so the list doesn't cover what was just picked; typing reopens it
+    setOpen(false);
     inputRef.current?.focus();
   };
 
@@ -155,7 +163,7 @@ export default function TopicSelect({
         }
         return;
       case 'Backspace':
-        if (!query && value.length > 0) onChange(value.slice(0, -1));
+        if (!query && value.length > 0 && !hideChips) onChange(value.slice(0, -1));
         return;
     }
   };
@@ -174,7 +182,7 @@ export default function TopicSelect({
           }`}
           onClick={() => inputRef.current?.focus()}
         >
-          {value.map((id) =>
+          {!hideChips && value.map((id) =>
             renderChip ? (
               <span key={id} className="contents">
                 {renderChip(id, () => remove(id))}
@@ -205,10 +213,11 @@ export default function TopicSelect({
             aria-expanded={isOpen}
             aria-controls={listboxId}
             aria-activedescendant={isOpen && activeIndex >= 0 ? optionId(activeIndex) : undefined}
+            aria-describedby={describedBy}
             autoComplete="off"
             maxLength={120}
             value={query}
-            placeholder={value.length === 0 ? placeholder : ''}
+            placeholder={value.length === 0 || hideChips ? placeholder : ''}
             disabled={creating}
             onChange={(e) => {
               setQuery(e.target.value);
@@ -216,6 +225,7 @@ export default function TopicSelect({
               setHighlightedIndex(0);
             }}
             onFocus={() => setOpen(true)}
+            onClick={() => setOpen(true)}
             onKeyDown={handleKeyDown}
             className="flex-1 min-w-[120px] outline-none bg-transparent"
           />
