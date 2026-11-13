@@ -14,8 +14,7 @@ import Select from '@/components/ui/Select';
 import Button from '@/components/ui/Button';
 import Spinner from '@/components/ui/Spinner';
 import TagFilterCombobox, { TagFilterOption } from '@/components/ui/TagFilterCombobox';
-import TopicTree from '@/components/topics/TopicTree';
-import { ChevronDownIcon } from '@/components/topics/icons';
+import TopicSidebar from '@/components/topics/TopicSidebar';
 import useTopics from '@/lib/hooks/useTopics';
 import { getTagUsage, TagUsage } from '@/lib/supabase/client';
 import { canonicalTagName, hasTag, tagsEqual } from '@/lib/utils/tagUtils';
@@ -57,7 +56,6 @@ export default function NotesPage() {
   const { categories } = useCategories();
   const { tags } = useTags();
   const { graph: topicGraph } = useTopics();
-  const [showMobileTopics, setShowMobileTopics] = useState(false);
   const { track } = useAnalytics();
   const { subscription } = useSubscription();
   const router = useRouter();
@@ -205,35 +203,11 @@ export default function NotesPage() {
   return (
     <PageContainer title="Notes Library">
       <div className="grid gap-6 lg:grid-cols-[16rem_minmax(0,1fr)]">
-        {/* Topic tree: a sidebar on large screens, a collapsible panel above the list on small ones */}
-        <aside className="lg:sticky lg:top-20 lg:self-start">
-          <div className="p-4 bg-white rounded-lg shadow dark:bg-gray-800 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
-            <button
-              type="button"
-              onClick={() => setShowMobileTopics((v) => !v)}
-              aria-expanded={showMobileTopics}
-              aria-controls="library-topic-tree"
-              className="flex items-center justify-between w-full text-sm font-semibold tracking-wide text-gray-500 uppercase lg:hidden dark:text-gray-400"
-            >
-              <span>
-                Topics
-                {selectedTopic && (
-                  <span className="ml-2 font-normal tracking-normal normal-case text-primary-700 dark:text-primary-300">
-                    {selectedTopic.name}
-                  </span>
-                )}
-              </span>
-              <ChevronDownIcon className={`w-4 h-4 transition-transform ${showMobileTopics ? 'rotate-180' : ''}`} />
-            </button>
-            <div id="library-topic-tree" className={`${showMobileTopics ? 'mt-3' : 'hidden'} lg:block lg:mt-0`}>
-              <TopicTree
-                selectedId={filters.topic || null}
-                onSelect={(id) => updateFilters({ topic: id ?? '' })}
-                hideHeadingOnMobile
-              />
-            </div>
-          </div>
-        </aside>
+        {/* Topic tree: a sidebar on large screens, a collapsible panel on small ones */}
+        <TopicSidebar
+          selectedId={filters.topic || null}
+          onSelect={(id) => updateFilters({ topic: id ?? '' })}
+        />
 
         <div className="space-y-6 min-w-0">
           {/* Search and filter section */}

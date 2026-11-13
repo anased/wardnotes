@@ -199,11 +199,16 @@ export function flattenTree(
   return rows;
 }
 
-/** Tree keys of every ancestor row on each path to `id`, so expanding them reveals it. */
-export function expandKeysFor(graph: TopicGraph, id: string): string[] {
+/**
+ * Tree keys of every ancestor row on each path to `id`, so expanding them
+ * reveals it. With `includeSelf`, the topic's own rows are expanded too so
+ * its subtopics show.
+ */
+export function expandKeysFor(graph: TopicGraph, id: string, includeSelf = false): string[] {
   const keys = new Set<string>();
   for (const path of ancestorPaths(graph, id)) {
-    for (let i = 1; i < path.length; i++) keys.add(path.slice(0, i).join('/'));
+    const end = includeSelf ? path.length : path.length - 1;
+    for (let i = 1; i <= end; i++) keys.add(path.slice(0, i).join('/'));
   }
   return [...keys];
 }

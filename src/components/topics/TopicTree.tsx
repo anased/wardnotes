@@ -51,7 +51,8 @@ export default function TopicTree({
   // Reveal the selected topic wherever it appears
   useEffect(() => {
     if (!selectedId || !graph.byId.has(selectedId)) return;
-    const keys = expandKeysFor(graph, selectedId);
+    // On a topic's page (link mode) also open the topic so its subtopics show
+    const keys = expandKeysFor(graph, selectedId, !onSelect);
     setExpanded((prev) => (keys.every((k) => prev.has(k)) ? prev : new Set([...prev, ...keys])));
   }, [selectedId, graph]);
 

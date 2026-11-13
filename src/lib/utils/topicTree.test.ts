@@ -116,4 +116,9 @@ describe('flattenTree', () => {
     const rows = flattenTree(graph, new Set(expandKeysFor(graph, 'pres')));
     expect(rows.filter((r) => r.id === 'pres')).toHaveLength(2);
   });
+
+  test('expandKeysFor with includeSelf also opens the topic itself', () => {
+    const rows = flattenTree(graph, new Set(expandKeysFor(graph, 'cv', true)));
+    expect(rows.map((r) => r.id)).toContain('svd');
+  });
 });
