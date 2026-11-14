@@ -1,5 +1,19 @@
 /** Pure helpers for laying out a topic page. */
 
+/**
+ * Suggestions offered by "Add section"; any custom name is allowed too.
+ * Kinds of note (article, question, case…) are the note's Type, not sections.
+ */
+export const SECTION_SUGGESTIONS = [
+  'Overview',
+  'Pathophysiology',
+  'Diagnosis',
+  'Management',
+  'Trials and evidence',
+  'Pearls and pitfalls',
+  'Algorithms',
+] as const;
+
 export interface SectionLike {
   id: string;
   name: string;

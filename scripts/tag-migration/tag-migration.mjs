@@ -14,6 +14,8 @@
  *                   aliases and section)
  *        section -> the tag names a part of a topic (Pathophysiology, Pearls…);
  *                   notes are filed under that section of their topics
+ *        keep    -> a cross-cutting label (exam source, population…): it
+ *                   stays on notes as a label; no topic or section
  *        drop    -> ignore the tag (it stays on notes until you remove tags)
  *      Rows marked review=yes need a decision.
  *
@@ -26,7 +28,7 @@
  *      Options: --no-category-fallback (see below).
  *
  * Mapping columns
- *   action    topic | section | drop
+ *   action    topic | section | keep | drop
  *   tag       the tag as it appears on notes (matched ignoring case/spacing)
  *   topic     topic name; several tags may map to one topic (synonyms). A tag
  *             that differs from its topic's name is added as an alias.
@@ -44,8 +46,12 @@
  *     (a link that would create a cycle is skipped and reported)
  *   - links each tagged note to its mapped topics; a note's section tag files
  *     it under that section in each of its topics (sections are created as
- *     needed). A note with only section tags is filed under its category's
- *     topic (the specialty), unless --no-category-fallback.
+ *     needed).
+ *   - every note (any user, tagged or not) that still has no topic is filed
+ *     under the topic named after its category (the specialty; created if
+ *     missing, made primary; notes without a category are left alone), unless
+ *     --no-category-fallback
+ *   - keep and drop rows change nothing; kept labels are listed in the report
  *   - existing links are never changed (re-running won't undo edits made in
  *     the app); a primary topic is set only for notes that have none (the most specific
  *     of its new topics: deepest in the tree, then fewest notes, then tag order)
@@ -57,7 +63,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const ACTIONS = ['topic', 'section', 'drop'];
+export const ACTIONS = ['topic', 'section', 'keep', 'drop'];
 
 export const COLUMNS = [
   'action',
@@ -81,9 +87,6 @@ export const SECTION_SUGGESTIONS = [
   'Diagnosis',
   'Management',
   'Trials and evidence',
-  'Articles',
-  'Clinical questions',
-  'Cases',
   'Pearls and pitfalls',
   'Algorithms',
 ];
@@ -95,9 +98,6 @@ const SECTION_WORDS = [
   [/^(diagnos\w*|workup|work-up|investigations?|imaging|differentials?|ddx)$/, 'Diagnosis'],
   [/^(management|treatments?|therapy|therapies|therapeutics)$/, 'Management'],
   [/^(trials?|evidence|rcts?)$/, 'Trials and evidence'],
-  [/^(articles?|papers?|reviews?)$/, 'Articles'],
-  [/^(questions?|q&a|qa)$/, 'Clinical questions'],
-  [/^(cases?)$/, 'Cases'],
   [/^(pearls?|pitfalls?|tips?)$/, 'Pearls and pitfalls'],
   [/^(algorithms?|approach|flowcharts?|pathways?)$/, 'Algorithms'],
   [/^(guidelines?)$/, 'Guidelines'],
@@ -224,14 +224,20 @@ export function suggestMapping(inventory) {
       };
 
       // Labels used across specialties or on a large share of the account's
-      // notes are probably not topics (exam source, population, setting…)
+      // notes are probably not topics (exam source, population, setting…):
+      // keep them as labels
       if (crossCategories.length > 1 || (r.note_count >= 10 && r.note_count / busiestTag > 0.4)) {
-        row.review = 'yes';
-        if (crossCategories.length > 1) row.parents = '';
-        row.reason =
+        const why =
           crossCategories.length > 1
-            ? `Used across ${crossCategories.join(' and ')}: a topic, a section, or drop?`
-            : `On ${r.note_count} notes (a large share): a cross-cutting label (exam, population, setting)? Topic, section, or drop?`;
+            ? `used across ${crossCategories.join(' and ')}`
+            : `on ${r.note_count} notes, a large share of this account's tagged notes`;
+        out.push({
+          ...base,
+          action: 'keep',
+          review: 'yes',
+          reason: `Cross-cutting label (${why}), like an exam source or population: keep it as a label. Change to topic if it is really a subject.`,
+        });
+        continue;
       } else if (taggedNotes <= 3) {
         row.review = 'yes';
         row.reason = `Account with only ${taggedNotes} tagged ${taggedNotes === 1 ? 'note' : 'notes'} (test account?)`;
@@ -335,7 +341,7 @@ export function validateMapping(rawRows) {
     const where = `row ${line} (${r.tag || 'no tag'})`;
     if (!r.tag) errors.push(`${where}: tag is empty`);
     if (!UUID_RE.test(r.user_id)) errors.push(`${where}: user_id is not a UUID`);
-    if (!ACTIONS.includes(r.action)) errors.push(`${where}: action must be topic, section or drop (got "${raw.action}")`);
+    if (!ACTIONS.includes(r.action)) errors.push(`${where}: action must be topic, section, keep or drop (got "${raw.action}")`);
     if (r.action === 'topic' && !r.topic) errors.push(`${where}: action=topic needs a topic name`);
     if (r.action === 'section' && !r.section) errors.push(`${where}: action=section needs a section name`);
     if (r.topic.length > 120) errors.push(`${where}: topic name is longer than 120 characters`);
@@ -343,7 +349,9 @@ export function validateMapping(rawRows) {
     for (const path of parentPaths(r)) {
       if (path.some((p) => key(p) === key(r.topic))) errors.push(`${where}: "${r.topic}" can't be its own parent`);
     }
-    if (r.action === 'drop' && (r.topic || r.section)) warnings.push(`${where}: action=drop, so topic/section are ignored`);
+    if ((r.action === 'drop' || r.action === 'keep') && (r.topic || r.section || r.parents)) {
+      warnings.push(`${where}: action=${r.action}, so topic/parents/section are ignored`);
+    }
     if (r.action === 'section' && r.topic) warnings.push(`${where}: action=section ignores the topic column`);
 
     const k = `${r.user_id}|${key(r.tag)}`;
@@ -374,7 +382,9 @@ const sqlNullable = (s) => (s ? sqlText(s) : 'NULL');
 
 /** Builds the apply script. Rows must come from validateMapping. */
 export function buildApplySql(rows, { commit = false, categoryFallback = true, source = 'tag-mapping' } = {}) {
-  const used = rows.filter((r) => r.action !== 'drop');
+  const used = rows.filter((r) => r.action === 'topic' || r.action === 'section');
+  const kept = rows.filter((r) => r.action === 'keep');
+  const keptValues = kept.map((r) => `  (${sqlText(r.user_id)}::uuid, ${sqlText(r.tag)})`).join(',\n');
   const values = used
     .map(
       (r) =>
@@ -388,7 +398,8 @@ export function buildApplySql(rows, { commit = false, categoryFallback = true, s
 -- Tag -> topic migration, generated from ${source} on ${new Date().toISOString().slice(0, 10)}.
 -- ${commit ? 'COMMITS its changes.' : 'DRY RUN: ends with ROLLBACK. Read the report, then regenerate with --commit.'}
 -- Safe to re-run. Never changes notes.tags, flashcards or the tags table.
--- Mapping rows used: ${used.length} (${rows.length - used.length} dropped).
+-- Mapping rows used: ${used.length}; kept as labels: ${kept.length}; dropped: ${rows.length - used.length - kept.length}.
+-- Category fallback: ${categoryFallback ? 'on (every note without a topic is filed under its category)' : 'off (--no-category-fallback)'}.
 --
 
 BEGIN;
@@ -413,6 +424,10 @@ CREATE TEMP TABLE tm_map (
   user_id uuid, tag text, action text, topic text, parents text[], aliases text[], section text
 ) ON COMMIT DROP;
 ${used.length ? `INSERT INTO tm_map VALUES\n${values};` : '-- (no rows to apply)'}
+
+-- Labels kept on notes as they are (reported only)
+CREATE TEMP TABLE tm_kept (user_id uuid, tag text) ON COMMIT DROP;
+${kept.length ? `INSERT INTO tm_kept VALUES\n${keptValues};` : '-- (no labels kept)'}
 
 CREATE TEMP TABLE tm_log (kind text, detail text) ON COMMIT DROP;
 CREATE TEMP TABLE tm_section_order (name text PRIMARY KEY, ord int) ON COMMIT DROP;
@@ -507,31 +522,33 @@ JOIN tm_map m
   ON m.user_id = n.user_id
  AND lower(public.normalize_tag_name(m.tag)) = lower(public.normalize_tag_name(u.tag));
 
+CREATE TEMP TABLE tm_note_section ON COMMIT DROP AS
+SELECT DISTINCT ON (note_id) note_id, section FROM tm_hits WHERE action = 'section' ORDER BY note_id, ord;
+
 CREATE TEMP TABLE tm_links ON COMMIT DROP AS
 WITH topic_rows AS (
   SELECT note_id, user_id, pg_temp.tm_topic(user_id, topic) AS topic_id, section, ord
   FROM tm_hits WHERE action = 'topic'
-),
-fallback_rows AS (
-  -- Notes with only section tags go under their category's topic
-  SELECT DISTINCT ON (note_id) note_id, user_id, pg_temp.tm_topic(user_id, category) AS topic_id, NULL::text AS section, 0::bigint AS ord
-  FROM tm_hits h
-  WHERE ${categoryFallback ? 'true' : 'false'}
-    AND h.action = 'section'
-    AND NOT EXISTS (SELECT 1 FROM tm_hits x WHERE x.note_id = h.note_id AND x.action = 'topic')
-  ORDER BY note_id
-),
-note_section AS (
-  SELECT DISTINCT ON (note_id) note_id, section FROM tm_hits WHERE action = 'section' ORDER BY note_id, ord
-),
-merged AS (
-  SELECT r.note_id, r.user_id, r.topic_id, COALESCE(r.section, s.section) AS section, r.ord
-  FROM (SELECT * FROM topic_rows UNION ALL SELECT * FROM fallback_rows) r
-  LEFT JOIN note_section s ON s.note_id = r.note_id
 )
-SELECT DISTINCT ON (note_id, topic_id) note_id, user_id, topic_id, public.normalize_tag_name(section) AS section, ord
-FROM merged
-ORDER BY note_id, topic_id, ord;
+SELECT DISTINCT ON (r.note_id, r.topic_id) r.note_id, r.user_id, r.topic_id,
+       public.normalize_tag_name(COALESCE(r.section, s.section)) AS section, r.ord, false AS via_category
+FROM topic_rows r
+LEFT JOIN tm_note_section s ON s.note_id = r.note_id
+ORDER BY r.note_id, r.topic_id, r.ord;
+
+-- 2b. Every note (any user, tagged or not) that would still have no topic is
+--     filed under the topic named after its category (its specialty), with
+--     its section tag if it has one. Notes without a category stay unfiled.
+INSERT INTO tm_links (note_id, user_id, topic_id, section, ord, via_category)
+SELECT n.id, n.user_id, pg_temp.tm_topic(n.user_id, n.category),
+       public.normalize_tag_name(s.section), 0, true
+FROM public.notes n
+LEFT JOIN tm_note_section s ON s.note_id = n.id
+WHERE ${categoryFallback ? 'true' : 'false'}
+  AND public.normalize_tag_name(COALESCE(n.category, '')) <> ''
+  AND NOT EXISTS (SELECT 1 FROM tm_links l WHERE l.note_id = n.id)
+  AND NOT EXISTS (SELECT 1 FROM public.note_topics nt WHERE nt.note_id = n.id)
+ORDER BY n.created_at;
 
 -- 3. Sections the links need (standard ones keep the app's suggested order)
 INSERT INTO public.topic_sections (topic_id, user_id, name, sort_order)
@@ -585,20 +602,29 @@ SELECT * FROM (
   UNION ALL SELECT 1, 'summary', 'note links added', ((SELECT count(*) FROM public.note_topics) - b.links)::text FROM tm_before b
   UNION ALL SELECT 1, 'summary', 'primary topics set', ((SELECT count(*) FROM public.note_topics WHERE is_primary) - b.primaries)::text FROM tm_before b
   UNION ALL SELECT 1, 'summary', 'notes filed', (SELECT count(DISTINCT note_id) FROM tm_links)::text
-  UNION ALL SELECT 1, 'summary', 'tagged notes not filed (only dropped tags)',
+  UNION ALL SELECT 1, 'summary', 'notes filed under their category (no topic otherwise)',
+         (SELECT count(*) FROM tm_links WHERE via_category)::text
+  UNION ALL SELECT 1, 'summary', 'notes still without a topic',
          (SELECT count(*) FROM public.notes n
-          WHERE n.user_id IN (SELECT user_id FROM tm_map) AND cardinality(n.tags) > 0
-            AND NOT EXISTS (SELECT 1 FROM tm_links l WHERE l.note_id = n.id))::text
+          WHERE NOT EXISTS (SELECT 1 FROM public.note_topics nt WHERE nt.note_id = n.id))::text
+  UNION ALL SELECT 1, 'summary', 'labels kept', (SELECT count(*) FROM tm_kept)::text
   UNION ALL SELECT 2, kind, detail, '' FROM tm_log
+  UNION ALL
+  SELECT 2, 'label kept', k.tag,
+         (SELECT count(*) FROM public.notes n
+          WHERE n.user_id = k.user_id
+            AND EXISTS (SELECT 1 FROM unnest(n.tags) t
+                        WHERE lower(public.normalize_tag_name(t)) = lower(public.normalize_tag_name(k.tag))))::text || ' notes'
+  FROM tm_kept k
   UNION ALL
   SELECT 3, 'notes per topic', t.name, count(*)::text
   FROM tm_links l JOIN public.topics t ON t.id = l.topic_id
   GROUP BY t.name
   UNION ALL
-  SELECT 4, 'tagged note not filed', left(n.title, 80), array_to_string(n.tags, ', ')
+  SELECT 4, 'note without a topic', left(n.title, 80),
+         COALESCE(NULLIF(array_to_string(n.tags, ', '), ''), '(no tags)') || ' / category: ' || COALESCE(NULLIF(n.category, ''), '(none)')
   FROM public.notes n
-  WHERE n.user_id IN (SELECT user_id FROM tm_map) AND cardinality(n.tags) > 0
-    AND NOT EXISTS (SELECT 1 FROM tm_links l WHERE l.note_id = n.id)
+  WHERE NOT EXISTS (SELECT 1 FROM public.note_topics nt WHERE nt.note_id = n.id)
 ) r
 ORDER BY ord, section, item;
 
@@ -640,7 +666,7 @@ function main() {
     const counts = Object.fromEntries(ACTIONS.map((a) => [a, rows.filter((r) => r.action === a).length]));
     console.error(
       `Wrote ${rows.length} tags to ${join(outDir, 'tag-mapping.csv')} (and .json): ` +
-        `${counts.topic} topic, ${counts.section} section, ${counts.drop} drop; ` +
+        `${counts.topic} topic, ${counts.section} section, ${counts.keep} keep, ${counts.drop} drop; ` +
         `${rows.filter((r) => r.review).length} marked review=yes.`
     );
     return;
@@ -656,7 +682,9 @@ function main() {
     }
     if (command === 'check') {
       const n = (a) => rows.filter((r) => r.action === a).length;
-      console.error(`OK: ${rows.length} rows (${n('topic')} topic, ${n('section')} section, ${n('drop')} drop).`);
+      console.error(
+        `OK: ${rows.length} rows (${n('topic')} topic, ${n('section')} section, ${n('keep')} keep, ${n('drop')} drop).`
+      );
       return;
     }
     process.stdout.write(

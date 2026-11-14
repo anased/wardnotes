@@ -18,8 +18,11 @@ per_tag AS (
   GROUP BY user_id, tag
 ),
 per_category AS (
+  -- Notes without a category (no longer written by the app) are left out
   SELECT user_id, tag, jsonb_object_agg(category, n) AS categories
-  FROM (SELECT user_id, tag, category, count(*) AS n FROM note_tags GROUP BY user_id, tag, category) c
+  FROM (SELECT user_id, tag, category, count(*) AS n FROM note_tags
+        WHERE nullif(trim(category), '') IS NOT NULL
+        GROUP BY user_id, tag, category) c
   GROUP BY user_id, tag
 ),
 samples AS (

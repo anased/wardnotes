@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  SECTION_SUGGESTIONS,
   buildApplySql,
   parentPaths,
   parseCsv,
@@ -31,6 +32,15 @@ test('sectionForTag recognises section-like tags only', () => {
   assert.equal(sectionForTag('PRES'), null);
 });
 
+test('articles, questions and cases are no longer sections', () => {
+  assert.equal(sectionForTag('Articles'), null);
+  assert.equal(sectionForTag('Clinical questions'), null);
+  assert.equal(sectionForTag('Cases'), null);
+  assert.ok(!SECTION_SUGGESTIONS.includes('Articles'));
+  assert.ok(!SECTION_SUGGESTIONS.includes('Clinical questions'));
+  assert.ok(!SECTION_SUGGESTIONS.includes('Cases'));
+});
+
 test('suggestMapping: topics under their category, sections, drops and nesting', () => {
   const rows = suggestMapping([
     inv('RITE', 109, { Neurology: 107, General: 1, Cardiology: 1 }),
@@ -43,7 +53,9 @@ test('suggestMapping: topics under their category, sections, drops and nesting',
     inv('Pediatric', 54, { Neurology: 30, Cardiology: 24 }),
   ]);
   const by = Object.fromEntries(rows.map((r) => [r.tag, r]));
-  assert.equal(by.RITE.review, 'yes'); // large share
+  // Cross-cutting labels are kept as labels, flagged for review
+  assert.deepEqual([by.RITE.action, by.RITE.review, by.RITE.topic], ['keep', 'yes', '']); // large share
+  assert.match(by.RITE.reason, /Cross-cutting label .*large share/);
   assert.equal(by.Stroke.review, ''); // one stray note elsewhere doesn't count
   assert.equal(by.Stroke.parents, 'Neurology');
   assert.equal(by['Stroke prevention'].parents, 'Neurology > Stroke');
@@ -52,8 +64,8 @@ test('suggestMapping: topics under their category, sections, drops and nesting',
   assert.deepEqual([by.BAD.action, by.BAD.topic, by.BAD.parents], ['topic', 'BAD', 'Neurology']);
   assert.deepEqual([by.neurology.topic, by.neurology.parents], ['Neurology', '']);
   assert.equal(by.unused.action, 'drop');
-  assert.equal(by.Pediatric.review, 'yes'); // used across two specialties
-  assert.equal(by.Pediatric.parents, '');
+  assert.deepEqual([by.Pediatric.action, by.Pediatric.review, by.Pediatric.parents], ['keep', 'yes', '']);
+  assert.match(by.Pediatric.reason, /used across Neurology and Cardiology/);
 });
 
 test('CSV round trip keeps commas, quotes and newlines', () => {
@@ -81,6 +93,16 @@ test('validateMapping reports actionable errors', () => {
   assert.match(errors.join('\n'), /row 7 \(E\): user_id is not a UUID/);
 });
 
+test('validateMapping accepts keep and warns about ignored columns', () => {
+  const { rows, errors, warnings } = validateMapping([
+    { action: 'keep', tag: 'RITE', user_id: U },
+    { action: 'Keep', tag: 'Pediatric', topic: 'Pediatrics', user_id: U },
+  ]);
+  assert.deepEqual(errors, []);
+  assert.deepEqual(rows.map((r) => r.action), ['keep', 'keep']);
+  assert.match(warnings.join('\n'), /row 3 \(Pediatric\): action=keep, so topic\/parents\/section are ignored/);
+});
+
 test('parentPaths splits several root-first paths', () => {
   assert.deepEqual(parentPaths({ parents: 'Neurology > Cerebrovascular | Neurology>Neurocritical care' }), [
     ['Neurology', 'Cerebrovascular'],
@@ -98,6 +120,20 @@ test('buildApplySql quotes values, skips dropped rows and is a dry run by defaul
   assert.ok(!sql.includes("'note'"));
   assert.match(sql, /ROLLBACK;  -- dry run/);
   assert.match(buildApplySql(rows, { commit: true }), /\nCOMMIT;\n$/);
+  assert.match(sql, /WHERE true\n  AND public\.normalize_tag_name\(COALESCE\(n\.category/);
   assert.match(buildApplySql(rows, { categoryFallback: false }), /WHERE false\n/);
+  assert.match(sql, /notes filed under their category/);
   assert.ok(!/notes\s+SET\s+tags/i.test(sql) && !/DELETE FROM public\.(notes|tags)/i.test(sql));
+});
+
+test('buildApplySql: kept labels are reported, never mapped', () => {
+  const { rows } = validateMapping([
+    { action: 'keep', tag: 'RITE', user_id: U },
+    { action: 'topic', tag: 'PRES', topic: 'PRES', user_id: U },
+  ]);
+  const sql = buildApplySql(rows);
+  assert.match(sql, /INSERT INTO tm_kept VALUES\n  \('[0-9a-f-]+'::uuid, 'RITE'\);/);
+  assert.ok(!/INSERT INTO tm_map VALUES[^;]*'RITE'/.test(sql));
+  assert.match(sql, /'label kept'/);
+  assert.match(sql, /kept as labels: 1; dropped: 0/);
 });

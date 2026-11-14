@@ -12,19 +12,7 @@ export interface TopicNoteLink {
   is_primary: boolean;
 }
 
-/** Suggestions offered by "Add section"; any custom name is allowed too. */
-export const SECTION_SUGGESTIONS = [
-  'Overview',
-  'Pathophysiology',
-  'Diagnosis',
-  'Management',
-  'Trials and evidence',
-  'Articles',
-  'Clinical questions',
-  'Cases',
-  'Pearls and pitfalls',
-  'Algorithms',
-] as const;
+export { SECTION_SUGGESTIONS } from '../utils/topicSections';
 
 export function sectionErrorMessage(err: unknown, name?: string): string {
   const e = err as { code?: string; message?: string } | null;

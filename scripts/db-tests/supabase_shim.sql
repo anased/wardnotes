@@ -19,7 +19,7 @@ GRANT USAGE ON SCHEMA extensions TO authenticated;
 CREATE TABLE public.notes (
     id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL PRIMARY KEY,
     user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    title text NOT NULL, content jsonb NOT NULL, tags text[] DEFAULT '{}', category text NOT NULL,
+    title text NOT NULL, content jsonb NOT NULL, tags text[] DEFAULT '{}', category text,
     status text NOT NULL DEFAULT 'answered', content_type text,
     created_at timestamptz DEFAULT now() NOT NULL);
 ALTER TABLE public.notes ENABLE ROW LEVEL SECURITY;

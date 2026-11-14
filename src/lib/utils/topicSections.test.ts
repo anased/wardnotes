@@ -1,4 +1,4 @@
-import { groupBySection, moveItem, unusedSuggestions } from './topicSections';
+import { SECTION_SUGGESTIONS, groupBySection, moveItem, unusedSuggestions } from './topicSections';
 
 const sections = [
   { id: 'mgmt', name: 'Management', sort_order: 2 },
@@ -49,6 +49,12 @@ describe('moveItem', () => {
 
 describe('unusedSuggestions', () => {
   test('drops suggestions the topic already has, ignoring case', () => {
-    expect(unusedSuggestions(['Overview', 'Diagnosis', 'Cases'], [{ name: 'diagnosis ' }])).toEqual(['Overview', 'Cases']);
+    expect(unusedSuggestions(['Overview', 'Diagnosis', 'Algorithms'], [{ name: 'diagnosis ' }])).toEqual(['Overview', 'Algorithms']);
+  });
+
+  test('note kinds are types, not section suggestions', () => {
+    for (const kind of ['Articles', 'Clinical questions', 'Cases']) {
+      expect(SECTION_SUGGESTIONS as readonly string[]).not.toContain(kind);
+    }
   });
 });

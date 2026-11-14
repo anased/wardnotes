@@ -14,7 +14,18 @@ BEGIN
           WHERE nt.note_id = '10000000-0000-0000-0000-000000000005') = 'Diagnosis', 'topic row section applied';
   ASSERT (SELECT t.name FROM note_topics nt JOIN topics t ON t.id = nt.topic_id
           WHERE nt.note_id = '10000000-0000-0000-0000-000000000003') = 'Neurology', 'section-only note falls back to its category';
-  ASSERT NOT EXISTS (SELECT 1 FROM note_topics WHERE note_id = '10000000-0000-0000-0000-000000000004'), 'dropped-only note not filed';
+  -- Category fallback: every note without a topic goes under its category's topic (primary)
+  ASSERT (SELECT t.name FROM note_topics nt JOIN topics t ON t.id = nt.topic_id
+          WHERE nt.note_id = '10000000-0000-0000-0000-000000000004' AND nt.is_primary) = 'Neurology', 'kept-label-only note filed under its category';
+  ASSERT (SELECT t.name FROM note_topics nt JOIN topics t ON t.id = nt.topic_id
+          WHERE nt.note_id = '10000000-0000-0000-0000-000000000007' AND nt.is_primary) = 'Cardiology', 'untagged note filed under its category (topic created)';
+  ASSERT (SELECT t.name || '/' || t.user_id FROM note_topics nt JOIN topics t ON t.id = nt.topic_id
+          WHERE nt.note_id = '10000000-0000-0000-0000-000000000010' AND nt.is_primary) = 'neurology/22222222-2222-2222-2222-222222222222', 'other user''s untagged note filed under their own topic';
+  ASSERT NOT EXISTS (SELECT 1 FROM note_topics WHERE note_id IN ('10000000-0000-0000-0000-000000000008', '10000000-0000-0000-0000-000000000009')), 'notes without a category stay unfiled';
+  ASSERT (SELECT array_agg(topic_id::text) FROM note_topics WHERE note_id = '10000000-0000-0000-0000-000000000011') = ARRAY['20000000-0000-0000-0000-000000000001'], 'a note filed in the app is left alone';
+  ASSERT (SELECT count(*) FROM notes n WHERE NOT EXISTS (SELECT 1 FROM note_topics nt WHERE nt.note_id = n.id)) = 2, 'only the two notes without a category are unfiled';
+  ASSERT NOT EXISTS (SELECT 1 FROM topics WHERE name = 'RITE'), 'kept label creates no topic';
+  ASSERT NOT EXISTS (SELECT 1 FROM topic_sections WHERE name = 'RITE'), 'kept label creates no section';
   ASSERT (SELECT count(*) FROM topics WHERE name = 'Stroke') = 2, 'each user gets their own topic';
   ASSERT (SELECT tags FROM notes WHERE id = '10000000-0000-0000-0000-000000000001') = ARRAY['RITE','Stroke','BAD','Lacunar syndrome','Pathophysiology/mechanism'], 'notes.tags untouched';
   RAISE NOTICE 'OK first run';
