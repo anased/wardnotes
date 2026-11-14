@@ -39,3 +39,32 @@ export function contentTypeOptions(noneLabel: string) {
     ...CONTENT_TYPES.map((value) => ({ value, label: CONTENT_TYPE_LABELS[value] })),
   ];
 }
+
+/** Key for a note's type in type filters: its content type, or 'none'. */
+export type TypeFilterKey = ContentType | 'none';
+
+export function typeFilterKey(contentType: ContentType | null | undefined): TypeFilterKey {
+  return isContentType(contentType) ? contentType : 'none';
+}
+
+export function typeFilterLabel(key: TypeFilterKey): string {
+  return key === 'none' ? 'No type' : CONTENT_TYPE_LABELS[key];
+}
+
+/**
+ * Types present among `items` with their counts, in the usual type order
+ * ("No type" last). Types with no notes are left out.
+ */
+export function typeCounts<T>(
+  items: T[],
+  typeOf: (item: T) => ContentType | null | undefined
+): { key: TypeFilterKey; count: number }[] {
+  const counts = new Map<TypeFilterKey, number>();
+  for (const item of items) {
+    const k = typeFilterKey(typeOf(item));
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  return [...CONTENT_TYPES, 'none' as const]
+    .filter((k) => counts.has(k))
+    .map((key) => ({ key, count: counts.get(key)! }));
+}

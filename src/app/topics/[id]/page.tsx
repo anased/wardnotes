@@ -36,6 +36,14 @@ import MoveToSectionMenu from '@/components/topics/MoveToSectionMenu';
 import NoteTypeIcon from '@/components/notes/NoteTypeIcon';
 import useTrials from '@/lib/hooks/useTrials';
 import { ancestorPaths, childIds } from '@/lib/utils/topicTree';
+import { TypeFilterKey, typeCounts, typeFilterKey, typeFilterLabel } from '@/lib/utils/noteFields';
+
+const CHIP_CLASS =
+  'inline-flex items-center gap-1 px-2.5 py-0.5 text-sm rounded-full transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 dark:focus-visible:ring-primary-400';
+const CHIP_OFF =
+  'bg-gray-50 text-gray-700 ring-1 ring-gray-200 hover:bg-gray-100 dark:bg-gray-700/60 dark:text-gray-200 dark:ring-gray-600 dark:hover:bg-gray-700';
+const CHIP_ON =
+  'bg-primary-50 text-primary-800 ring-1 ring-primary-200 hover:bg-primary-100 dark:bg-primary-900/60 dark:text-primary-100 dark:ring-primary-700';
 
 export default function TopicPage() {
   const { user, loading: authLoading } = useAuth();
@@ -57,6 +65,12 @@ export default function TopicPage() {
   const [trialLinks, setTrialLinks] = useState<TopicTrialLink[]>([]);
   const [showLinkTrial, setShowLinkTrial] = useState(false);
   const { byId: trialsById } = useTrials();
+  const [typeFilter, setTypeFilter] = useState<TypeFilterKey | 'all'>('all');
+
+  // A new topic starts unfiltered
+  useEffect(() => {
+    setTypeFilter('all');
+  }, [topicId]);
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/auth');
@@ -92,7 +106,15 @@ export default function TopicPage() {
     load();
   }, [load]);
 
-  const groups = useMemo(() => groupBySection(sections, links), [sections, links]);
+  const types = useMemo(() => typeCounts(links, (l) => l.note.content_type), [links]);
+  // A type that no longer has notes here falls back to All
+  const activeType = typeFilter !== 'all' && types.some((t) => t.key === typeFilter) ? typeFilter : 'all';
+  const visibleLinks = useMemo(
+    () => (activeType === 'all' ? links : links.filter((l) => typeFilterKey(l.note.content_type) === activeType)),
+    [links, activeType]
+  );
+  // Sections the filter empties are hidden (groupBySection skips empty ones)
+  const groups = useMemo(() => groupBySection(sections, visibleLinks), [sections, visibleLinks]);
   const sectionCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const l of [...links, ...trialLinks]) if (l.section_id) counts[l.section_id] = (counts[l.section_id] ?? 0) + 1;
@@ -295,9 +317,44 @@ export default function TopicPage() {
             <div className="p-4 text-red-700 bg-red-100 rounded-lg dark:bg-red-900 dark:text-red-200">{error}</div>
           )}
 
+          {!loading && links.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter notes by type">
+              {[{ key: 'all' as const, count: links.length }, ...types].map(({ key, count }) => {
+                const active = activeType === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setTypeFilter(key)}
+                    className={`${CHIP_CLASS} ${active ? CHIP_ON : CHIP_OFF}`}
+                  >
+                    {key === 'all' ? 'All' : typeFilterLabel(key)}
+                    <span
+                      className={`text-xs tabular-nums ${
+                        active ? 'text-primary-700 dark:text-primary-200' : 'text-gray-500 dark:text-gray-400'
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {loading ? (
             <div className="flex items-center justify-center h-40">
               <Spinner size="md" color="primary" />
+            </div>
+          ) : links.length > 0 && visibleLinks.length === 0 ? (
+            <div className="p-8 text-center bg-white rounded-lg shadow dark:bg-gray-800">
+              <p className="text-gray-600 dark:text-gray-400">
+                No {activeType === 'all' ? '' : typeFilterLabel(activeType).toLowerCase()} notes in {topic.name}.
+              </p>
+              <Button variant="outline" onClick={() => setTypeFilter('all')} className="mt-4">
+                Show all notes
+              </Button>
             </div>
           ) : groups.length === 0 ? (
             <div className="p-8 text-center bg-white rounded-lg shadow dark:bg-gray-800">
