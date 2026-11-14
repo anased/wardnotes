@@ -13,7 +13,8 @@ const customJestConfig = {
     '^@/(.*)$': '<rootDir>/src/$1',
   },
   testEnvironment: 'jest-environment-jsdom',
-  testPathIgnorePatterns: ['<rootDir>/e2e/', '<rootDir>/.next/', '<rootDir>/node_modules/'],
+  // scripts/ has node:test suites (npm run test:scripts)
+  testPathIgnorePatterns: ['<rootDir>/e2e/', '<rootDir>/scripts/', '<rootDir>/.next/', '<rootDir>/node_modules/'],
   collectCoverage: true,
   collectCoverageFrom: [
     'src/**/*.{js,jsx,ts,tsx}',

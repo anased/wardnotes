@@ -20,7 +20,9 @@ export type Note = {
   title: string;
   content: Record<string, unknown>; // TipTap JSON content
   tags: string[];
-  category: string; // Changed from enum to string type
+  /** Legacy specialty name. Optional; the web app no longer writes it (the
+   *  specialty is the primary topic's top-level topic). */
+  category: string | null;
   /** 'unanswered' marks an open question; everything else is 'answered'. */
   status: NoteStatus;
   /** What kind of note this is (question, article, trial, ...), if set. */

@@ -56,7 +56,7 @@ export default function NoteCard({ note, onTagClick, highlightTags = [] }: NoteC
     >
       {/* Header: category, type, status — kept out of the title's flow */}
       <div className="flex flex-wrap items-center gap-1.5 mb-2 min-w-0">
-        <CategoryBadge category={note.category} size="sm" variant="subtle" />
+        {note.category && <CategoryBadge category={note.category} size="sm" variant="subtle" />}
         <NoteFieldBadges note={note} inline />
       </div>
 

@@ -314,7 +314,7 @@ CREATE TABLE public.notes (
     title text NOT NULL,
     content jsonb NOT NULL,
     tags text[] DEFAULT '{}'::text[],
-    category text NOT NULL,
+    category text,  -- legacy; optional since make_note_category_optional.sql (specialty comes from the primary topic)
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT notes_pkey PRIMARY KEY (id),
     CONSTRAINT notes_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
