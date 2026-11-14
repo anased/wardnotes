@@ -1,11 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import useAuth from '@/lib/hooks/useAuth';
 import useNotes from '@/lib/hooks/useNotes';
-import useCategories from '@/lib/hooks/useCategories';
 import useTags from '@/lib/hooks/useTags';
 import PageContainer from '@/components/layout/PageContainer';
 import NoteCard from '@/components/notes/NoteCard';
@@ -30,8 +29,10 @@ import {
   LibraryFilters,
   buildLibraryQuery,
   hasFieldFilters,
+  legacyCategoryParam,
   parseLibraryParams,
 } from '@/lib/utils/libraryFilters';
+import { rootTopicByName } from '@/lib/utils/specialty';
 import { useAnalytics } from '@/lib/analytics/useAnalytics';
 import { useSubscription } from '@/lib/hooks/useSubscription';
 
@@ -53,9 +54,8 @@ export default function NotesPage() {
     search,
     filterNotes
   } = useNotes();
-  const { categories } = useCategories();
   const { tags } = useTags();
-  const { graph: topicGraph } = useTopics();
+  const { graph: topicGraph, loading: topicsLoading } = useTopics();
   const { track } = useAnalytics();
   const { subscription } = useSubscription();
   const router = useRouter();
@@ -65,14 +65,6 @@ export default function NotesPage() {
   const [searchInput, setSearchInput] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [tagUsage, setTagUsage] = useState<TagUsage[]>([]);
-
-  const categoryOptions = [
-    { value: 'All', label: 'All Categories' },
-    ...categories.map(cat => ({
-      value: cat.name,
-      label: cat.name
-    }))
-  ];
 
   // Tag usage counts; refetched when the tag list changes (add/rename/delete)
   useEffect(() => {
@@ -109,7 +101,6 @@ export default function NotesPage() {
         await search(next.q);
       } else if (hasFieldFilters(next)) {
         await filterNotes({
-          category: next.category,
           tags: next.tags,
           status: next.status || undefined,
           contentType: next.contentType || undefined,
@@ -136,15 +127,21 @@ export default function NotesPage() {
     }
   }, [user, authLoading, router]);
 
-  // Initial filters come from the URL, e.g. a tag or category clicked on the
-  // dashboard or a note page: /notes?tag=...&category=...
+  // Initial filters come from the URL, e.g. a tag or topic clicked on the
+  // dashboard or a note page: /notes?tag=...&topic=...
+  // Old ?category=Neurology links become the Neurology root topic, so those
+  // wait for the topics to load.
+  const initialLoadForRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!user) return;
-    const fromUrl = parseLibraryParams(window.location.search);
+    if (!user || initialLoadForRef.current === user.id) return;
+    const search = window.location.search;
+    if (legacyCategoryParam(search) && topicsLoading) return;
+    initialLoadForRef.current = user.id;
+    const fromUrl = parseLibraryParams(search, (name) => rootTopicByName(topicGraph, name));
     setSearchInput(fromUrl.q);
     applyFilters(fromUrl);
     // Only on login / first load; later changes go through the handlers
-  }, [user]);
+  }, [user, topicsLoading]);
 
   // Tags in the URL may use another spelling ("stroke"); once the tag list
   // has loaded, switch to the stored spelling so the filter matches.
@@ -235,13 +232,7 @@ export default function NotesPage() {
               </div>
             </form>
 
-            <div className="grid grid-cols-1 mt-3 gap-x-3 sm:grid-cols-3 lg:grid-cols-[repeat(3,minmax(0,11rem))_1fr]">
-              <Select
-                aria-label="Category"
-                options={categoryOptions}
-                value={filters.category}
-                onChange={(e) => updateFilters({ category: e.target.value })}
-              />
+            <div className="grid grid-cols-1 mt-3 gap-x-3 sm:grid-cols-2 lg:grid-cols-[repeat(2,minmax(0,11rem))_1fr]">
               <Select
                 aria-label="Type"
                 options={TYPE_OPTIONS}
@@ -258,7 +249,7 @@ export default function NotesPage() {
                   updateFilters({ status: isNoteStatus(e.target.value) ? e.target.value : '' })
                 }
               />
-              <div className="mb-4 sm:col-span-3 lg:col-span-1">
+              <div className="mb-4 sm:col-span-2 lg:col-span-1">
                 <TagFilterCombobox
                   options={tagOptions}
                   value={filters.tags}
@@ -292,18 +283,6 @@ export default function NotesPage() {
                     onClick={() => updateFilters({ topic: '' })}
                     aria-label="Remove topic filter"
                     className={`${chipButtonClass} text-primary-600 hover:text-primary-800 dark:text-primary-300 dark:hover:text-primary-100`}
-                  >
-                    &times;
-                  </button>
-                </div>
-              )}
-              {filters.category !== 'All' && (
-                <div className="flex items-center px-3 py-1 text-sm bg-blue-100 rounded-full dark:bg-blue-900">
-                  <span>Category: {filters.category}</span>
-                  <button
-                    onClick={() => updateFilters({ category: 'All' })}
-                    aria-label={`Remove category filter ${filters.category}`}
-                    className={`${chipButtonClass} text-blue-600 hover:text-blue-800 dark:text-blue-300 dark:hover:text-blue-100`}
                   >
                     &times;
                   </button>

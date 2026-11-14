@@ -56,7 +56,6 @@ export interface NoteRouteParams {
 
 // Search and filter types
 export interface NoteFilterOptions {
-  category?: string;
   tag?: string;
   query?: string;
   sortBy?: 'created_at' | 'title';

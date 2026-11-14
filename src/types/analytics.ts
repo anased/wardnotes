@@ -54,6 +54,7 @@ export interface BaseEventProperties {
 
 // Specific event properties
 export interface NoteCreatedProperties extends BaseEventProperties {
+  /** Specialty (root topic of the primary topic); name kept for analytics continuity. */
   note_category?: string;
   tag_count: number;
 }

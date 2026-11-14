@@ -3,7 +3,6 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Note } from '@/lib/supabase/client';
 import useNotes from '@/lib/hooks/useNotes';
-import useCategories from '@/lib/hooks/useCategories';
 import useTags from '@/lib/hooks/useTags';
 import { useDraftPersistence } from '@/lib/hooks/useDraftPersistence';
 import Button from '../ui/Button';
@@ -11,11 +10,11 @@ import Input from '../ui/Input';
 import Select from '../ui/Select';
 import TagInput from '../ui/TagInput';
 import NoteEditor from './NoteEditor';
-import CategoryCreationModal from '../ui/CategoryCreationModal';
 import NoteImprover from './NoteImprover'; // Add this import
 import LearningQuestionsInput from './LearningQuestionsInput';
 import NoteTopicPicker from '../topics/NoteTopicPicker';
 import useTopics from '@/lib/hooks/useTopics';
+import { noteSpecialty } from '@/lib/utils/specialty';
 import { getNoteTopicLinks, saveNoteTopics } from '@/lib/supabase/noteTopics';
 import { NoteTopicLink, parseDraftLinks, sameLinks } from '@/lib/utils/noteTopicLinks';
 import { useNotification } from '@/lib/context/NotificationContext';
@@ -58,9 +57,6 @@ const EMPTY_CONTENT = {
   ],
 };
 
-// Special value to indicate "Add new category" option
-const ADD_NEW_CATEGORY = 'add_new_category';
-
 // Define types for TipTap nodes
 interface TextNode {
   type: 'text';
@@ -98,13 +94,12 @@ interface TipTapDocument {
 
 export default function NoteForm({ initialData = {}, isEditing = false, initialTopicLinks = [] }: NoteFormProps) {
   const router = useRouter();
-  const { addNote, editNote } = useNotes();
-  const { categories, addCategory } = useCategories();
+  const { addNote, editNote, reloadNote } = useNotes();
   const { tags, addTag } = useTags();
   const { track } = useAnalytics();
   const { subscription } = useSubscription();
   const { refreshQuota } = useQuota();
-  const { refreshCounts: refreshTopicCounts } = useTopics();
+  const { graph: topicGraph, refreshCounts: refreshTopicCounts } = useTopics();
   const { showNotification } = useNotification();
 
   const [title, setTitle] = useState(initialData.title || '');
@@ -117,7 +112,6 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
   const [learningError, setLearningError] = useState<string | null>(null);
   const [content, setContent] = useState<Record<string, unknown>>(initialData.content || EMPTY_CONTENT);
   const [selectedTags, setSelectedTags] = useState<string[]>(initialData.tags || []);
-  const [category, setCategory] = useState<string>(initialData.category || '');
   const [status, setStatus] = useState<NoteStatus>(
     isNoteStatus(initialData.status) ? initialData.status : 'answered'
   );
@@ -138,16 +132,12 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  // State for the category creation modal
-  const [showCategoryModal, setShowCategoryModal] = useState(false);
-
   // Draft persistence hook
   const { loadDraft, clearDraft } = useDraftPersistence(
     initialData.id,
     {
       title,
       content,
-      category,
       tags: selectedTags,
       status,
       content_type: contentType,
@@ -157,36 +147,8 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
     true // Enable draft persistence
   );
 
-  // Generate category options from the database, adding the "Add new category" option
-  const categoryOptions = [
-    // Add placeholder option if no categories exist
-    ...(categories.length === 0 ? [{
-      value: '',
-      label: 'No categories yet - create one below'
-    }] : []),
-    // Add existing categories
-    ...categories.map(cat => ({
-      value: cat.name,
-      label: cat.name
-    })),
-    // Always add the "Add new category" option
-    {
-      value: ADD_NEW_CATEGORY,
-      label: '+ Add new category...'
-    }
-  ];
-
   // Extract all tag names for suggestions
   const tagSuggestions = tags.map(tag => tag.name);
-
-  // Set a default category if none was selected and options are available
-  // Only run this ONCE on mount, not on every re-render
-  useEffect(() => {
-    if (!category && categories.length > 0 && !initialData.category) {
-      setCategory(categories[0].name);
-    }
-     
-  }, [categories.length]); // Only when categories are loaded, not on every change
 
   // Automatically load and restore draft on component mount (silently)
   useEffect(() => {
@@ -198,7 +160,6 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
       const isDraftDifferent =
         draft.title !== (initialData.title || '') ||
         JSON.stringify(draft.content) !== JSON.stringify(initialData.content || EMPTY_CONTENT) ||
-        draft.category !== (initialData.category || '') ||
         JSON.stringify(draft.tags) !== JSON.stringify(initialData.tags || []) ||
         (draft.status !== undefined && draft.status !== (initialData.status || 'answered')) ||
         (draft.content_type !== undefined && draft.content_type !== (initialData.content_type || ''));
@@ -207,7 +168,6 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
       if (isDraftDifferent) {
         setTitle(draft.title);
         setContent(draft.content);
-        setCategory(draft.category);
         setSelectedTags(draft.tags);
         if (isNoteStatus(draft.status)) setStatus(draft.status);
         if (draft.content_type === '' || isContentType(draft.content_type)) {
@@ -281,31 +241,6 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
       cancelled = true;
     };
   }, [initialData.id]);
-
-  // Handle category change with special handling for "Add new category" option
-  const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value;
-    
-    if (value === ADD_NEW_CATEGORY) {
-      setShowCategoryModal(true);
-    } else {
-      setCategory(value);
-    }
-  };
-
-  // Handle creating a new category from the modal
-  const handleCreateCategory = async (name: string, color: string) => {
-    try {
-      // Create the new category
-      const newCategory = await addCategory(name, color);
-      
-      // Set the new category as the selected one
-      setCategory(newCategory.name);
-    } catch (err) {
-      console.error('Error creating category:', err);
-      throw err; // Let the modal handle the error
-    }
-  };
 
   // Create any tags on the note that aren't in the user's tag list yet.
   // Runs when the note is saved, so tags typed and removed again aren't kept.
@@ -640,6 +575,7 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
       await saveNoteTopics(noteId, topicLinks);
       setSavedTopicLinks(topicLinks);
       refreshTopicCounts();
+      reloadNote(noteId);
     } catch (err) {
       console.error('Error saving note topics:', err);
       showNotification('The note was saved, but its topics could not be updated. Edit the note to try again.', 'error', 8000);
@@ -663,11 +599,6 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!category) {
-      setError(categories.length === 0 ? 'Please create a category first' : 'Please select a category');
-      return;
-    }
-
     // Generate title if not provided
     const finalTitle = title.trim() || generateTitleFromContent(content);
 
@@ -682,7 +613,6 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
           title: finalTitle,
           content,
           tags: finalTags,
-          category,
           status,
           content_type: contentType || null,
         });
@@ -699,7 +629,6 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
           title: finalTitle,
           content,
           tags: finalTags,
-          category,
           status,
           content_type: contentType || null,
         });
@@ -711,7 +640,7 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
 
         // Track note creation
         track('note_created', {
-          note_category: category,
+          note_category: noteSpecialty(topicGraph, { note_topics: topicLinks })?.name,
           tag_count: finalTags.length,
           subscription_status: subscription?.subscription_status === 'active' ? 'premium' : 'free'
         });
@@ -752,13 +681,6 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
       <NoteTopicPicker value={topicLinks} onChange={setTopicLinks} />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Select
-          label="Category"
-          value={category}
-          onChange={handleCategoryChange}
-          options={categoryOptions}
-        />
-        
         <TagInput
           label="Tags"
           value={selectedTags}
@@ -915,13 +837,6 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
           {isEditing ? 'Update Note' : 'Save Note'}
         </Button>
       </div>
-
-      {/* Category Creation Modal */}
-      <CategoryCreationModal
-        isOpen={showCategoryModal}
-        onClose={() => setShowCategoryModal(false)}
-        onSave={handleCreateCategory}
-      />
     </form>
   );
 }

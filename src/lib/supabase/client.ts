@@ -28,19 +28,25 @@ export type Note = {
   /** What kind of note this is (question, article, trial, ...), if set. */
   content_type: ContentType | null;
   created_at: string;
+  /** The note's topic links, when the query embeds them (see NOTE_SELECT). */
+  note_topics?: NoteTopicRef[];
 };
+
+export type NoteTopicRef = { topic_id: string; is_primary: boolean };
+
+/**
+ * Columns read for notes everywhere in the app: the row plus its topic links,
+ * so lists can show the specialty (root of the primary topic) without
+ * another round trip.
+ */
+export const NOTE_SELECT = '*, note_topics(topic_id,is_primary)';
 
 /** Fields a caller provides when creating a note; status/type default in the database. */
-export type NoteInput = Omit<Note, 'id' | 'user_id' | 'created_at' | 'status' | 'content_type'> &
+export type NoteInput = Omit<Note, 'id' | 'user_id' | 'created_at' | 'status' | 'content_type' | 'category' | 'note_topics'> &
   Partial<Pick<Note, 'status' | 'content_type'>>;
 
-export type Category = {
-  id: string;
-  user_id: string;
-  name: string;
-  color: string;
-  created_at: string;
-};
+/** Columns a caller may change on a note. */
+export type NoteUpdate = Partial<Omit<Note, 'id' | 'user_id' | 'created_at' | 'category' | 'note_topics'>>;
 
 export type Tag = {
   id: string;
@@ -57,7 +63,7 @@ export type Tag = {
 export const getNotes = async () => {
   const { data, error } = await supabase
     .from('notes')
-    .select('*')
+    .select(NOTE_SELECT)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -72,7 +78,7 @@ export const getNotes = async () => {
 export const getNoteById = async (id: string) => {
   const { data, error } = await supabase
     .from('notes')
-    .select('*')
+    .select(NOTE_SELECT)
     .eq('id', id)
     .single();
 
@@ -102,7 +108,7 @@ export const createNote = async (note: NoteInput) => {
   const { data, error } = await supabase
     .from('notes')
     .insert(noteWithUser)
-    .select();
+    .select(NOTE_SELECT);
 
   if (error) {
     console.error('Error creating note:', error);
@@ -117,12 +123,12 @@ export const createNote = async (note: NoteInput) => {
 };
 
 // Update an existing note
-export const updateNote = async (id: string, note: Partial<Omit<Note, 'id' | 'user_id' | 'created_at'>>) => {
+export const updateNote = async (id: string, note: NoteUpdate) => {
   const { data, error } = await supabase
     .from('notes')
     .update(note)
     .eq('id', id)
-    .select()
+    .select(NOTE_SELECT)
     .single();
 
   if (error) {
@@ -151,7 +157,8 @@ export const deleteNote = async (id: string) => {
 // Search notes by text
 export const searchNotes = async (query: string) => {
   const { data, error } = await supabase
-    .rpc('search_notes', { search_query: query });
+    .rpc('search_notes', { search_query: query })
+    .select(NOTE_SELECT);
 
   if (error) {
     console.error('Error searching notes:', error);
@@ -162,8 +169,6 @@ export const searchNotes = async (query: string) => {
 };
 
 export type NoteFilters = {
-  /** Category name; omit (or 'All') for every category. */
-  category?: string;
   /** Notes must have ALL of these tags. */
   tags?: string[];
   status?: NoteStatus;
@@ -172,18 +177,14 @@ export type NoteFilters = {
   topicId?: string;
 };
 
-// Filter notes by category, tags, status and/or content type. Tag matching is AND: a note must
+// Filter notes by topic, tags, status and/or content type. Tag matching is AND: a note must
 // carry every selected tag. Tag names are canonical in the database, so
 // an exact array containment check is enough.
-export const filterNotes = async ({ category, tags = [], status, contentType, topicId }: NoteFilters) => {
+export const filterNotes = async ({ tags = [], status, contentType, topicId }: NoteFilters) => {
   // notes_in_topic returns notes rows, so the filters below still apply to it
   let query = topicId
     ? supabase.rpc('notes_in_topic', { p_topic_id: topicId })
-    : supabase.from('notes').select('*');
-
-  if (category && category !== 'All') {
-    query = query.eq('category', category);
-  }
+    : supabase.from('notes').select();
 
   if (tags.length > 0) {
     query = query.contains('tags', tags);
@@ -197,7 +198,8 @@ export const filterNotes = async ({ category, tags = [], status, contentType, to
     query = query.eq('content_type', contentType);
   }
 
-  const { data, error } = await query.order('created_at', { ascending: false });
+  // select() last: on an rpc call it would hide the filter methods (types only)
+  const { data, error } = await query.select(NOTE_SELECT).order('created_at', { ascending: false });
 
   if (error) {
     console.error('Error filtering notes:', error);
@@ -207,156 +209,58 @@ export const filterNotes = async ({ category, tags = [], status, contentType, to
   return data as Note[];
 };
 
-// Fetch notes that could be related to `note`: any that share a tag, plus
-// the most recent ones in the same category. Ranking happens client-side
-// (see rankRelatedNotes); this only narrows the candidate pool.
+// Fetch notes that could be related to `note`: any that share a label (tag),
+// plus notes filed under `topicIds` (the note's topics and the topics near
+// them; see relatedTopicIds). Ranking happens client-side (see
+// rankRelatedNotes); this only narrows the candidate pool.
 export const getRelatedNoteCandidates = async (
-  note: Pick<Note, 'id' | 'tags' | 'category'>,
-  { tagLimit = 50, categoryLimit = 20 }: { tagLimit?: number; categoryLimit?: number } = {}
+  note: Pick<Note, 'id' | 'tags'>,
+  topicIds: string[],
+  { tagLimit = 50, topicLimit = 60 }: { tagLimit?: number; topicLimit?: number } = {}
 ) => {
   const tags = (note.tags || []).filter(Boolean);
 
   const byTags = tags.length
     ? supabase
         .from('notes')
-        .select('*')
+        .select(NOTE_SELECT)
         .overlaps('tags', tags)
         .neq('id', note.id)
         .order('created_at', { ascending: false })
         .limit(tagLimit)
     : null;
 
-  const byCategory = note.category
-    ? supabase
-        .from('notes')
-        .select('*')
-        .eq('category', note.category)
-        .neq('id', note.id)
-        .order('created_at', { ascending: false })
-        .limit(categoryLimit)
-    : null;
+  const byTopics = async () => {
+    if (topicIds.length === 0) return { data: [] as Note[], error: null };
+    const links = await supabase
+      .from('note_topics')
+      .select('note_id')
+      .in('topic_id', topicIds)
+      .neq('note_id', note.id)
+      .limit(500);
+    if (links.error) return { data: null, error: links.error };
+    const ids = [...new Set((links.data ?? []).map((l: { note_id: string }) => l.note_id))];
+    if (ids.length === 0) return { data: [] as Note[], error: null };
+    return supabase
+      .from('notes')
+      .select(NOTE_SELECT)
+      .in('id', ids)
+      .order('created_at', { ascending: false })
+      .limit(topicLimit);
+  };
 
-  const [tagResult, categoryResult] = await Promise.all([byTags, byCategory]);
+  const [tagResult, topicResult] = await Promise.all([byTags, byTopics()]);
 
-  const error = tagResult?.error || categoryResult?.error;
+  const error = tagResult?.error || topicResult?.error;
   if (error) {
     console.error('Error fetching related notes:', error);
     throw error;
   }
 
   return [
+    ...((topicResult?.data as Note[] | null) ?? []),
     ...((tagResult?.data as Note[] | null) ?? []),
-    ...((categoryResult?.data as Note[] | null) ?? []),
   ];
-};
-
-// ======================
-// Category Operations
-// ======================
-
-// Get all categories for the current user
-export const getCategories = async () => {
-  const { data, error } = await supabase
-    .from('categories')
-    .select('*')
-    .order('name', { ascending: true });
-
-  if (error) {
-    console.error('Error fetching categories:', error);
-    throw error;
-  }
-
-  return data as Category[];
-};
-
-// Create a new category
-export const createCategory = async (name: string, color: string = 'blue') => {
-  // Get the current user
-  const { data: { user } } = await supabase.auth.getUser();
-  
-  if (!user) {
-    throw new Error('User not authenticated');
-  }
-  
-  // Create the category
-  const { data, error } = await supabase
-    .from('categories')
-    .insert({
-      user_id: user.id,
-      name: normalizeTagName(name),
-      color
-    })
-    .select();
-
-  if (error) {
-    console.error('Error creating category:', error);
-    throw categoryError(error);
-  }
-  
-  if (!data || data.length === 0) {
-    throw new Error('Failed to create category - no data returned');
-  }
-
-  return data[0] as Category;
-};
-
-// Category names are unique per user ignoring case (enforced in the database).
-const categoryError = (error: { code?: string; message: string }) =>
-  error.code === '23505'
-    ? new Error('A category with this name already exists')
-    : error;
-
-// Update a category
-export const updateCategory = async (id: string, updates: { name?: string; color?: string }) => {
-  const normalized =
-    updates.name === undefined ? updates : { ...updates, name: normalizeTagName(updates.name) };
-
-  const { data, error } = await supabase
-    .from('categories')
-    .update(normalized)
-    .eq('id', id)
-    .select()
-    .single();
-
-  if (error) {
-    console.error('Error updating category:', error);
-    throw categoryError(error);
-  }
-
-  return data as Category;
-};
-
-// Delete a category
-export const deleteCategory = async (id: string) => {
-  // First check if this category is used by any notes
-  const { data: notes, error: notesError } = await supabase
-    .from('notes')
-    .select('id')
-    .eq('category', id)
-    .limit(1);
-
-  if (notesError) {
-    console.error('Error checking if category is in use:', notesError);
-    throw notesError;
-  }
-
-  // If category is in use, don't delete it
-  if (notes && notes.length > 0) {
-    throw new Error('Cannot delete category that is in use by notes');
-  }
-
-  // Delete the category
-  const { error } = await supabase
-    .from('categories')
-    .delete()
-    .eq('id', id);
-
-  if (error) {
-    console.error('Error deleting category:', error);
-    throw error;
-  }
-
-  return true;
 };
 
 // ======================

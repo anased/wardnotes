@@ -8,7 +8,6 @@ import { AuthProvider } from '@/lib/context/AuthContext';
 import { SubscriptionProvider } from '@/lib/context/SubscriptionContext';
 import { TagsProvider } from '@/lib/context/TagsContext';
 import { NotesProvider } from '@/lib/context/NotesContext';
-import { CategoriesProvider } from '@/lib/context/CategoriesContext';
 import { TopicsProvider } from '@/lib/context/TopicsContext';
 import { TrialsProvider } from '@/lib/context/TrialsContext';
 import AuthRedirectHandler from '@/components/auth/AuthRedirectHandler';
@@ -102,16 +101,14 @@ export default function RootLayout({
             <SubscriptionProvider>
               <TagsProvider>
                 <NotesProvider>
-                  <CategoriesProvider>
-                    <TopicsProvider>
-                      <TrialsProvider>
-                        <AnalyticsProvider />
-                        <AuthRedirectHandler />
-                        <WebVitals />
-                        {children}
-                      </TrialsProvider>
-                    </TopicsProvider>
-                  </CategoriesProvider>
+                  <TopicsProvider>
+                    <TrialsProvider>
+                      <AnalyticsProvider />
+                      <AuthRedirectHandler />
+                      <WebVitals />
+                      {children}
+                    </TrialsProvider>
+                  </TopicsProvider>
                 </NotesProvider>
               </TagsProvider>
             </SubscriptionProvider>

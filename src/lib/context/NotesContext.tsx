@@ -11,7 +11,8 @@ import {
   filterNotes as filterNotesQuery,
   Note,
   NoteFilters,
-  NoteInput
+  NoteInput,
+  NoteUpdate
 } from '../supabase/client';
 import { useAuth } from './AuthContext';
 
@@ -22,10 +23,12 @@ interface NotesContextType {
   fetchNotes: () => Promise<void>;
   fetchNoteById: (id: string) => Promise<Note>;
   addNote: (note: NoteInput) => Promise<Note>;
-  editNote: (id: string, note: Partial<Omit<Note, 'id' | 'user_id' | 'created_at'>>) => Promise<Note>;
+  editNote: (id: string, note: NoteUpdate) => Promise<Note>;
   removeNote: (id: string) => Promise<void>;
+  /** Re-reads one note into the list, e.g. after its topics changed (they're embedded in each note). */
+  reloadNote: (id: string) => Promise<void>;
   search: (query: string) => Promise<void>;
-  /** Filter by category, tags (a note must have all of them), status, content type and topic (with subtopics). */
+  /** Filter by tags (a note must have all of them), status, content type and topic (with subtopics). */
   filterNotes: (filters: NoteFilters) => Promise<void>;
 }
 
@@ -126,7 +129,7 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Update an existing note
-  const editNote = useCallback(async (id: string, note: Partial<Omit<Note, 'id' | 'user_id' | 'created_at'>>) => {
+  const editNote = useCallback(async (id: string, note: NoteUpdate) => {
     try {
       setLoading(true);
       const updatedNote = await updateNote(id, note);
@@ -158,6 +161,15 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const reloadNote = useCallback(async (id: string) => {
+    try {
+      const fresh = await getNoteById(id);
+      setNotes((prev) => prev.map((n) => (n.id === id ? fresh : n)));
+    } catch (err) {
+      console.error(`Error reloading note ${id}:`, err);
+    }
+  }, []);
+
   // Search notes by text (calls backend, maintains existing behavior)
   const search = useCallback(async (query: string) => {
     if (!query.trim()) {
@@ -180,11 +192,10 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
     }
   }, [fetchNotes]);
 
-  // Filter notes by category and/or tags in the database
+  // Filter notes by topic, tags, status and/or type in the database
   const filterNotes = useCallback(async (filters: NoteFilters) => {
-    const hasCategory = !!filters.category && filters.category !== 'All';
     const hasTags = (filters.tags?.length ?? 0) > 0;
-    if (!hasCategory && !hasTags && !filters.status && !filters.contentType && !filters.topicId) {
+    if (!hasTags && !filters.status && !filters.contentType && !filters.topicId) {
       return fetchNotes();
     }
 
@@ -214,6 +225,7 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
     addNote,
     editNote,
     removeNote,
+    reloadNote,
     search,
     filterNotes,
   };

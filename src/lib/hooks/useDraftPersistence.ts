@@ -3,7 +3,8 @@ import { useEffect, useRef, useCallback } from 'react';
 interface DraftData {
   title: string;
   content: Record<string, unknown>;
-  category: string;
+  /** Legacy: drafts saved before categories were retired still carry it; ignored. */
+  category?: string;
   tags: string[];
   /** Added later; older drafts don't have these. */
   status?: string;
@@ -103,7 +104,7 @@ export function useDraftPersistence(
     if (enabled) {
       saveDraft(data);
     }
-  }, [data.title, data.content, data.category, data.tags, data.status, data.content_type, enabled, saveDraft]);
+  }, [data.title, data.content, data.tags, data.status, data.content_type, enabled, saveDraft]);
 
   // Cleanup debounce timer on unmount
   useEffect(() => {

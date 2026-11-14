@@ -6,7 +6,7 @@ interface NoteFieldBadgesProps {
   className?: string;
   /**
    * Render the badges without a wrapper so they flow inside the parent's
-   * flex row (e.g. next to the category on a card).
+   * flex row (e.g. next to the specialty on a card).
    */
   inline?: boolean;
 }
