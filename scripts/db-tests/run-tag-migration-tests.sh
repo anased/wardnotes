@@ -26,7 +26,12 @@ grep -q '^1|summary|notes still without a topic|2$' "$TMP/dry.out" || { echo 're
 grep -q '^2|label kept|RITE|3 notes$' "$TMP/dry.out" || { echo 'report: kept label'; exit 1; }
 echo 'OK dry run report'
 
-run() { "${PSQL[@]}" -d wn_test "$@" 2>&1 | grep -E '^(psql:.*)?(NOTICE|ERROR)' | sed 's/^psql:[^ ]* //' || true; }
+run() {
+  local out
+  out=$("${PSQL[@]}" -d wn_test "$@" 2>&1 | grep -E '^(psql:.*)?(NOTICE|ERROR)' | sed 's/^psql:[^ ]* //' || true)
+  echo "$out"
+  if grep -q ERROR <<<"$out"; then echo 'FAILED'; exit 1; fi
+}
 "${PSQL[@]}" -d wn_test < "$TMP/commit.sql" > /dev/null
 run < "$T/checks.sql"
 "${PSQL[@]}" -d wn_test < "$TMP/commit.sql" > /dev/null

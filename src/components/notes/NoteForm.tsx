@@ -692,7 +692,7 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
           label="Type"
           value={contentType}
           onChange={(e) => setContentType(isContentType(e.target.value) ? e.target.value : '')}
-          options={contentTypeOptions('No type')}
+          options={contentTypeOptions('No type', [initialData.content_type, contentType])}
         />
 
         <Select

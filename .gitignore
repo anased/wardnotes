@@ -49,3 +49,5 @@ CLAUDE.md
 ui-improvements-tracker.md
 # Tag migration working files (inventory and mapping contain account data)
 scripts/tag-migration/out/
+# Trial-notes working files (account data)
+scripts/trial-notes/out/

@@ -209,6 +209,19 @@ export const filterNotes = async ({ tags = [], status, contentType, topicId }: N
   return data as Note[];
 };
 
+/** True when the user has at least one note of this type (e.g. the retired 'trial'). */
+export const hasNotesOfType = async (contentType: ContentType) => {
+  const { count, error } = await supabase
+    .from('notes')
+    .select('id', { count: 'exact', head: true })
+    .eq('content_type', contentType);
+  if (error) {
+    console.error('Error counting notes by type:', error);
+    throw error;
+  }
+  return (count ?? 0) > 0;
+};
+
 // Fetch notes that could be related to `note`: any that share a label (tag),
 // plus notes filed under `topicIds` (the note's topics and the topics near
 // them; see relatedTopicIds). Ranking happens client-side (see

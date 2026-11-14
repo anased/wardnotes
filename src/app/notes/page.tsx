@@ -15,7 +15,7 @@ import Spinner from '@/components/ui/Spinner';
 import TagFilterCombobox, { TagFilterOption } from '@/components/ui/TagFilterCombobox';
 import TopicSidebar from '@/components/topics/TopicSidebar';
 import useTopics from '@/lib/hooks/useTopics';
-import { getTagUsage, TagUsage } from '@/lib/supabase/client';
+import { getTagUsage, hasNotesOfType, TagUsage } from '@/lib/supabase/client';
 import { canonicalTagName, hasTag, tagsEqual } from '@/lib/utils/tagUtils';
 import {
   CONTENT_TYPE_LABELS,
@@ -42,7 +42,6 @@ const STATUS_OPTIONS = [
   { value: 'unanswered', label: STATUS_LABELS.unanswered },
 ];
 
-const TYPE_OPTIONS = contentTypeOptions('Any type');
 
 export default function NotesPage() {
   const { user, loading: authLoading } = useAuth();
@@ -65,6 +64,26 @@ export default function NotesPage() {
   const [searchInput, setSearchInput] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [tagUsage, setTagUsage] = useState<TagUsage[]>([]);
+  // "Trial" is retired as a type: offer it as a filter only while notes still have it
+  const [hasTrialNotes, setHasTrialNotes] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    hasNotesOfType('trial')
+      .then((has) => {
+        if (!cancelled) setHasTrialNotes(has);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  const typeOptions = contentTypeOptions(
+    'Any type',
+    hasTrialNotes || filters.contentType === 'trial' ? ['trial'] : []
+  );
 
   // Tag usage counts; refetched when the tag list changes (add/rename/delete)
   useEffect(() => {
@@ -235,7 +254,7 @@ export default function NotesPage() {
             <div className="grid grid-cols-1 mt-3 gap-x-3 sm:grid-cols-2 lg:grid-cols-[repeat(2,minmax(0,11rem))_1fr]">
               <Select
                 aria-label="Type"
-                options={TYPE_OPTIONS}
+                options={typeOptions}
                 value={filters.contentType}
                 onChange={(e) =>
                   updateFilters({ contentType: isContentType(e.target.value) ? e.target.value : '' })
