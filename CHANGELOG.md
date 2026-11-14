@@ -44,6 +44,38 @@ rollback and local tests in `scripts/db-tests/`.
 Fixed: opening the Library with a filter in the URL (e.g. `/notes?category=…`)
 showed all notes because the initial load replaced the filtered list.
 
+#### Changed - One model for organizing notes
+
+What it is about → **Topics** (one primary). Which part → **Section**. What
+kind → **Type**. Done? → **Status**. Cross-cutting facts (RITE, Pediatric) →
+**Labels**. Specialty → the primary topic's top-level topic.
+
+- **Categories retired in the app.** The editor no longer asks for a category,
+  and the Library's category filter and Settings → Categories are gone. Cards
+  and note pages show the specialty from the primary topic (notes without a
+  topic still show their old category). Old `?category=Neurology` links open
+  the Neurology topic filter. `notes.category` stays in the database (now
+  optional) until this release is live; it is dropped afterwards.
+- **Tags are called Labels** in the editor, Library filter and chips
+  ("Label: RITE"), note pages and settings. Nothing changes in the database.
+- **Related notes** rank by shared topics, then nearby topics (same parent,
+  broader/narrower), then shared labels, and say why ("shared topic PRES",
+  "same parent: Cerebrovascular", "1 shared label").
+- **Topic pages** filter notes by type with chips ("All 12 · Question 5 ·
+  Review 3"); sections the filter empties are hidden.
+- **Trial type phased out.** Trials are shared records, so new notes can't be
+  typed Trial (existing ones keep it until migrated); the Library keeps the
+  Trial filter while such notes exist.
+- Section suggestions no longer include Articles, Clinical questions and
+  Cases (those are types). The note editor puts Labels on their own row.
+
+Migrations (reviewable, dry run first, not yet run on production):
+- `scripts/tag-migration/`: every note without a topic is filed under its
+  category's topic; new `keep` action for cross-cutting labels.
+- `scripts/trial-notes/` (new): links each Trial note to a trial record
+  ("cites"), files the trial under the note's topics and retypes the note
+  (Review by default). Run after the tag migration.
+
 ### Added - Learning Questions from Clinical Encounters (February 2026)
 
 #### Overview

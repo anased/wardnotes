@@ -681,12 +681,14 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
       <NoteTopicPicker value={topicLinks} onChange={setTopicLinks} />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <TagInput
-          label="Labels"
-          value={selectedTags}
-          onChange={setSelectedTags}
-          suggestions={tagSuggestions}
-        />
+        <div className="md:col-span-2">
+          <TagInput
+            label="Labels"
+            value={selectedTags}
+            onChange={setSelectedTags}
+            suggestions={tagSuggestions}
+          />
+        </div>
 
         <Select
           label="Type"
