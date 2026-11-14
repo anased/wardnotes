@@ -314,10 +314,10 @@ export default function NotesPage() {
               )}
               {filters.tags.map((tag) => (
                 <div key={tag} className="flex items-center px-3 py-1 text-sm bg-green-100 rounded-full dark:bg-green-900">
-                  <span>Tag: {tag}</span>
+                  <span>Label: {tag}</span>
                   <button
                     onClick={() => updateFilters({ tags: filters.tags.filter((t) => !tagsEqual(t, tag)) })}
-                    aria-label={`Remove tag filter ${tag}`}
+                    aria-label={`Remove label filter ${tag}`}
                     className={`${chipButtonClass} text-green-600 hover:text-green-800 dark:text-green-300 dark:hover:text-green-100`}
                   >
                     &times;
@@ -325,7 +325,7 @@ export default function NotesPage() {
                 </div>
               ))}
               {filters.tags.length > 1 && (
-                <span className="text-xs text-gray-500 dark:text-gray-400">(notes with all of these tags)</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">(notes with all of these labels)</span>
               )}
               <button
                 onClick={handleClearFilters}

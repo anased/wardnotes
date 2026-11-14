@@ -15,7 +15,7 @@ function Harness({
   const [tags, setTags] = useState<string[]>(initial);
   return (
     <TagInput
-      label="Tags"
+      label="Labels"
       value={tags}
       suggestions={suggestions}
       onChange={(next) => {

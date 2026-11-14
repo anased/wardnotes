@@ -16,7 +16,7 @@ export interface TagInputHandle {
 }
 
 const TagInput = forwardRef<TagInputHandle, TagInputProps>(
-  ({ label, value = [], onChange, error, suggestions = [], placeholder = 'Add tags (press Enter or comma to add)' }, ref) => {
+  ({ label, value = [], onChange, error, suggestions = [], placeholder = 'Add labels (press Enter or comma to add)' }, ref) => {
     const [inputValue, setInputValue] = useState('');
     const [showSuggestions, setShowSuggestions] = useState(false);
     // Index of the highlighted suggestion, or -1 when none is highlighted
@@ -208,7 +208,7 @@ const TagInput = forwardRef<TagInputHandle, TagInputProps>(
                 <button
                   type="button"
                   onClick={() => removeTag(tag)}
-                  aria-label={`Remove tag ${tag}`}
+                  aria-label={`Remove label ${tag}`}
                   className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                 >
                   &times;

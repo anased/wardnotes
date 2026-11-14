@@ -682,7 +682,7 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <TagInput
-          label="Tags"
+          label="Labels"
           value={selectedTags}
           onChange={setSelectedTags}
           suggestions={tagSuggestions}

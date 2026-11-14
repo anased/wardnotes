@@ -38,7 +38,7 @@ describe('TagFilterCombobox', () => {
     const user = userEvent.setup();
     render(<Harness />);
 
-    await user.click(screen.getByRole('combobox', { name: 'Tags' }));
+    await user.click(screen.getByRole('combobox', { name: 'Labels' }));
 
     const listbox = screen.getByRole('listbox');
     expect(listbox).toHaveAttribute('aria-multiselectable', 'true');
@@ -77,7 +77,7 @@ describe('TagFilterCombobox', () => {
 
     expect(onChange).toHaveBeenLastCalledWith(['ICH', 'Stroke']);
     expect(screen.getByRole('option', { name: /^ICH/ })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('button', { name: 'Remove tag filter Stroke' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove label filter Stroke' })).toBeInTheDocument();
   });
 
   it('toggles a selected tag off when chosen again', async () => {
@@ -140,7 +140,7 @@ describe('TagFilterCombobox', () => {
     const onChange = jest.fn();
     render(<Harness initial={['ICH', 'Stroke']} onChange={onChange} />);
 
-    await user.click(screen.getByRole('button', { name: 'Remove tag filter ICH' }));
+    await user.click(screen.getByRole('button', { name: 'Remove label filter ICH' }));
 
     expect(onChange).toHaveBeenLastCalledWith(['Stroke']);
   });

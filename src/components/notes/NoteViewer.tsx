@@ -175,14 +175,14 @@ export default function NoteViewer({ note }: NoteViewerProps) {
         </div>
       </div>
       
-      {/* Tags section */}
+      {/* Labels (tags) */}
       {note.tags && note.tags.length > 0 && (
         <div className="flex flex-wrap gap-2 mt-4">
           {note.tags.map((tag) => (
             <Link
               key={tag}
               href={`/notes?tag=${encodeURIComponent(tag)}`}
-              aria-label={`Show notes tagged ${tag}`}
+              aria-label={`Show notes labeled ${tag}`}
               className="tag hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
             >
               {tag}
