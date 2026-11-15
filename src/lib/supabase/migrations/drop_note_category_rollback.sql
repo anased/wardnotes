@@ -8,6 +8,14 @@
 
 BEGIN;
 
+-- The restored trigger function looks categories up
+DO $$
+BEGIN
+  IF to_regclass('public.categories') IS NULL THEN
+    RAISE EXCEPTION 'public.categories is missing: run drop_categories_rollback.sql first';
+  END IF;
+END $$;
+
 ALTER TABLE public.notes ADD COLUMN IF NOT EXISTS category text;
 
 UPDATE public.notes n

@@ -1,5 +1,4 @@
 // src/lib/supabase/types.ts
-export type NoteCategory = string; // Changed from enum to string to support custom categories
 
 // Define subscription status and plan types
 export type SubscriptionStatus = 'active' | 'canceled' | 'past_due' | 'trialing' | 'unpaid' | 'free';
@@ -91,29 +90,6 @@ export interface Database {
           content_type?: 'question' | 'article' | 'trial' | 'review' | 'case' | 'other' | null;
           created_at?: string;
           updated_at?: string;
-        };
-      };
-      categories: {
-        Row: {
-          id: string;
-          user_id: string;
-          name: string;
-          color: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          name: string;
-          color?: string;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          user_id?: string;
-          name?: string;
-          color?: string;
-          created_at?: string;
         };
       };
       tags: {
@@ -510,11 +486,6 @@ export type NoteRow = Database['public']['Tables']['notes']['Row'];
 export type NoteInsert = Database['public']['Tables']['notes']['Insert'];
 export type NoteUpdate = Database['public']['Tables']['notes']['Update'];
 
-// Category types
-export type CategoryRow = Database['public']['Tables']['categories']['Row'];
-export type CategoryInsert = Database['public']['Tables']['categories']['Insert'];
-export type CategoryUpdate = Database['public']['Tables']['categories']['Update'];
-
 // Tag types
 export type TagRow = Database['public']['Tables']['tags']['Row'];
 export type TagInsert = Database['public']['Tables']['tags']['Insert'];
@@ -576,7 +547,6 @@ export type SignInCredentials = {
 
 // Export simplified types for use in the application
 export type Note = NoteRow;
-export type Category = CategoryRow;
 export type Tag = TagRow;
 export type DailyActivity = DailyActivityRow;
 export type Subscription = SubscriptionRow;
