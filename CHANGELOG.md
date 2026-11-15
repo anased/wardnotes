@@ -69,7 +69,9 @@ kind → **Type**. Done? → **Status**. Cross-cutting facts (RITE, Pediatric) �
 - Section suggestions no longer include Articles, Clinical questions and
   Cases (those are types). The note editor puts Labels on their own row.
 
-Migrations (reviewable, dry run first, not yet run on production):
+Migrations (reviewable, dry run first; both applied to production on 2026-11-15:
+271 notes filed under 61 new topics, 22 trial records linked from the 7 former
+Trial notes):
 - `scripts/tag-migration/`: every note without a topic is filed under its
   category's topic; new `keep` action for cross-cutting labels.
 - `scripts/trial-notes/` (new): links each Trial note to a trial record
