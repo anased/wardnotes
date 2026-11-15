@@ -27,6 +27,9 @@ BEGIN
   ASSERT NOT EXISTS (SELECT 1 FROM topics WHERE name = 'RITE'), 'kept label creates no topic';
   ASSERT NOT EXISTS (SELECT 1 FROM topic_sections WHERE name = 'RITE'), 'kept label creates no section';
   ASSERT (SELECT count(*) FROM topics WHERE name = 'Stroke') = 2, 'each user gets their own topic';
+  ASSERT (SELECT id FROM topics WHERE user_id = u1 AND name = 'Stroke') = '20000000-0000-0000-0000-000000000002', 'Ischemic stroke renamed to Stroke (merged, same record)';
+  ASSERT (SELECT aliases FROM topics WHERE id = '20000000-0000-0000-0000-000000000002') @> ARRAY['ischemic stroke'], 'old name kept as an alias';
+  ASSERT NOT EXISTS (SELECT 1 FROM topics WHERE lower(name) = 'ischemic stroke'), 'no separate Ischemic stroke topic left';
   ASSERT (SELECT tags FROM notes WHERE id = '10000000-0000-0000-0000-000000000001') = ARRAY['RITE','Stroke','BAD','Lacunar syndrome','Pathophysiology/mechanism'], 'notes.tags untouched';
   RAISE NOTICE 'OK first run';
 END $$;

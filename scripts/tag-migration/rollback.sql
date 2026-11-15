@@ -55,11 +55,11 @@ WITH d AS (
   RETURNING 1
 ) INSERT INTO tm_removed SELECT 'topics', count(*) FROM d;
 
--- Aliases added to topics that existed before
+-- Names (merges) and aliases of topics that existed before
 UPDATE public.topics t
-SET aliases = b.aliases
+SET name = b.name, aliases = b.aliases
 FROM backup.topics_pre_tagmap b
-WHERE b.id = t.id AND t.aliases IS DISTINCT FROM b.aliases;
+WHERE b.id = t.id AND (t.aliases IS DISTINCT FROM b.aliases OR t.name IS DISTINCT FROM b.name);
 
 SELECT what AS removed, n FROM tm_removed;
 

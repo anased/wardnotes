@@ -13,8 +13,10 @@ INSERT INTO public.notes (id, user_id, title, content, category, tags) VALUES
  ('10000000-0000-0000-0000-000000000009','22222222-2222-2222-2222-222222222222','Blank category','{}','  ', ARRAY[]::text[]),
  ('10000000-0000-0000-0000-000000000010','22222222-2222-2222-2222-222222222222','Untagged, other user','{}','neurology ', ARRAY[]::text[]),
  ('10000000-0000-0000-0000-000000000011','11111111-1111-1111-1111-111111111111','Already filed in the app','{}','Neurology', ARRAY[]::text[]);
--- A topic the user already made in the app, with an alias
+-- Topics the user already made in the app: one with an alias, and one that
+-- the mapping merges into Stroke (renamed, same record)
 INSERT INTO public.topics (id, user_id, name, aliases) VALUES
- ('20000000-0000-0000-0000-000000000001','11111111-1111-1111-1111-111111111111','Neurocritical care', ARRAY['NICU']);
+ ('20000000-0000-0000-0000-000000000001','11111111-1111-1111-1111-111111111111','Neurocritical care', ARRAY['NICU']),
+ ('20000000-0000-0000-0000-000000000002','11111111-1111-1111-1111-111111111111','Ischemic stroke', '{}');
 INSERT INTO public.note_topics (note_id, topic_id, user_id, is_primary) VALUES
  ('10000000-0000-0000-0000-000000000011','20000000-0000-0000-0000-000000000001','11111111-1111-1111-1111-111111111111', true);

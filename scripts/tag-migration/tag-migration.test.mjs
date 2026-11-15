@@ -137,3 +137,14 @@ test('buildApplySql: kept labels are reported, never mapped', () => {
   assert.match(sql, /'label kept'/);
   assert.match(sql, /kept as labels: 1; dropped: 0/);
 });
+
+test('buildApplySql: aliases that name an existing topic merge it (renamed before topics are created)', () => {
+  const { rows } = validateMapping([
+    { action: 'topic', tag: 'Stroke', topic: 'Stroke', parents: 'Neurology', aliases: 'ischemic stroke', user_id: U },
+  ]);
+  const sql = buildApplySql(rows);
+  const merge = sql.indexOf('-- 0. Merges');
+  assert.ok(merge > 0 && merge < sql.indexOf('-- 1. Topics, aliases and parents'));
+  assert.match(sql, /'topic renamed \(merged\)'/);
+  assert.ok(!/DELETE FROM public\.topics/.test(sql));
+});

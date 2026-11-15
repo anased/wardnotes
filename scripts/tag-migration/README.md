@@ -24,7 +24,7 @@ action for every tag:
 
 | action    | meaning |
 |-----------|---------|
-| `topic`   | Notes with this tag are filed under `topic`. Several tags can share a topic (synonyms); a tag that differs from its topic's name is added as an alias. Optional `parents` (e.g. `Neurology > Cerebrovascular \| Neurology > Neurocritical care`), extra `aliases` (`A \| B`) and a `section` to file these notes under. |
+| `topic`   | Notes with this tag are filed under `topic`. Several tags can share a topic (synonyms); a tag that differs from its topic's name is added as an alias. Optional `parents` (e.g. `Neurology > Cerebrovascular \| Neurology > Neurocritical care`), extra `aliases` (`A \| B`) and a `section` to file these notes under. If no topic has that name yet but one is named after an alias, it is renamed instead (a merge: same record and links, the old name becomes an alias). |
 | `section` | The tag names a part of a topic (Pathophysiology, Pearls…). Notes are filed under that section in each of their topics. |
 | `keep`    | A cross-cutting label (exam source, population, setting): it stays on notes as a label. No topic or section is made; the report lists it. |
 | `drop`    | Ignore the tag (it stays on notes for now). |

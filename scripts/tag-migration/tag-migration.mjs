@@ -34,7 +34,9 @@
  *             that differs from its topic's name is added as an alias.
  *   parents   parent paths separated by "|", each root-first with ">", e.g.
  *             "Neurology > Cerebrovascular | Neurology > Neurocritical care"
- *   aliases   extra aliases separated by "|"
+ *   aliases   extra aliases separated by "|". If no topic has this row's name
+ *             yet but one is named after an alias, that topic is renamed
+ *             (merged: same record and links, old name kept as an alias).
  *   section   for action=section: the section name. For action=topic:
  *             optional section to file these notes under in that topic.
  *   note_count, categories, review, reason, sample_titles: information only.
@@ -479,6 +481,34 @@ BEGIN
     prev := cur;
   END LOOP;
   RETURN prev;
+END $$;
+
+-- 0. Merges: when no topic has the row's name yet, an existing topic named
+--    after one of the row's aliases is renamed (same record and links; the old
+--    name becomes an alias below). Done first so paths reuse it.
+DO $$
+DECLARE
+  r record;
+  old_id uuid;
+  old_name text;
+BEGIN
+  FOR r IN SELECT DISTINCT ON (user_id, lower(topic)) * FROM tm_map
+           WHERE action = 'topic' AND cardinality(aliases) > 0
+           ORDER BY user_id, lower(topic), lower(tag) LOOP
+    CONTINUE WHEN EXISTS (
+      SELECT 1 FROM public.topics tp
+      WHERE tp.user_id = r.user_id
+        AND (lower(tp.name) = lower(public.normalize_tag_name(r.topic))
+             OR EXISTS (SELECT 1 FROM unnest(tp.aliases) a WHERE lower(a) = lower(public.normalize_tag_name(r.topic)))));
+    SELECT id, name INTO old_id, old_name FROM public.topics tp
+    WHERE tp.user_id = r.user_id
+      AND lower(tp.name) IN (SELECT lower(public.normalize_tag_name(a)) FROM unnest(r.aliases) a)
+    ORDER BY tp.created_at LIMIT 1;
+    IF old_id IS NOT NULL THEN
+      UPDATE public.topics SET name = public.normalize_tag_name(r.topic) WHERE id = old_id;
+      INSERT INTO pg_temp.tm_log VALUES ('topic renamed (merged)', old_name || ' -> ' || public.normalize_tag_name(r.topic));
+    END IF;
+  END LOOP;
 END $$;
 
 -- 1. Topics, aliases and parents
