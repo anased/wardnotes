@@ -1,5 +1,10 @@
 # Tags → topics migration
 
+> **Applied to production on 2026-11-15.** `notes.category` was dropped
+> afterwards (`src/lib/supabase/migrations/drop_note_category.sql`), so the
+> inventory and the category fallback below only work on a database that still
+> has that column (e.g. the local test database).
+
 Moves the free-text tags on notes into the topic system (topics, sections,
 note↔topic links) and files every note under a topic. Nothing changes until
 you approve a mapping and run the generated SQL with `--commit`.

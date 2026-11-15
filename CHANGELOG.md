@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed - notes.category (November 2026)
+
+- The `notes.category` column is dropped
+  (`src/lib/supabase/migrations/drop_note_category.sql`): every note is filed
+  under a topic, and the specialty comes from the primary topic. The values
+  are kept in `backup.notes_category_pre_drop`;
+  `drop_note_category_rollback.sql` restores them.
+- `normalize_note_taxonomy()` no longer touches the category, and its trigger
+  now fires on `UPDATE OF tags` only.
+- The app no longer falls back to the category for notes without a topic.
+  Old `?category=` Library links still map to the matching top-level topic.
+- The `categories` table (36 rows) is unchanged.
+
 ### Added - Topic-based knowledge organization (November 2026)
 
 Notes are now organized by linked topics instead of a flat list of tags.

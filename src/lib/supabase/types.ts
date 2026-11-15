@@ -65,8 +65,6 @@ export interface Database {
           title: string;
           content: Record<string, unknown>;
           tags: string[];
-          /** Legacy specialty name; optional, no longer written by the web app. */
-          category: string | null;
           status: 'answered' | 'unanswered';
           content_type: 'question' | 'article' | 'trial' | 'review' | 'case' | 'other' | null;
           created_at: string;
@@ -78,7 +76,6 @@ export interface Database {
           title: string;
           content: Record<string, unknown>;
           tags?: string[];
-          category?: string | null;
           status?: 'answered' | 'unanswered';
           content_type?: 'question' | 'article' | 'trial' | 'review' | 'case' | 'other' | null;
           created_at?: string;
@@ -90,7 +87,6 @@ export interface Database {
           title?: string;
           content?: Record<string, unknown>;
           tags?: string[];
-          category?: string | null;
           status?: 'answered' | 'unanswered';
           content_type?: 'question' | 'article' | 'trial' | 'review' | 'case' | 'other' | null;
           created_at?: string;

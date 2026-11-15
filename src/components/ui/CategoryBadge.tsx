@@ -1,7 +1,7 @@
 /**
- * Specialty badge (the root topic of a note's primary topic, or the legacy
- * category of a note without topics). Categories no longer have their own
- * colours, so the badge uses the default (blue) unless told otherwise.
+ * Specialty badge (the root topic of a note's primary topic). Specialties
+ * have no colours of their own, so the badge uses the default (blue) unless
+ * told otherwise.
  */
 interface CategoryBadgeProps {
   category: string;

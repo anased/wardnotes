@@ -38,7 +38,6 @@ function makeNote(id: string, overrides: Partial<Note> = {}): Note {
     title: `Note ${id}`,
     content: {},
     tags: [],
-    category: null,
     status: 'answered',
     content_type: null,
     created_at: '2026-01-01T00:00:00Z',

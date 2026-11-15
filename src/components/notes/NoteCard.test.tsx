@@ -26,7 +26,6 @@ function makeNote(overrides: Partial<Note> = {}): Note {
     title: 'What is the definition of END?',
     content: {},
     tags: ['END', 'Stroke', 'Clinical pearls', 'RITE', 'ICH'],
-    category: 'Neurology',
     status: 'answered',
     content_type: 'question',
     created_at: '2026-11-01T10:00:00Z',
@@ -86,26 +85,22 @@ describe('NoteCard', () => {
     expect(chip.className).not.toContain('bg-red-100');
   });
 
-  it('takes the specialty from the primary topic’s root, not the category', () => {
+  it('takes the specialty from the primary topic’s root', () => {
     render(
       <NoteCard
         note={makeNote({
-          category: 'General',
-          note_topics: [{ topic_id: 'pres', is_primary: true }],
+          note_topics: [
+            { topic_id: 'cv', is_primary: false },
+            { topic_id: 'pres', is_primary: true },
+          ],
         })}
       />
     );
     expect(screen.getByText('Neurology')).toBeInTheDocument();
-    expect(screen.queryByText('General')).not.toBeInTheDocument();
   });
 
-  it('falls back to the category only for notes without topics', () => {
-    render(<NoteCard note={makeNote({ category: 'Cardiology', note_topics: [] })} />);
-    expect(screen.getByText('Cardiology')).toBeInTheDocument();
-  });
-
-  it('shows no specialty when there is neither a topic nor a category', () => {
-    render(<NoteCard note={makeNote({ category: null })} />);
+  it('shows no specialty for a note without topics', () => {
+    render(<NoteCard note={makeNote({ note_topics: [] })} />);
     expect(screen.queryByText('Neurology')).not.toBeInTheDocument();
   });
 });

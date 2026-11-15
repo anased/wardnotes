@@ -116,7 +116,7 @@ export default function NoteViewer({ note }: NoteViewerProps) {
             <span className="text-sm text-gray-500 dark:text-gray-400">
               {formattedDate}
             </span>
-            {specialty?.topicId ? (
+            {specialty && (
               <Link
                 href={`/topics/${specialty.topicId}`}
                 aria-label={`Open topic ${specialty.name}`}
@@ -124,8 +124,6 @@ export default function NoteViewer({ note }: NoteViewerProps) {
               >
                 <CategoryBadge category={specialty.name} />
               </Link>
-            ) : (
-              specialty && <CategoryBadge category={specialty.name} />
             )}
             <NoteFieldBadges note={note} />
           </div>

@@ -20,9 +20,6 @@ export type Note = {
   title: string;
   content: Record<string, unknown>; // TipTap JSON content
   tags: string[];
-  /** Legacy specialty name. Optional; the web app no longer writes it (the
-   *  specialty is the primary topic's top-level topic). */
-  category: string | null;
   /** 'unanswered' marks an open question; everything else is 'answered'. */
   status: NoteStatus;
   /** What kind of note this is (question, article, trial, ...), if set. */
@@ -42,11 +39,11 @@ export type NoteTopicRef = { topic_id: string; is_primary: boolean };
 export const NOTE_SELECT = '*, note_topics(topic_id,is_primary)';
 
 /** Fields a caller provides when creating a note; status/type default in the database. */
-export type NoteInput = Omit<Note, 'id' | 'user_id' | 'created_at' | 'status' | 'content_type' | 'category' | 'note_topics'> &
+export type NoteInput = Omit<Note, 'id' | 'user_id' | 'created_at' | 'status' | 'content_type' | 'note_topics'> &
   Partial<Pick<Note, 'status' | 'content_type'>>;
 
 /** Columns a caller may change on a note. */
-export type NoteUpdate = Partial<Omit<Note, 'id' | 'user_id' | 'created_at' | 'category' | 'note_topics'>>;
+export type NoteUpdate = Partial<Omit<Note, 'id' | 'user_id' | 'created_at' | 'note_topics'>>;
 
 export type Tag = {
   id: string;
