@@ -1,7 +1,6 @@
 /**
  * A note's specialty is the top-level (root) topic of its primary topic.
- * PRES under Neurology > Cerebrovascular → Neurology. The legacy
- * `notes.category` is only used for notes that aren't filed under a topic.
+ * PRES under Neurology > Cerebrovascular → Neurology.
  */
 import { TopicGraph, ancestorPaths, topicKey } from './topicTree';
 
@@ -12,8 +11,8 @@ export interface TopicLinkLike {
 
 export interface Specialty {
   name: string;
-  /** Root topic id; undefined when the name comes from the legacy category. */
-  topicId?: string;
+  /** Root topic id. */
+  topicId: string;
 }
 
 /** The primary link's topic id, else the first link's (a note should always have a primary). */
@@ -28,21 +27,16 @@ export function rootTopicId(graph: TopicGraph, topicId: string): string | undefi
 }
 
 /**
- * Specialty for a note. Notes with topic links use the primary topic's root;
- * the category is a fallback only for notes with no topic at all. Returns
- * null when neither is known (or the topics haven't loaded yet).
+ * Specialty for a note: the root of its primary topic. Null for a note
+ * without topics, or while the topics haven't loaded yet.
  */
 export function noteSpecialty(
   graph: TopicGraph,
-  note: { category?: string | null; note_topics?: TopicLinkLike[] | null }
+  note: { note_topics?: TopicLinkLike[] | null }
 ): Specialty | null {
   const topicId = primaryTopicId(note.note_topics);
-  if (topicId) {
-    const root = rootTopicId(graph, topicId);
-    return root ? { name: graph.byId.get(root)!.name, topicId: root } : null;
-  }
-  const category = note.category?.trim();
-  return category ? { name: category } : null;
+  const root = topicId ? rootTopicId(graph, topicId) : undefined;
+  return root ? { name: graph.byId.get(root)!.name, topicId: root } : null;
 }
 
 /** Root topic whose name matches `name` (case-insensitive); used for old `?category=` links. */

@@ -37,20 +37,18 @@ describe('rootTopicId', () => {
 });
 
 describe('noteSpecialty', () => {
-  test('primary topic root wins over the category', () => {
-    expect(
-      noteSpecialty(graph, { category: 'General', note_topics: [{ topic_id: 'cv', is_primary: true }] })
-    ).toEqual({ name: 'Neurology', topicId: 'neuro' });
+  test('is the root of the primary topic', () => {
+    expect(noteSpecialty(graph, { note_topics: [{ topic_id: 'cv', is_primary: true }] })).toEqual({
+      name: 'Neurology',
+      topicId: 'neuro',
+    });
   });
-  test('falls back to the category only without topics', () => {
-    expect(noteSpecialty(graph, { category: ' Cardiology ', note_topics: [] })).toEqual({ name: 'Cardiology' });
-    expect(noteSpecialty(graph, { category: null })).toBeNull();
-    expect(noteSpecialty(graph, { category: '  ' })).toBeNull();
+  test('null without topics', () => {
+    expect(noteSpecialty(graph, { note_topics: [] })).toBeNull();
+    expect(noteSpecialty(graph, {})).toBeNull();
   });
-  test('topic not loaded yet: no badge rather than a stale category', () => {
-    expect(
-      noteSpecialty(graph, { category: 'General', note_topics: [{ topic_id: 'missing', is_primary: true }] })
-    ).toBeNull();
+  test('null while the topic is not loaded yet', () => {
+    expect(noteSpecialty(graph, { note_topics: [{ topic_id: 'missing', is_primary: true }] })).toBeNull();
   });
 });
 
