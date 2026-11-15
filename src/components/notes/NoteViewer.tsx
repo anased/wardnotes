@@ -8,6 +8,8 @@ import { useSubscription } from '@/lib/hooks/useSubscription'; // Add this impor
 
 import Button from '../ui/Button';
 import CategoryBadge from '../ui/CategoryBadge';
+import useTopics from '@/lib/hooks/useTopics';
+import { noteSpecialty } from '@/lib/utils/specialty';
 import NoteFieldBadges from './NoteFieldBadges';
 import NoteEditor, { SelectionInfo } from './NoteEditor';
 import { EnhancedFlashcardGeneratorModal } from './EnhancedFlashcardGeneratorModal';
@@ -16,6 +18,8 @@ import { FlashcardIntegrationButton } from './FlashcardIntegrationButton';
 import NoteFlashcardsSection from './NoteFlashcardsSection';
 import SelectionFloatingButton from './SelectionFloatingButton';
 import RelatedNotes from './RelatedNotes';
+import NoteTopicChips from '../topics/NoteTopicChips';
+import LinksSection from '../links/LinksSection';
 import { CreateFlashcardModal } from '../flashcards/CreateFlashCardModal';
 import { FlashcardService } from '@/services/flashcard';
 import type { FlashcardDeck } from '@/types/flashcard';
@@ -28,6 +32,8 @@ export default function NoteViewer({ note }: NoteViewerProps) {
   const router = useRouter();
   const { isPremium } = useSubscription();
   const { removeNote } = useNotes();
+  const { graph: topicGraph } = useTopics();
+  const specialty = noteSpecialty(topicGraph, note);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showFlashcardModal, setShowFlashcardModal] = useState(false);
@@ -110,15 +116,20 @@ export default function NoteViewer({ note }: NoteViewerProps) {
             <span className="text-sm text-gray-500 dark:text-gray-400">
               {formattedDate}
             </span>
-            <Link
-              href={`/notes?category=${encodeURIComponent(note.category)}`}
-              aria-label={`Show notes in ${note.category}`}
-              className="rounded-full transition hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-            >
-              <CategoryBadge category={note.category} />
-            </Link>
+            {specialty?.topicId ? (
+              <Link
+                href={`/topics/${specialty.topicId}`}
+                aria-label={`Open topic ${specialty.name}`}
+                className="rounded-full transition hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+              >
+                <CategoryBadge category={specialty.name} />
+              </Link>
+            ) : (
+              specialty && <CategoryBadge category={specialty.name} />
+            )}
             <NoteFieldBadges note={note} />
           </div>
+          <NoteTopicChips noteId={note.id} />
         </div>
         
         <div className="flex space-x-3">
@@ -164,14 +175,14 @@ export default function NoteViewer({ note }: NoteViewerProps) {
         </div>
       </div>
       
-      {/* Tags section */}
+      {/* Labels (tags) */}
       {note.tags && note.tags.length > 0 && (
         <div className="flex flex-wrap gap-2 mt-4">
           {note.tags.map((tag) => (
             <Link
               key={tag}
               href={`/notes?tag=${encodeURIComponent(tag)}`}
-              aria-label={`Show notes tagged ${tag}`}
+              aria-label={`Show notes labeled ${tag}`}
               className="tag hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
             >
               {tag}
@@ -196,7 +207,10 @@ export default function NoteViewer({ note }: NoteViewerProps) {
         noteTitle={note.title}
       />
 
-      {/* Related notes (shared tags / same category) */}
+      {/* Labeled links to and from other notes and trials */}
+      <LinksSection self={{ type: 'note', id: note.id }} selfLabel="This note" />
+
+      {/* Related notes (shared topics / labels) */}
       <RelatedNotes note={note} />
 
       {/* Floating button for manual flashcard creation */}

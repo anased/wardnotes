@@ -27,8 +27,8 @@ export default function TagFilterCombobox({
   options,
   value,
   onChange,
-  label = 'Tags',
-  placeholder = 'Filter by tags…',
+  label = 'Labels',
+  placeholder = 'Filter by labels…',
 }: TagFilterComboboxProps) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
@@ -144,7 +144,7 @@ export default function TagFilterCombobox({
                 e.stopPropagation();
                 remove(tag);
               }}
-              aria-label={`Remove tag filter ${tag}`}
+              aria-label={`Remove label filter ${tag}`}
               className="text-gray-500 rounded-full hover:text-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 dark:text-gray-400 dark:hover:text-gray-100"
             >
               &times;

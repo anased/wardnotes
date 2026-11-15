@@ -44,7 +44,7 @@ export default function TagsPage() {
 
     if (tags.some(tag => tagsEqual(tag.name, name) &&
         (!editingTag || tag.id !== editingTag.id))) {
-      setFormError('A tag with this name already exists');
+      setFormError('A label with this name already exists');
       return;
     }
     
@@ -68,7 +68,7 @@ export default function TagsPage() {
     } catch (err) {
       const error = err as Error;
       console.error('Error saving tag:', error);
-      setFormError(error.message || 'Failed to save tag');
+      setFormError(error.message || 'Failed to save label');
     } finally {
       setIsSubmitting(false);
     }
@@ -80,14 +80,14 @@ export default function TagsPage() {
   };
   
   const handleDelete = async (tag: Tag) => {
-    let message = `Delete the tag "${tag.name}"? This cannot be undone.`;
+    let message = `Delete the label "${tag.name}"? This cannot be undone.`;
     try {
       const noteCount = await countNotesWithTag(tag.name);
       if (noteCount > 0) {
-        message = `Delete the tag "${tag.name}"? It will be removed from ${noteCount} ${noteCount === 1 ? 'note' : 'notes'} and their flashcards. This cannot be undone.`;
+        message = `Delete the label "${tag.name}"? It will be removed from ${noteCount} ${noteCount === 1 ? 'note' : 'notes'} and their flashcards. This cannot be undone.`;
       }
     } catch {
-      message = `Delete the tag "${tag.name}"? It will be removed from any notes and flashcards that use it. This cannot be undone.`;
+      message = `Delete the label "${tag.name}"? It will be removed from any notes and flashcards that use it. This cannot be undone.`;
     }
 
     if (confirm(message)) {
@@ -101,7 +101,7 @@ export default function TagsPage() {
         }
       } catch (err) {
         const error = err as Error;
-        alert(error.message || 'Failed to delete tag');
+        alert(error.message || 'Failed to delete label');
       }
     }
   };
@@ -116,7 +116,7 @@ export default function TagsPage() {
 
   if (loading) {
     return (
-      <PageContainer title="Tags">
+      <PageContainer title="Labels">
         <div className="flex items-center justify-center h-64">
           <Spinner size="md" color="primary" />
         </div>
@@ -125,12 +125,12 @@ export default function TagsPage() {
   }
 
   return (
-    <PageContainer title="Manage Tags">
+    <PageContainer title="Manage Labels">
       <div className="max-w-4xl mx-auto space-y-8">
         {/* Form for adding/editing tags */}
         <div className="p-6 bg-white rounded-lg shadow dark:bg-gray-800">
           <h2 className="mb-4 text-xl font-semibold">
-            {editingTag ? 'Edit Tag' : 'Add New Tag'}
+            {editingTag ? 'Edit Label' : 'Add New Label'}
           </h2>
           {editingTag && (
             <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
@@ -146,10 +146,10 @@ export default function TagsPage() {
             )}
             
             <Input
-              label="Tag Name"
+              label="Label Name"
               value={newTagName}
               onChange={(e) => setNewTagName(e.target.value)}
-              placeholder="Enter tag name"
+              placeholder="Enter label name, e.g. RITE or Pediatric"
               maxLength={MAX_TAG_LENGTH}
               required
             />
@@ -168,7 +168,7 @@ export default function TagsPage() {
                 type="submit"
                 isLoading={isSubmitting}
               >
-                {editingTag ? 'Update Tag' : 'Add Tag'}
+                {editingTag ? 'Update Label' : 'Add Label'}
               </Button>
             </div>
           </form>
@@ -176,17 +176,17 @@ export default function TagsPage() {
         
         {/* List of existing tags */}
         <div className="p-6 bg-white rounded-lg shadow dark:bg-gray-800">
-          <h2 className="mb-4 text-xl font-semibold">Your Tags</h2>
+          <h2 className="mb-4 text-xl font-semibold">Your Labels</h2>
           
           {error && (
             <div className="p-4 mb-4 text-red-700 bg-red-100 rounded-lg dark:bg-red-900 dark:text-red-200">
-              Error loading tags: {error.message}
+              Error loading labels: {error.message}
             </div>
           )}
           
           {tags.length === 0 ? (
             <div className="p-4 text-center text-gray-600 dark:text-gray-400">
-              You haven&apos;t created any custom tags yet.
+              You haven&apos;t created any labels yet.
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -201,7 +201,7 @@ export default function TagsPage() {
                   <div className="flex space-x-2">
                     <button
                       onClick={() => handleEdit(tag)}
-                      aria-label={`Rename tag ${tag.name}`}
+                      aria-label={`Rename label ${tag.name}`}
                       className="p-1 text-primary-600 hover:text-primary-900 dark:text-primary-400 dark:hover:text-primary-300"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -210,7 +210,7 @@ export default function TagsPage() {
                     </button>
                     <button
                       onClick={() => handleDelete(tag)}
-                      aria-label={`Delete tag ${tag.name}`}
+                      aria-label={`Delete label ${tag.name}`}
                       className="p-1 text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">

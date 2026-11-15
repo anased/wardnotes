@@ -1,7 +1,11 @@
-import useCategories from '@/lib/hooks/useCategories';
-
+/**
+ * Specialty badge (the root topic of a note's primary topic, or the legacy
+ * category of a note without topics). Categories no longer have their own
+ * colours, so the badge uses the default (blue) unless told otherwise.
+ */
 interface CategoryBadgeProps {
   category: string;
+  color?: string;
   size?: 'sm' | 'md';
   /**
    * 'solid' fills the badge with the category colour. 'subtle' is a neutral
@@ -26,17 +30,8 @@ export default function CategoryBadge({
   category,
   size = 'md',
   variant = 'solid',
+  color = 'blue',
 }: CategoryBadgeProps) {
-  const { categories } = useCategories();
-  
-  // Find the category in our list to get its color
-  const categoryData = categories.find(
-    cat => cat.name.toLowerCase() === category.toLowerCase()
-  );
-  
-  // Default to blue if category not found
-  const color = categoryData?.color || 'blue';
-  
   // Determine size class
   const sizeClass = size === 'sm' ? 'text-xs px-2 py-0.5' : 'text-sm px-2.5 py-0.5';
   

@@ -3,9 +3,11 @@ import { useRouter } from 'next/navigation';
 import { Note } from '@/lib/supabase/client';
 import { hasTag, splitVisibleTags } from '@/lib/utils/tagUtils';
 import CategoryBadge from '../ui/CategoryBadge';
+import useTopics from '@/lib/hooks/useTopics';
+import { noteSpecialty } from '@/lib/utils/specialty';
 import NoteFieldBadges from './NoteFieldBadges';
 
-/** Tags shown on a card before collapsing the rest into "+N". */
+/** Labels (tags) shown on a card before collapsing the rest into "+N". */
 const MAX_VISIBLE_TAGS = 3;
 
 interface NoteCardProps {
@@ -25,6 +27,8 @@ interface NoteCardProps {
  */
 export default function NoteCard({ note, onTagClick, highlightTags = [] }: NoteCardProps) {
   const router = useRouter();
+  const { graph } = useTopics();
+  const specialty = noteSpecialty(graph, note);
   const unanswered = note.status === 'unanswered';
   const { visible, hidden } = splitVisibleTags(note.tags, MAX_VISIBLE_TAGS, highlightTags);
 
@@ -54,9 +58,9 @@ export default function NoteCard({ note, onTagClick, highlightTags = [] }: NoteC
             : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
         }`}
     >
-      {/* Header: category, type, status — kept out of the title's flow */}
+      {/* Header: specialty, type, status — kept out of the title's flow */}
       <div className="flex flex-wrap items-center gap-1.5 mb-2 min-w-0">
-        <CategoryBadge category={note.category} size="sm" variant="subtle" />
+        {specialty && <CategoryBadge category={specialty.name} size="sm" variant="subtle" />}
         <NoteFieldBadges note={note} inline />
       </div>
 
@@ -84,7 +88,7 @@ export default function NoteCard({ note, onTagClick, highlightTags = [] }: NoteC
               <button
                 key={tag}
                 type="button"
-                aria-label={`Show notes tagged ${tag}`}
+                aria-label={`Show notes labeled ${tag}`}
                 onClick={(e) => handleTagClick(e, tag)}
                 className={`relative z-10 max-w-[10rem] truncate px-2 py-0.5 text-xs rounded-full transition
                   focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 dark:focus-visible:ring-primary-400
@@ -104,7 +108,7 @@ export default function NoteCard({ note, onTagClick, highlightTags = [] }: NoteC
               >
                 <span aria-hidden="true">+{hidden.length}</span>
                 <span className="sr-only">
-                  {`and ${hidden.length} more ${hidden.length === 1 ? 'tag' : 'tags'}: ${hidden.join(', ')}`}
+                  {`and ${hidden.length} more ${hidden.length === 1 ? 'label' : 'labels'}: ${hidden.join(', ')}`}
                 </span>
               </span>
             )}

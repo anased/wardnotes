@@ -9,6 +9,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Topic-based knowledge organization (November 2026)
+
+Notes are now organized by linked topics instead of a flat list of tags.
+
+- **Topics** (`/topics/[id]`): first-class records with aliases and a short
+  description that nest Specialty → Domain → Topic → Subtopic. A topic can
+  have several parents (PRES under Cerebrovascular and Neurocritical care) and
+  is still one record. Topic pages show the breadcrumb and an "also in" line,
+  aliases, note count, subtopic chips, sections with their notes (type icons,
+  primary topic), Unsorted, and linked trials.
+- **Sections** belong to each topic: added from suggestions (Overview,
+  Pathophysiology, Diagnosis, …) or with a custom name, renamed, reordered and
+  deleted (their notes move to Unsorted). Only sections with notes are shown.
+- **Notes on several topics**, one primary, each with an optional section.
+  The note editor has a topic picker that matches names and aliases first
+  ("RPLS" finds PRES) before offering to create a topic.
+- **Topic tree** in the notes area (sidebar on desktop, collapsible panel on
+  mobile); clicking a topic opens its page. "View in Library" on a topic page
+  filters the Library by that topic (`?topic=`), including subtopics.
+- **Trials** (`/trials`, `/trials/[id]`): one shared record per trial
+  (acronym, year, population, intervention vs comparator, result, notes,
+  "superseded by"), linked from every topic that cites it.
+- **Labeled links** between notes and trials (answers, supports, cites,
+  critiques, illustrates, related), shown in both directions.
+- **Tag migration** (`scripts/tag-migration/`): exports a reviewable
+  tag → topic/section/drop mapping and generates idempotent, dry-run-first SQL
+  to apply it. `notes.tags` is left in place until removal is confirmed.
+
+Database: `src/lib/supabase/migrations/add_topics.sql` (tables, RLS, cycle
+prevention, `topic_descendants`, `notes_in_topic`, `search_topics`, …) with a
+rollback and local tests in `scripts/db-tests/`.
+
+Fixed: opening the Library with a filter in the URL (e.g. `/notes?category=…`)
+showed all notes because the initial load replaced the filtered list.
+
+#### Changed - One model for organizing notes
+
+What it is about → **Topics** (one primary). Which part → **Section**. What
+kind → **Type**. Done? → **Status**. Cross-cutting facts (RITE, Pediatric) →
+**Labels**. Specialty → the primary topic's top-level topic.
+
+- **Categories retired in the app.** The editor no longer asks for a category,
+  and the Library's category filter and Settings → Categories are gone. Cards
+  and note pages show the specialty from the primary topic (notes without a
+  topic still show their old category). Old `?category=Neurology` links open
+  the Neurology topic filter. `notes.category` stays in the database (now
+  optional) until this release is live; it is dropped afterwards.
+- **Tags are called Labels** in the editor, Library filter and chips
+  ("Label: RITE"), note pages and settings. Nothing changes in the database.
+- **Related notes** rank by shared topics, then nearby topics (same parent,
+  broader/narrower), then shared labels, and say why ("shared topic PRES",
+  "same parent: Cerebrovascular", "1 shared label").
+- **Topic pages** filter notes by type with chips ("All 12 · Question 5 ·
+  Review 3"); sections the filter empties are hidden.
+- **Trial type phased out.** Trials are shared records, so new notes can't be
+  typed Trial (existing ones keep it until migrated); the Library keeps the
+  Trial filter while such notes exist.
+- Section suggestions no longer include Articles, Clinical questions and
+  Cases (those are types). The note editor puts Labels on their own row.
+
+Migrations (reviewable, dry run first; both applied to production on 2026-11-15:
+271 notes filed under 61 new topics, 22 trial records linked from the 7 former
+Trial notes):
+- `scripts/tag-migration/`: every note without a topic is filed under its
+  category's topic; new `keep` action for cross-cutting labels.
+- `scripts/trial-notes/` (new): links each Trial note to a trial record
+  ("cites"), files the trial under the note's topics and retypes the note
+  (Review by default). Run after the tag migration.
+
 ### Added - Learning Questions from Clinical Encounters (February 2026)
 
 #### Overview

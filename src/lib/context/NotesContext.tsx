@@ -11,7 +11,8 @@ import {
   filterNotes as filterNotesQuery,
   Note,
   NoteFilters,
-  NoteInput
+  NoteInput,
+  NoteUpdate
 } from '../supabase/client';
 import { useAuth } from './AuthContext';
 
@@ -22,10 +23,12 @@ interface NotesContextType {
   fetchNotes: () => Promise<void>;
   fetchNoteById: (id: string) => Promise<Note>;
   addNote: (note: NoteInput) => Promise<Note>;
-  editNote: (id: string, note: Partial<Omit<Note, 'id' | 'user_id' | 'created_at'>>) => Promise<Note>;
+  editNote: (id: string, note: NoteUpdate) => Promise<Note>;
   removeNote: (id: string) => Promise<void>;
+  /** Re-reads one note into the list, e.g. after its topics changed (they're embedded in each note). */
+  reloadNote: (id: string) => Promise<void>;
   search: (query: string) => Promise<void>;
-  /** Filter by category, tags (a note must have all of them), status and content type. */
+  /** Filter by tags (a note must have all of them), status, content type and topic (with subtopics). */
   filterNotes: (filters: NoteFilters) => Promise<void>;
 }
 
@@ -41,6 +44,17 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
   // List requests (fetch/search/filter) can overlap, e.g. the initial load and
   // a filter from the URL. Only the most recent one may update the list.
   const listRequestRef = useRef(0);
+  // User the latest list request was made for. A page that loads a filtered
+  // list on mount (e.g. /notes?topic=…) runs its effect before this
+  // provider's, so the provider must not replace that list with all notes.
+  const listRequestedForRef = useRef<string | null>(null);
+  const userIdRef = useRef<string | null>(null);
+  userIdRef.current = user?.id ?? null;
+
+  const beginListRequest = () => {
+    listRequestedForRef.current = userIdRef.current;
+    return ++listRequestRef.current;
+  };
 
   // Fetch all notes
   const fetchNotes = useCallback(async () => {
@@ -50,7 +64,7 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const requestId = ++listRequestRef.current;
+    const requestId = beginListRequest();
     try {
       setLoading(true);
       const data = await getNotes();
@@ -70,12 +84,15 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
   // Load notes once when user is authenticated
   useEffect(() => {
     const currentUserId = user?.id || null;
+    const userChanged = currentUserId !== lastUserIdRef.current;
+    lastUserIdRef.current = currentUserId;
 
-    // Only fetch if:
-    // 1. User ID changed (new user or logout), OR
-    // 2. We have no notes yet (initial load) AND not in a filtered state
-    if (currentUserId !== lastUserIdRef.current || (currentUserId && notes.length === 0 && !isFiltered)) {
-      lastUserIdRef.current = currentUserId;
+    // Skip when a page already asked for a (possibly filtered) list for this user
+    const alreadyRequested = currentUserId !== null && listRequestedForRef.current === currentUserId;
+    if (alreadyRequested) return;
+
+    // Fetch if the user changed (login/logout) or nothing has loaded yet
+    if (userChanged || (currentUserId && notes.length === 0 && !isFiltered)) {
       fetchNotes();
     }
   }, [user, fetchNotes, notes.length, isFiltered]);
@@ -112,7 +129,7 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Update an existing note
-  const editNote = useCallback(async (id: string, note: Partial<Omit<Note, 'id' | 'user_id' | 'created_at'>>) => {
+  const editNote = useCallback(async (id: string, note: NoteUpdate) => {
     try {
       setLoading(true);
       const updatedNote = await updateNote(id, note);
@@ -144,12 +161,21 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const reloadNote = useCallback(async (id: string) => {
+    try {
+      const fresh = await getNoteById(id);
+      setNotes((prev) => prev.map((n) => (n.id === id ? fresh : n)));
+    } catch (err) {
+      console.error(`Error reloading note ${id}:`, err);
+    }
+  }, []);
+
   // Search notes by text (calls backend, maintains existing behavior)
   const search = useCallback(async (query: string) => {
     if (!query.trim()) {
       return fetchNotes();
     }
-    const requestId = ++listRequestRef.current;
+    const requestId = beginListRequest();
     try {
       setLoading(true);
       const results = await searchNotes(query);
@@ -166,15 +192,14 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
     }
   }, [fetchNotes]);
 
-  // Filter notes by category and/or tags in the database
+  // Filter notes by topic, tags, status and/or type in the database
   const filterNotes = useCallback(async (filters: NoteFilters) => {
-    const hasCategory = !!filters.category && filters.category !== 'All';
     const hasTags = (filters.tags?.length ?? 0) > 0;
-    if (!hasCategory && !hasTags && !filters.status && !filters.contentType) {
+    if (!hasTags && !filters.status && !filters.contentType && !filters.topicId) {
       return fetchNotes();
     }
 
-    const requestId = ++listRequestRef.current;
+    const requestId = beginListRequest();
     try {
       setLoading(true);
       const results = await filterNotesQuery(filters);
@@ -200,6 +225,7 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
     addNote,
     editNote,
     removeNote,
+    reloadNote,
     search,
     filterNotes,
   };

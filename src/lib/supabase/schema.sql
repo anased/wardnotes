@@ -314,7 +314,7 @@ CREATE TABLE public.notes (
     title text NOT NULL,
     content jsonb NOT NULL,
     tags text[] DEFAULT '{}'::text[],
-    category text NOT NULL,
+    category text,  -- legacy; optional since make_note_category_optional.sql (specialty comes from the primary topic)
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT notes_pkey PRIMARY KEY (id),
     CONSTRAINT notes_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
@@ -469,3 +469,12 @@ CREATE POLICY "Users can view their own tags" ON public.tags FOR SELECT USING (a
 CREATE POLICY "Users can create their own tags" ON public.tags FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update their own tags" ON public.tags FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "Users can delete their own tags" ON public.tags FOR DELETE USING (auth.uid() = user_id);
+--
+-- Topics, sections, trials and links (2026-11-12)
+--
+-- Tables topics, topic_edges, topic_sections, note_topics, trials,
+-- trial_topics and note_links, their RLS policies and the functions
+-- topic_descendants, notes_in_topic, search_topics, topic_note_counts,
+-- set_note_topics, set_trial_topics and reorder_topic_sections are defined in
+-- migrations/add_topics.sql (tested by scripts/db-tests/run-topics-tests.sh).
+--

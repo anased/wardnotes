@@ -1,9 +1,8 @@
 // src/components/notes/NoteForm.tsx
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Note } from '@/lib/supabase/client';
 import useNotes from '@/lib/hooks/useNotes';
-import useCategories from '@/lib/hooks/useCategories';
 import useTags from '@/lib/hooks/useTags';
 import { useDraftPersistence } from '@/lib/hooks/useDraftPersistence';
 import Button from '../ui/Button';
@@ -11,9 +10,19 @@ import Input from '../ui/Input';
 import Select from '../ui/Select';
 import TagInput from '../ui/TagInput';
 import NoteEditor from './NoteEditor';
-import CategoryCreationModal from '../ui/CategoryCreationModal';
 import NoteImprover from './NoteImprover'; // Add this import
 import LearningQuestionsInput from './LearningQuestionsInput';
+import NoteTopicPicker from '../topics/NoteTopicPicker';
+import useTopics from '@/lib/hooks/useTopics';
+import { noteSpecialty } from '@/lib/utils/specialty';
+import { getNoteTopicLinks, saveNoteTopics } from '@/lib/supabase/noteTopics';
+import { NoteTopicLink, parseDraftLinks, sameLinks } from '@/lib/utils/noteTopicLinks';
+import { useNotification } from '@/lib/context/NotificationContext';
+import NoteLinksField, { LinkDraftWithTitle } from '../links/NoteLinksField';
+import useTrials from '@/lib/hooks/useTrials';
+import { getNoteSummaries, getOutgoingLinks, saveOutgoingNoteLinks } from '@/lib/supabase/noteLinks';
+import { draftKey, isLinkRelation } from '@/lib/utils/noteLinks';
+import { trialLabel } from '@/lib/utils/trials';
 import PremiumFeatureGate from '../premium/PremiumFeatureGate'; // Import the premium gate
 import { useAnalytics } from '@/lib/analytics/useAnalytics';
 import { useSubscription } from '@/lib/hooks/useSubscription';
@@ -33,6 +42,8 @@ import {
 interface NoteFormProps {
   initialData?: Partial<Note>;
   isEditing?: boolean;
+  /** Topic links for a new note, e.g. when started from a topic page. */
+  initialTopicLinks?: NoteTopicLink[];
 }
 const ENABLE_PREMIUM_FEATURES = true;
 
@@ -45,9 +56,6 @@ const EMPTY_CONTENT = {
     },
   ],
 };
-
-// Special value to indicate "Add new category" option
-const ADD_NEW_CATEGORY = 'add_new_category';
 
 // Define types for TipTap nodes
 interface TextNode {
@@ -84,14 +92,15 @@ interface TipTapDocument {
   content: ContentNode[];
 }
 
-export default function NoteForm({ initialData = {}, isEditing = false }: NoteFormProps) {
+export default function NoteForm({ initialData = {}, isEditing = false, initialTopicLinks = [] }: NoteFormProps) {
   const router = useRouter();
-  const { addNote, editNote } = useNotes();
-  const { categories, addCategory } = useCategories();
+  const { addNote, editNote, reloadNote } = useNotes();
   const { tags, addTag } = useTags();
   const { track } = useAnalytics();
   const { subscription } = useSubscription();
   const { refreshQuota } = useQuota();
+  const { graph: topicGraph, refreshCounts: refreshTopicCounts } = useTopics();
+  const { showNotification } = useNotification();
 
   const [title, setTitle] = useState(initialData.title || '');
 
@@ -103,18 +112,25 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
   const [learningError, setLearningError] = useState<string | null>(null);
   const [content, setContent] = useState<Record<string, unknown>>(initialData.content || EMPTY_CONTENT);
   const [selectedTags, setSelectedTags] = useState<string[]>(initialData.tags || []);
-  const [category, setCategory] = useState<string>(initialData.category || '');
   const [status, setStatus] = useState<NoteStatus>(
     isNoteStatus(initialData.status) ? initialData.status : 'answered'
   );
   const [contentType, setContentType] = useState<ContentType | ''>(
     isContentType(initialData.content_type) ? initialData.content_type : ''
   );
+  const [topicLinks, setTopicLinks] = useState<NoteTopicLink[]>(initialTopicLinks);
+  // Links as stored, to skip saving when they didn't change (null until loaded)
+  const [savedTopicLinks, setSavedTopicLinks] = useState<NoteTopicLink[] | null>(
+    initialData.id ? null : []
+  );
+  const topicsFromDraftRef = useRef(false);
+  const [linkDrafts, setLinkDrafts] = useState<LinkDraftWithTitle[]>([]);
+  // draftKeys of the links as stored (null until loaded)
+  const [savedLinkKeys, setSavedLinkKeys] = useState<string[] | null>(initialData.id ? null : []);
+  const linksFromDraftRef = useRef(false);
+  const { byId: trialsById } = useTrials();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
-
-  // State for the category creation modal
-  const [showCategoryModal, setShowCategoryModal] = useState(false);
 
   // Draft persistence hook
   const { loadDraft, clearDraft } = useDraftPersistence(
@@ -122,44 +138,17 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
     {
       title,
       content,
-      category,
       tags: selectedTags,
       status,
       content_type: contentType,
+      topics: topicLinks,
+      links: linkDrafts,
     },
     true // Enable draft persistence
   );
 
-  // Generate category options from the database, adding the "Add new category" option
-  const categoryOptions = [
-    // Add placeholder option if no categories exist
-    ...(categories.length === 0 ? [{
-      value: '',
-      label: 'No categories yet - create one below'
-    }] : []),
-    // Add existing categories
-    ...categories.map(cat => ({
-      value: cat.name,
-      label: cat.name
-    })),
-    // Always add the "Add new category" option
-    {
-      value: ADD_NEW_CATEGORY,
-      label: '+ Add new category...'
-    }
-  ];
-
   // Extract all tag names for suggestions
   const tagSuggestions = tags.map(tag => tag.name);
-
-  // Set a default category if none was selected and options are available
-  // Only run this ONCE on mount, not on every re-render
-  useEffect(() => {
-    if (!category && categories.length > 0 && !initialData.category) {
-      setCategory(categories[0].name);
-    }
-     
-  }, [categories.length]); // Only when categories are loaded, not on every change
 
   // Automatically load and restore draft on component mount (silently)
   useEffect(() => {
@@ -171,7 +160,6 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
       const isDraftDifferent =
         draft.title !== (initialData.title || '') ||
         JSON.stringify(draft.content) !== JSON.stringify(initialData.content || EMPTY_CONTENT) ||
-        draft.category !== (initialData.category || '') ||
         JSON.stringify(draft.tags) !== JSON.stringify(initialData.tags || []) ||
         (draft.status !== undefined && draft.status !== (initialData.status || 'answered')) ||
         (draft.content_type !== undefined && draft.content_type !== (initialData.content_type || ''));
@@ -180,41 +168,79 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
       if (isDraftDifferent) {
         setTitle(draft.title);
         setContent(draft.content);
-        setCategory(draft.category);
         setSelectedTags(draft.tags);
         if (isNoteStatus(draft.status)) setStatus(draft.status);
         if (draft.content_type === '' || isContentType(draft.content_type)) {
           setContentType(draft.content_type);
         }
       }
+
+      if (Array.isArray(draft.links)) {
+        const restored = (draft.links as Record<string, unknown>[]).filter(
+          (l): l is Record<string, unknown> & LinkDraftWithTitle =>
+            !!l &&
+            isLinkRelation(l.relation) &&
+            (l.target_type === 'note' || l.target_type === 'trial') &&
+            typeof l.target_id === 'string'
+        ).map((l) => ({ relation: l.relation, target_type: l.target_type, target_id: l.target_id, title: String(l.title ?? '') }));
+        if (restored.length > 0 || initialData.id) {
+          linksFromDraftRef.current = true;
+          setLinkDrafts(restored);
+        }
+      }
+
+      const draftTopics = parseDraftLinks(draft.topics);
+      if (draftTopics && (draftTopics.length > 0 || initialData.id)) {
+        topicsFromDraftRef.current = true;
+        setTopicLinks(draftTopics);
+      }
     }
      
   }, []); // Only run on mount
 
-  // Handle category change with special handling for "Add new category" option
-  const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value;
-    
-    if (value === ADD_NEW_CATEGORY) {
-      setShowCategoryModal(true);
-    } else {
-      setCategory(value);
-    }
-  };
+  // Load an existing note's outgoing links (a restored draft keeps its own)
+  useEffect(() => {
+    if (!initialData.id) return;
+    let cancelled = false;
+    getOutgoingLinks('note', initialData.id)
+      .then(async (links) => {
+        const noteTitles = await getNoteSummaries(
+          links.filter((l) => l.target_type === 'note').map((l) => l.target_id)
+        );
+        if (cancelled) return;
+        setSavedLinkKeys(links.map(draftKey));
+        if (!linksFromDraftRef.current) {
+          setLinkDrafts(
+            links.map((l) => ({
+              relation: l.relation,
+              target_type: l.target_type,
+              target_id: l.target_id,
+              title: l.target_type === 'note' ? noteTitles[l.target_id]?.title ?? 'Note' : '',
+            }))
+          );
+        }
+      })
+      .catch((err) => console.error('Error loading note links:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [initialData.id]);
 
-  // Handle creating a new category from the modal
-  const handleCreateCategory = async (name: string, color: string) => {
-    try {
-      // Create the new category
-      const newCategory = await addCategory(name, color);
-      
-      // Set the new category as the selected one
-      setCategory(newCategory.name);
-    } catch (err) {
-      console.error('Error creating category:', err);
-      throw err; // Let the modal handle the error
-    }
-  };
+  // Load an existing note's topic links (a restored draft keeps its own)
+  useEffect(() => {
+    if (!initialData.id) return;
+    let cancelled = false;
+    getNoteTopicLinks(initialData.id)
+      .then((links) => {
+        if (cancelled) return;
+        setSavedTopicLinks(links);
+        if (!topicsFromDraftRef.current) setTopicLinks(links);
+      })
+      .catch((err) => console.error('Error loading note topics:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, [initialData.id]);
 
   // Create any tags on the note that aren't in the user's tag list yet.
   // Runs when the note is saved, so tags typed and removed again aren't kept.
@@ -535,13 +561,43 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
     }
   };
 
+  /**
+   * Saves topic links when they changed. The note itself is already saved at
+   * this point, so a failure is reported without failing the whole save
+   * (retrying would otherwise create a second copy of a new note).
+   */
+  const saveTopicLinks = async (noteId: string) => {
+    // Existing links not loaded yet (and none restored from a draft): the
+    // user can't have changed them, and saving would wipe them.
+    if (savedTopicLinks === null && !topicsFromDraftRef.current) return;
+    if (savedTopicLinks && sameLinks(topicLinks, savedTopicLinks)) return;
+    try {
+      await saveNoteTopics(noteId, topicLinks);
+      setSavedTopicLinks(topicLinks);
+      refreshTopicCounts();
+      reloadNote(noteId);
+    } catch (err) {
+      console.error('Error saving note topics:', err);
+      showNotification('The note was saved, but its topics could not be updated. Edit the note to try again.', 'error', 8000);
+    }
+  };
+
+  /** Saves outgoing links when they changed; like topics, a failure doesn't fail the note save. */
+  const saveLinks = async (noteId: string) => {
+    if (savedLinkKeys === null && !linksFromDraftRef.current) return;
+    const keys = linkDrafts.map(draftKey);
+    if (savedLinkKeys && keys.length === savedLinkKeys.length && keys.every((k) => savedLinkKeys.includes(k))) return;
+    try {
+      await saveOutgoingNoteLinks(noteId, linkDrafts);
+      setSavedLinkKeys(keys);
+    } catch (err) {
+      console.error('Error saving note links:', err);
+      showNotification('The note was saved, but its links could not be updated. Edit the note to try again.', 'error', 8000);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!category) {
-      setError(categories.length === 0 ? 'Please create a category first' : 'Please select a category');
-      return;
-    }
 
     // Generate title if not provided
     const finalTitle = title.trim() || generateTitleFromContent(content);
@@ -557,10 +613,11 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
           title: finalTitle,
           content,
           tags: finalTags,
-          category,
           status,
           content_type: contentType || null,
         });
+        await saveTopicLinks(initialData.id);
+        await saveLinks(initialData.id);
 
         // Clear draft after successful save
         clearDraft();
@@ -572,17 +629,18 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
           title: finalTitle,
           content,
           tags: finalTags,
-          category,
           status,
           content_type: contentType || null,
         });
+        await saveTopicLinks(newNote.id);
+        await saveLinks(newNote.id);
 
         // Clear draft after successful save
         clearDraft();
 
         // Track note creation
         track('note_created', {
-          note_category: category,
+          note_category: noteSpecialty(topicGraph, { note_topics: topicLinks })?.name,
           tag_count: finalTags.length,
           subscription_status: subscription?.subscription_status === 'active' ? 'premium' : 'free'
         });
@@ -620,26 +678,23 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
         placeholder="Auto-generated from content if left empty"
       />
       
+      <NoteTopicPicker value={topicLinks} onChange={setTopicLinks} />
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <Select
-          label="Category"
-          value={category}
-          onChange={handleCategoryChange}
-          options={categoryOptions}
-        />
-        
-        <TagInput
-          label="Tags"
-          value={selectedTags}
-          onChange={setSelectedTags}
-          suggestions={tagSuggestions}
-        />
+        <div className="md:col-span-2">
+          <TagInput
+            label="Labels"
+            value={selectedTags}
+            onChange={setSelectedTags}
+            suggestions={tagSuggestions}
+          />
+        </div>
 
         <Select
           label="Type"
           value={contentType}
           onChange={(e) => setContentType(isContentType(e.target.value) ? e.target.value : '')}
-          options={contentTypeOptions('No type')}
+          options={contentTypeOptions('No type', [initialData.content_type, contentType])}
         />
 
         <Select
@@ -651,6 +706,17 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
           options={NOTE_STATUSES.map((value) => ({ value, label: STATUS_LABELS[value] }))}
         />
       </div>
+
+      <NoteLinksField
+        noteId={initialData.id}
+        value={linkDrafts.map((l) =>
+          // Trial titles come from the trials list (always current)
+          l.target_type === 'trial' && trialsById.has(l.target_id)
+            ? { ...l, title: trialLabel(trialsById.get(l.target_id)!) }
+            : l
+        )}
+        onChange={setLinkDrafts}
+      />
 
       {/* Learning Questions Section - Collapsible */}
       <div className="border border-blue-200 dark:border-blue-800 rounded-lg overflow-hidden">
@@ -773,13 +839,6 @@ export default function NoteForm({ initialData = {}, isEditing = false }: NoteFo
           {isEditing ? 'Update Note' : 'Save Note'}
         </Button>
       </div>
-
-      {/* Category Creation Modal */}
-      <CategoryCreationModal
-        isOpen={showCategoryModal}
-        onClose={() => setShowCategoryModal(false)}
-        onSave={handleCreateCategory}
-      />
     </form>
   );
 }
