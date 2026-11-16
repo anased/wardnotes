@@ -47,6 +47,10 @@ export default function Modal({ isOpen, onClose, title, children, maxWidth = 'ma
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
+      // React events bubble through portals along the component tree, so a
+      // form inside this dialog would otherwise also submit any form that
+      // renders the modal (e.g. "Create Topic" submitting the note form).
+      onSubmit={(e) => e.stopPropagation()}
     >
       <div
         ref={panelRef}
