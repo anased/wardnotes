@@ -189,6 +189,10 @@ export default function NoteEditor({
     content,
     editable,
     editorProps: {
+      attributes: {
+        // Let the editable area fill the box so clicks anywhere inside land in the editor
+        class: 'min-h-[200px]',
+      },
       handlePaste: (view, event) => {
         const files = getImageFiles(event.clipboardData?.files);
         if (files.length === 0) return false;
@@ -275,6 +279,26 @@ export default function NoteEditor({
     editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
     setShowLinkMenu(false);
   }, [editor, linkUrl]);
+
+  // Clicking the padding around the editable area (or empty space in the box)
+  // should still place the cursor in the editor, at the nearest text position.
+  const handleContentMouseDown = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (!editor || !editable) return;
+    const dom = editor.view.dom;
+    if (dom.contains(event.target as Node)) return; // ProseMirror handles its own clicks
+
+    event.preventDefault();
+    const rect = dom.getBoundingClientRect();
+    const left = Math.min(Math.max(event.clientX, rect.left + 1), rect.right - 1);
+    const top = Math.min(Math.max(event.clientY, rect.top + 1), rect.bottom - 1);
+    const pos = editor.view.posAtCoords({ left, top })?.pos;
+
+    if (pos === undefined) {
+      editor.chain().focus('end').run();
+    } else {
+      editor.chain().focus().setTextSelection(pos).run();
+    }
+  }, [editor, editable]);
 
   const addTable = useCallback(() => {
     if (!editor) return;
@@ -528,8 +552,11 @@ export default function NoteEditor({
         </div>
       )}
       
-      <div className="p-4">
-        <EditorContent editor={editor} className="min-h-[200px] prose dark:prose-invert max-w-none" />
+      <div
+        className={`p-4 ${editable ? 'cursor-text' : ''}`}
+        onMouseDown={handleContentMouseDown}
+      >
+        <EditorContent editor={editor} className="prose dark:prose-invert max-w-none" />
       </div>
     </div>
   );
