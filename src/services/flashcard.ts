@@ -305,6 +305,21 @@ export class FlashcardService {
     return data || [];
   }
   
+  /** Number of cards due now across all decks (same rule as getDueCards), without fetching rows. */
+  static async getDueCount(): Promise<number> {
+    const user = await this.getAuthenticatedUser();
+
+    const { count, error } = await supabase
+      .from('flashcards')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .lte('next_review', new Date().toISOString())
+      .neq('status', 'suspended');
+
+    if (error) throw error;
+    return count ?? 0;
+  }
+
   static async getFlashcardsDue(deckId?: string, noteId?: string, limit: number = 50): Promise<Flashcard[]> {
     return this.getDueCards(deckId, noteId, limit);
   }

@@ -166,6 +166,8 @@ export const searchNotes = async (query: string) => {
 };
 
 export type NoteFilters = {
+  /** Text search (see search_notes); the other filters narrow its results. */
+  query?: string;
   /** Notes must have ALL of these tags. */
   tags?: string[];
   status?: NoteStatus;
@@ -174,14 +176,22 @@ export type NoteFilters = {
   topicId?: string;
 };
 
-// Filter notes by topic, tags, status and/or content type. Tag matching is AND: a note must
-// carry every selected tag. Tag names are canonical in the database, so
-// an exact array containment check is enough.
-export const filterNotes = async ({ tags = [], status, contentType, topicId }: NoteFilters) => {
-  // notes_in_topic returns notes rows, so the filters below still apply to it
-  let query = topicId
-    ? supabase.rpc('notes_in_topic', { p_topic_id: topicId })
-    : supabase.from('notes').select();
+// Filter notes by text search, topic, tags, status and/or content type; all
+// given filters must match. Tag matching is AND: a note must carry every
+// selected tag. Tag names are canonical in the database, so an exact array
+// containment check is enough.
+export const filterNotes = async ({ query: text, tags = [], status, contentType, topicId }: NoteFilters) => {
+  const q = text?.trim() || '';
+  // search_notes and notes_in_topic return notes rows, so the filters below
+  // still apply to them. Both together can't be one query: the topic's note
+  // ids are fetched alongside and intersected below.
+  let query = q
+    ? supabase.rpc('search_notes', { search_query: q })
+    : topicId
+      ? supabase.rpc('notes_in_topic', { p_topic_id: topicId })
+      : supabase.from('notes').select();
+  const topicIdsRequest =
+    q && topicId ? supabase.rpc('notes_in_topic', { p_topic_id: topicId }).select('id') : null;
 
   if (tags.length > 0) {
     query = query.contains('tags', tags);
@@ -196,14 +206,20 @@ export const filterNotes = async ({ tags = [], status, contentType, topicId }: N
   }
 
   // select() last: on an rpc call it would hide the filter methods (types only)
-  const { data, error } = await query.select(NOTE_SELECT).order('created_at', { ascending: false });
+  const [{ data, error }, topicResult] = await Promise.all([
+    query.select(NOTE_SELECT).order('created_at', { ascending: false }),
+    topicIdsRequest,
+  ]);
 
-  if (error) {
-    console.error('Error filtering notes:', error);
-    throw error;
+  if (error || topicResult?.error) {
+    console.error('Error filtering notes:', error || topicResult?.error);
+    throw error || topicResult?.error;
   }
 
-  return data as Note[];
+  const notes = data as Note[];
+  if (!topicResult) return notes;
+  const inTopic = new Set((topicResult.data as { id: string }[]).map((r) => r.id));
+  return notes.filter((n) => inTopic.has(n.id));
 };
 
 /** True when the user has at least one note of this type (e.g. the retired 'trial'). */

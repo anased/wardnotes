@@ -215,7 +215,7 @@ export default function TopicPage() {
 
   return (
     <PageContainer>
-      <div className="grid gap-6 lg:grid-cols-[16rem_minmax(0,1fr)]">
+      <div className="grid gap-6">
         <TopicSidebar selectedId={topic.id} />
 
         <div className="min-w-0 space-y-6">

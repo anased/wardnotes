@@ -156,7 +156,7 @@ export function FlashcardDashboard() {
   // Custom study session rendering
   if (customStudyCards) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div>
         <StudySession
           cards={customStudyCards}
           onSessionComplete={handleCustomSessionComplete}
@@ -168,7 +168,7 @@ export function FlashcardDashboard() {
 
   if (studyingDeck) {
     return (
-      <div className="container mx-auto px-4 py-8">
+      <div>
         <StudySession
           deck={studyingDeck}
           onSessionComplete={handleSessionComplete}
@@ -179,15 +179,9 @@ export function FlashcardDashboard() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold">Flashcards</h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            Study with spaced repetition
-          </p>
-        </div>
-        <div className="flex gap-3">
+    <div>
+      <div className="flex justify-end mb-8">
+        <div className="flex flex-wrap justify-end gap-3">
           <Button
             onClick={() => setIsCustomStudyModalOpen(true)}
             variant="outline"

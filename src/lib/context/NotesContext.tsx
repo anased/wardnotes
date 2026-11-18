@@ -192,10 +192,10 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
     }
   }, [fetchNotes]);
 
-  // Filter notes by topic, tags, status and/or type in the database
+  // Filter notes by text search, topic, tags, status and/or type in the database
   const filterNotes = useCallback(async (filters: NoteFilters) => {
     const hasTags = (filters.tags?.length ?? 0) > 0;
-    if (!hasTags && !filters.status && !filters.contentType && !filters.topicId) {
+    if (!filters.query?.trim() && !hasTags && !filters.status && !filters.contentType && !filters.topicId) {
       return fetchNotes();
     }
 
