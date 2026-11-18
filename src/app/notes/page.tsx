@@ -1,14 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import useAuth from '@/lib/hooks/useAuth';
 import useNotes from '@/lib/hooks/useNotes';
 import useTags from '@/lib/hooks/useTags';
 import PageContainer from '@/components/layout/PageContainer';
 import NoteCard from '@/components/notes/NoteCard';
-import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import Button from '@/components/ui/Button';
 import Spinner from '@/components/ui/Spinner';
@@ -43,7 +42,7 @@ const STATUS_OPTIONS = [
 ];
 
 
-export default function NotesPage() {
+function NotesLibrary() {
   const { user, loading: authLoading } = useAuth();
   const {
     notes,
@@ -59,10 +58,13 @@ export default function NotesPage() {
   const { subscription } = useSubscription();
   const router = useRouter();
 
-  // Applied filters (mirrored in the URL) and the text currently in the search box
+  // Applied filters, mirrored in the URL. Text search comes from the header
+  // search box, which navigates here with ?q=.
   const [filters, setFilters] = useState<LibraryFilters>(EMPTY_FILTERS);
-  const [searchInput, setSearchInput] = useState('');
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
   const [isSearching, setIsSearching] = useState(false);
+  const qParam = (useSearchParams()?.get('q') || '').trim();
   const [tagUsage, setTagUsage] = useState<TagUsage[]>([]);
   // "Trial" is retired as a type: offer it as a filter only while notes still have it
   const [hasTrialNotes, setHasTrialNotes] = useState(false);
@@ -111,6 +113,7 @@ export default function NotesPage() {
    * survive a refresh), then loads the matching notes.
    */
   const applyFilters = useCallback(async (next: LibraryFilters) => {
+    filtersRef.current = next; // before the URL changes, so the ?q= effect sees it
     setFilters(next);
     const qs = buildLibraryQuery(next);
     window.history.replaceState(null, '', qs ? `${window.location.pathname}?${qs}` : window.location.pathname);
@@ -135,7 +138,6 @@ export default function NotesPage() {
 
   const updateFilters = (changes: Partial<LibraryFilters>) => {
     // Changing a filter ends a text search
-    setSearchInput('');
     return applyFilters({ ...filters, q: '', ...changes });
   };
 
@@ -157,8 +159,9 @@ export default function NotesPage() {
     if (legacyCategoryParam(search) && topicsLoading) return;
     initialLoadForRef.current = user.id;
     const fromUrl = parseLibraryParams(search, (name) => rootTopicByName(topicGraph, name));
-    setSearchInput(fromUrl.q);
-    applyFilters(fromUrl);
+    // Searches arrive from the header search box as ?q=; run them as searches (tracked)
+    if (fromUrl.q) runSearch(fromUrl.q);
+    else applyFilters(fromUrl);
     // Only on login / first load; later changes go through the handlers
   }, [user, topicsLoading]);
 
@@ -173,10 +176,14 @@ export default function NotesPage() {
     }
   }, [tags]);
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const q = searchInput.trim();
+  // A search from the header while this page is open changes ?q= without
+  // remounting the page: run it. (Our own URL updates already match filters.q.)
+  useEffect(() => {
+    if (!initialLoadForRef.current || qParam === filtersRef.current.q) return;
+    runSearch(qParam);
+  }, [qParam]);
 
+  const runSearch = async (q: string) => {
     try {
       setIsSearching(true);
       // A search replaces the other filters
@@ -204,7 +211,6 @@ export default function NotesPage() {
   };
 
   const handleClearFilters = () => {
-    setSearchInput('');
     applyFilters(EMPTY_FILTERS);
   };
 
@@ -224,34 +230,9 @@ export default function NotesPage() {
         <TopicSidebar selectedId={filters.topic || null} />
 
         <div className="space-y-6 min-w-0">
-          {/* Search and filter section */}
-          <div className="p-4 bg-white rounded-lg shadow dark:bg-gray-800">
-            <form onSubmit={handleSearch} role="search" className="flex flex-col gap-3 sm:flex-row">
-              <div className="flex-1">
-                <Input
-                  aria-label="Search notes"
-                  placeholder="Search notes..."
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  fullWidth
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button type="submit" isLoading={isSearching}>
-                  Search
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleClearFilters}
-                  disabled={loading}
-                >
-                  Clear
-                </Button>
-              </div>
-            </form>
-
-            <div className="grid grid-cols-1 mt-3 gap-x-3 sm:grid-cols-2 lg:grid-cols-[repeat(2,minmax(0,11rem))_1fr]">
+          {/* Filters (each field carries its own bottom margin, hence pb-0) */}
+          <div className="p-4 pb-0 bg-white rounded-lg shadow dark:bg-gray-800">
+            <div className="grid grid-cols-1 gap-x-3 sm:grid-cols-2 lg:grid-cols-[repeat(2,minmax(0,11rem))_1fr]">
               <Select
                 aria-label="Type"
                 options={typeOptions}
@@ -277,6 +258,24 @@ export default function NotesPage() {
               </div>
             </div>
           </div>
+
+          {/* Search indicator: the header search box is the only place to type a search */}
+          {filters.q && (
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center px-3 py-1 text-sm bg-gray-100 rounded-full dark:bg-gray-700">
+                <span>
+                  Search: <span className="font-medium">&ldquo;{filters.q}&rdquo;</span>
+                </span>
+                <button
+                  onClick={handleClearFilters}
+                  aria-label="Clear search"
+                  className={`${chipButtonClass} text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white`}
+                >
+                  &times;
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Filter indicators */}
           {hasActiveFilters && (
@@ -388,7 +387,7 @@ export default function NotesPage() {
             ) : (
               <div className="note-grid">
                 {notes.map((note) => (
-                  <NoteCard key={note.id} note={note} onTagClick={handleNoteTagClick} />
+                  <NoteCard key={note.id} note={note} onTagClick={handleNoteTagClick} showPreview />
                 ))}
               </div>
             )}
@@ -407,5 +406,14 @@ export default function NotesPage() {
         </div>
       </div>
     </PageContainer>
+  );
+}
+
+// useSearchParams needs a Suspense boundary so the page can still be prerendered.
+export default function NotesPage() {
+  return (
+    <Suspense fallback={null}>
+      <NotesLibrary />
+    </Suspense>
   );
 }

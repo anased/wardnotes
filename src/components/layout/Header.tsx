@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { FormEvent, Suspense, useEffect, useRef, useState } from 'react';
 import useAuth from '@/lib/hooks/useAuth';
 
 interface HeaderProps {
@@ -11,6 +11,8 @@ interface HeaderProps {
 export default function Header({ showActions = false }: HeaderProps) {
   const { user, signOut } = useAuth();
   const withActions = showActions && !!user;
+  // Phones: the search box opens in a row under the header
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   return (
     <header className="sticky top-0 z-10 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
@@ -25,8 +27,30 @@ export default function Header({ showActions = false }: HeaderProps) {
 
         {withActions ? (
           <>
-            <HeaderSearch />
+            <Suspense fallback={<div className="hidden md:block flex-1" />}>
+              <HeaderSearch className="hidden md:flex flex-1 justify-center min-w-0" enableShortcut />
+            </Suspense>
             <div className="flex items-center gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => setMobileSearchOpen((o) => !o)}
+                aria-label={mobileSearchOpen ? 'Close search' : 'Search notes'}
+                aria-expanded={mobileSearchOpen}
+                aria-controls="mobile-search"
+                className="md:hidden inline-flex items-center justify-center w-11 h-11 rounded-lg text-gray-600 hover:bg-gray-100
+                  focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
+                <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+                  {mobileSearchOpen ? (
+                    <path d="M6 6l12 12M18 6L6 18" />
+                  ) : (
+                    <>
+                      <circle cx="11" cy="11" r="7" />
+                      <path d="M20 20l-3.5-3.5" />
+                    </>
+                  )}
+                </svg>
+              </button>
               <Link
                 href="/notes/new"
                 className="inline-flex items-center gap-2 h-11 px-4 rounded-lg bg-primary-600 text-white text-[15px] font-semibold
@@ -68,17 +92,42 @@ export default function Header({ showActions = false }: HeaderProps) {
           </div>
         )}
       </div>
+      {withActions && mobileSearchOpen && (
+        <div id="mobile-search" className="px-4 pb-3 md:hidden">
+          <Suspense fallback={null}>
+            <HeaderSearch className="flex" autoFocus onSubmitted={() => setMobileSearchOpen(false)} />
+          </Suspense>
+        </div>
+      )}
     </header>
   );
 }
 
-/** Search box that opens the Library with the query; "/" focuses it from anywhere on the page. */
-function HeaderSearch() {
+interface HeaderSearchProps {
+  className?: string;
+  autoFocus?: boolean;
+  /** Let "/" focus this box from anywhere on the page. */
+  enableShortcut?: boolean;
+  onSubmitted?: () => void;
+}
+
+/**
+ * Search box that opens the Library with the query (the Library has no search
+ * box of its own). On the Library it shows the search being viewed.
+ */
+function HeaderSearch({ className = '', autoFocus = false, enableShortcut = false, onSubmitted }: HeaderSearchProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const currentQ = pathname === '/notes' ? searchParams?.get('q') ?? '' : '';
   const inputRef = useRef<HTMLInputElement>(null);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(currentQ);
+
+  // Follow the URL: a new search, or the Library clearing it
+  useEffect(() => setQuery(currentQ), [currentQ]);
 
   useEffect(() => {
+    if (!enableShortcut) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
       const target = e.target as HTMLElement | null;
@@ -88,16 +137,18 @@ function HeaderSearch() {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
+  }, [enableShortcut]);
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
     const q = query.trim();
     router.push(q ? `/notes?q=${encodeURIComponent(q)}` : '/notes');
+    inputRef.current?.blur();
+    onSubmitted?.();
   };
 
   return (
-    <form role="search" onSubmit={onSubmit} className="hidden md:flex flex-1 justify-center min-w-0">
+    <form role="search" onSubmit={onSubmit} className={className}>
       <label className="relative block w-full max-w-xl">
         <span className="sr-only">Search notes</span>
         <svg
@@ -120,18 +171,22 @@ function HeaderSearch() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search notes, labels, questions…"
-          aria-keyshortcuts="/"
+          autoFocus={autoFocus}
+          enterKeyHint="search"
+          aria-keyshortcuts={enableShortcut ? '/' : undefined}
           className="w-full h-11 pl-10 pr-10 rounded-lg border border-gray-300 bg-gray-50 text-[15px] text-gray-900 placeholder:text-gray-500
             focus:outline-none focus:ring-2 focus:ring-primary-600 focus:border-transparent focus:bg-white
             dark:bg-gray-900 dark:border-gray-600 dark:text-gray-100 dark:placeholder:text-gray-400 dark:focus:ring-primary-400"
         />
-        <kbd
-          aria-hidden="true"
-          className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 rounded border border-gray-300 text-xs text-gray-500 font-sans
-            dark:border-gray-600 dark:text-gray-400"
-        >
-          /
-        </kbd>
+        {enableShortcut && (
+          <kbd
+            aria-hidden="true"
+            className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 rounded border border-gray-300 text-xs text-gray-500 font-sans
+              dark:border-gray-600 dark:text-gray-400"
+          >
+            /
+          </kbd>
+        )}
       </label>
     </form>
   );
