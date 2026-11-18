@@ -31,11 +31,9 @@ export default function PageContainer({
   const appLayout = !isPublicPage && (!!user || loading);
   const shouldShowMobileNav = showMobileNav && !!user && !isPublicPage;
 
-  const heading = title && (
-    <div className="mb-6">
-      <h1 className="text-2xl font-bold">{title}</h1>
-    </div>
-  );
+  // Page titles aren't shown (the sidebar already says where you are) but stay
+  // as the page's heading for screen readers.
+  const heading = title && <h1 className="sr-only">{title}</h1>;
 
   return (
     <div className="flex flex-col min-h-screen">

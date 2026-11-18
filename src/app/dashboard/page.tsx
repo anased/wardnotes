@@ -16,8 +16,6 @@ import { useNotification } from '@/lib/context/NotificationContext';
 import {
   buildWeek,
   countThisWeek,
-  firstName,
-  greetingFor,
   reviewMinutes,
 } from '@/lib/utils/dashboard';
 
@@ -63,7 +61,7 @@ export default function DashboardPage() {
 
   if (authLoading || notesLoading) {
     return (
-      <PageContainer>
+      <PageContainer title="Home">
         <div className="flex items-center justify-center h-64">
           <Spinner size="md" color="primary" />
         </div>
@@ -71,31 +69,13 @@ export default function DashboardPage() {
     );
   }
 
-  const name = firstName(user?.user_metadata?.full_name || user?.user_metadata?.name);
-  const greeting = name ? `${greetingFor(now)}, ${name}` : greetingFor(now);
-  const today = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
   const due = stats.dueCount ?? 0;
   const activeDays = week.filter((d) => d.active).length;
   const daysSoFar = week.filter((d) => !d.isFuture).length;
 
   return (
-    <PageContainer>
+    <PageContainer title="Home">
       <div className="flex flex-col gap-7">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-[28px] font-bold tracking-tight text-gray-900 dark:text-gray-50">{greeting}</h1>
-          <p className="text-[15px] text-gray-600 dark:text-gray-400">
-            {today}
-            {!stats.loading && stats.dueCount !== null && (
-              <>
-                {' · '}
-                {due > 0
-                  ? `${due} ${due === 1 ? 'card is' : 'cards are'} waiting for review`
-                  : 'No cards due for review'}
-              </>
-            )}
-          </p>
-        </div>
-
         <section aria-label="Today" className="grid gap-4 grid-cols-[repeat(auto-fit,minmax(220px,1fr))]">
           {/* Flashcards due */}
           <div className={statCard}>

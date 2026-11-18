@@ -1,28 +1,10 @@
 import {
   buildWeek,
   countThisWeek,
-  firstName,
-  greetingFor,
   previewText,
   reviewMinutes,
   startOfWeek,
 } from './dashboard';
-
-describe('greetingFor', () => {
-  it('picks the greeting by hour', () => {
-    expect(greetingFor(new Date(2026, 10, 17, 8))).toBe('Good morning');
-    expect(greetingFor(new Date(2026, 10, 17, 13))).toBe('Good afternoon');
-    expect(greetingFor(new Date(2026, 10, 17, 20))).toBe('Good evening');
-  });
-});
-
-describe('firstName', () => {
-  it('returns the first word', () => {
-    expect(firstName('  Anas Ahmed ')).toBe('Anas');
-    expect(firstName(undefined)).toBe('');
-    expect(firstName('')).toBe('');
-  });
-});
 
 describe('reviewMinutes', () => {
   it('estimates about 25 seconds a card', () => {

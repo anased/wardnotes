@@ -3,19 +3,6 @@
 /** Seconds a typical card takes to review; used for the "≈ N min" estimate. */
 const SECONDS_PER_CARD = 25;
 
-/** "Good morning" / "Good afternoon" / "Good evening" for the given time. */
-export function greetingFor(date: Date): string {
-  const h = date.getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 18) return 'Good afternoon';
-  return 'Good evening';
-}
-
-/** First word of a display name, or '' when there is none. */
-export function firstName(fullName: string | null | undefined): string {
-  return (fullName ?? '').trim().split(/\s+/)[0] ?? '';
-}
-
 /** Minutes a review of `cards` cards is likely to take (at least 1 when there are any). */
 export function reviewMinutes(cards: number): number {
   if (cards <= 0) return 0;
