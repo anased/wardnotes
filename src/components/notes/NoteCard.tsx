@@ -6,6 +6,8 @@ import CategoryBadge from '../ui/CategoryBadge';
 import useTopics from '@/lib/hooks/useTopics';
 import { noteSpecialty } from '@/lib/utils/specialty';
 import NoteFieldBadges from './NoteFieldBadges';
+import { convertTipTapToPlainText, TipTapNode } from '@/lib/utils/content-converter';
+import { previewText } from '@/lib/utils/dashboard';
 
 /** Labels (tags) shown on a card before collapsing the rest into "+N". */
 const MAX_VISIBLE_TAGS = 3;
@@ -16,6 +18,8 @@ interface NoteCardProps {
   onTagClick?: (tag: string) => void;
   /** Tags to emphasise, e.g. the ones this note shares with the note being viewed. */
   highlightTags?: string[];
+  /** Show a short plain-text snippet of the note body under the title. */
+  showPreview?: boolean;
 }
 
 /**
@@ -25,12 +29,13 @@ interface NoteCardProps {
  * clickable while tag buttons stay separately clickable and focusable
  * (interactive elements can't be nested inside a link).
  */
-export default function NoteCard({ note, onTagClick, highlightTags = [] }: NoteCardProps) {
+export default function NoteCard({ note, onTagClick, highlightTags = [], showPreview = false }: NoteCardProps) {
   const router = useRouter();
   const { graph } = useTopics();
   const specialty = noteSpecialty(graph, note);
   const unanswered = note.status === 'unanswered';
   const { visible, hidden } = splitVisibleTags(note.tags, MAX_VISIBLE_TAGS, highlightTags);
+  const preview = showPreview && note.content ? previewText(convertTipTapToPlainText(note.content as TipTapNode)) : '';
 
   const formattedDate = new Date(note.created_at).toLocaleDateString('en-US', {
     month: 'short',
@@ -75,6 +80,10 @@ export default function NoteCard({ note, onTagClick, highlightTags = [] }: NoteC
           {note.title}
         </Link>
       </h3>
+
+      {preview && (
+        <p className="mt-1.5 text-sm leading-relaxed text-gray-600 line-clamp-2 dark:text-gray-400">{preview}</p>
+      )}
 
       {/* Footer pinned to the bottom so cards in a row line up */}
       <div className="pt-3 mt-auto">
