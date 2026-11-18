@@ -8,7 +8,6 @@ import useNotes from '@/lib/hooks/useNotes';
 import { useSubscription } from '@/lib/hooks/useSubscription';
 import { useDashboardStats } from '@/lib/hooks/useDashboardStats';
 import PageContainer from '@/components/layout/PageContainer';
-import AppSidebar from '@/components/layout/AppSidebar';
 import NoteCard from '@/components/notes/NoteCard';
 import Button from '@/components/ui/Button';
 import Spinner from '@/components/ui/Spinner';
@@ -62,11 +61,9 @@ export default function DashboardPage() {
   const notesThisWeek = useMemo(() => countThisWeek(notes, now), [notes, now]);
   const incompleteCount = useMemo(() => notes.filter((n) => n.status === 'unanswered').length, [notes]);
 
-  const sidebar = <AppSidebar dueCount={stats.dueCount} />;
-
   if (authLoading || notesLoading) {
     return (
-      <PageContainer sidebar={sidebar}>
+      <PageContainer>
         <div className="flex items-center justify-center h-64">
           <Spinner size="md" color="primary" />
         </div>
@@ -82,7 +79,7 @@ export default function DashboardPage() {
   const daysSoFar = week.filter((d) => !d.isFuture).length;
 
   return (
-    <PageContainer sidebar={sidebar}>
+    <PageContainer>
       <div className="flex flex-col gap-7">
         <div className="flex flex-col gap-1">
           <h1 className="text-[28px] font-bold tracking-tight text-gray-900 dark:text-gray-50">{greeting}</h1>

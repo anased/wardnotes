@@ -2,11 +2,22 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { FlashcardService } from '@/services/flashcard';
 
-interface AppSidebarProps {
-  /** Flashcards due now, shown as a badge when above zero. */
-  dueCount?: number | null;
+/** Flashcards due now, loaded once per mount; null until known or on error. */
+function useDueCount(): number | null {
+  const [count, setCount] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    FlashcardService.getDueCount()
+      .then((n) => !cancelled && setCount(n))
+      .catch((err) => console.error('Error loading due flashcards:', err));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return count;
 }
 
 interface NavItem {
@@ -30,7 +41,8 @@ const iconProps = {
 };
 
 /** Desktop navigation shown beside the page (phones use the bottom MobileNav). */
-export default function AppSidebar({ dueCount }: AppSidebarProps) {
+export default function AppSidebar() {
+  const dueCount = useDueCount();
   const pathname = usePathname() ?? '';
   const status = useSearchParams()?.get('status') ?? null;
 
@@ -48,7 +60,10 @@ export default function AppSidebar({ dueCount }: AppSidebarProps) {
     {
       href: '/notes',
       label: 'Library',
-      isActive: (p, s) => p === '/notes' && s !== 'unanswered',
+      isActive: (p, s) =>
+        (p.startsWith('/notes') && !(p === '/notes' && s === 'unanswered') && p !== '/notes/new') ||
+        p.startsWith('/topics') ||
+        p.startsWith('/trials'),
       icon: (
         <svg {...iconProps}>
           <path d="M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z" />
@@ -76,6 +91,16 @@ export default function AppSidebar({ dueCount }: AppSidebarProps) {
         <svg {...iconProps}>
           <circle cx="12" cy="12" r="9" />
           <path d="M12 8v4M12 16h.01" />
+        </svg>
+      ),
+    },
+    {
+      href: '/learning-tracker',
+      label: 'Learning tracker',
+      isActive: (p) => p.startsWith('/learning-tracker'),
+      icon: (
+        <svg {...iconProps}>
+          <path d="M13 3L4 14h7l-1 7 9-11h-7z" />
         </svg>
       ),
     },
