@@ -78,10 +78,12 @@ describe('parseLibraryParams', () => {
     ]);
   });
 
-  test('a search query takes precedence over other filters', () => {
+  test('keeps a search query together with the other filters', () => {
     expect(parseLibraryParams('?q=apixaban&tag=Stroke&status=unanswered')).toEqual({
       ...EMPTY_FILTERS,
       q: 'apixaban',
+      tags: ['Stroke'],
+      status: 'unanswered',
     });
   });
 });
@@ -102,8 +104,10 @@ describe('buildLibraryQuery', () => {
     expect(parseLibraryParams(buildLibraryQuery(filters))).toEqual(filters);
   });
 
-  test('writes only the search when searching', () => {
-    expect(buildLibraryQuery({ ...EMPTY_FILTERS, q: ' tPA ', tags: ['Stroke'] })).toBe('q=tPA');
+  test('writes the search together with the other filters', () => {
+    expect(buildLibraryQuery({ ...EMPTY_FILTERS, q: ' tPA ', tags: ['Stroke'] })).toBe('q=tPA&tag=Stroke');
+    const filters = { ...EMPTY_FILTERS, q: 'pres', status: 'unanswered' as const, contentType: 'trial' as const };
+    expect(parseLibraryParams(buildLibraryQuery(filters))).toEqual(filters);
   });
 });
 

@@ -49,7 +49,6 @@ function NotesLibrary() {
     loading: notesLoading,
     error,
     fetchNotes,
-    search,
     filterNotes
   } = useNotes();
   const { tags } = useTags();
@@ -119,10 +118,10 @@ function NotesLibrary() {
     window.history.replaceState(null, '', qs ? `${window.location.pathname}?${qs}` : window.location.pathname);
 
     try {
-      if (next.q) {
-        await search(next.q);
-      } else if (hasFieldFilters(next)) {
+      // The filters narrow a text search rather than replacing it
+      if (next.q || hasFieldFilters(next)) {
         await filterNotes({
+          query: next.q || undefined,
           tags: next.tags,
           status: next.status || undefined,
           contentType: next.contentType || undefined,
@@ -134,12 +133,9 @@ function NotesLibrary() {
     } catch (err) {
       console.error('Filter error:', err);
     }
-  }, [search, filterNotes, fetchNotes]);
+  }, [filterNotes, fetchNotes]);
 
-  const updateFilters = (changes: Partial<LibraryFilters>) => {
-    // Changing a filter ends a text search
-    return applyFilters({ ...filters, q: '', ...changes });
-  };
+  const updateFilters = (changes: Partial<LibraryFilters>) => applyFilters({ ...filters, ...changes });
 
   useEffect(() => {
     // If not logged in, redirect to login page
@@ -160,7 +156,7 @@ function NotesLibrary() {
     initialLoadForRef.current = user.id;
     const fromUrl = parseLibraryParams(search, (name) => rootTopicByName(topicGraph, name));
     // Searches arrive from the header search box as ?q=; run them as searches (tracked)
-    if (fromUrl.q) runSearch(fromUrl.q);
+    if (fromUrl.q) runSearch(fromUrl);
     else applyFilters(fromUrl);
     // Only on login / first load; later changes go through the handlers
   }, [user, topicsLoading]);
@@ -177,17 +173,19 @@ function NotesLibrary() {
   }, [tags]);
 
   // A search from the header while this page is open changes ?q= without
-  // remounting the page: run it. (Our own URL updates already match filters.q.)
+  // remounting the page: run it within the current filters. (Our own URL
+  // updates already match filters.q.)
   useEffect(() => {
     if (!initialLoadForRef.current || qParam === filtersRef.current.q) return;
-    runSearch(qParam);
+    runSearch({ ...filtersRef.current, q: qParam });
   }, [qParam]);
 
-  const runSearch = async (q: string) => {
+  /** Applies filters that include a (new) text search, and records the search. */
+  const runSearch = async (next: LibraryFilters) => {
+    const q = next.q;
     try {
       setIsSearching(true);
-      // A search replaces the other filters
-      await applyFilters({ ...EMPTY_FILTERS, q });
+      await applyFilters(next);
 
       if (q) {
         // Track search usage after search completes
@@ -267,7 +265,7 @@ function NotesLibrary() {
                   Search: <span className="font-medium">&ldquo;{filters.q}&rdquo;</span>
                 </span>
                 <button
-                  onClick={handleClearFilters}
+                  onClick={() => updateFilters({ q: '' })}
                   aria-label="Clear search"
                   className={`${chipButtonClass} text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white`}
                 >

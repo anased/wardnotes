@@ -4,7 +4,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 /** Everything the Notes Library list can be narrowed by. */
 export interface LibraryFilters {
-  /** Full-text search. A search replaces the other filters. */
+  /** Text search. The other filters narrow its results. */
   q: string;
   /** Notes must have all of these tags. */
   tags: string[];
@@ -45,7 +45,6 @@ export function parseLibraryParams(
 ): LibraryFilters {
   const params = new URLSearchParams(search);
   const q = (params.get('q') || '').trim();
-  if (q) return { ...EMPTY_FILTERS, q };
 
   const status = params.get('status');
   const type = params.get('type');
@@ -60,7 +59,7 @@ export function parseLibraryParams(
   if (!topic && category && findRootTopic) topic = findRootTopic(category) ?? '';
 
   return {
-    q: '',
+    q,
     tags,
     status: isNoteStatus(status) ? status : '',
     contentType: isContentType(type) ? type : '',
@@ -71,10 +70,7 @@ export function parseLibraryParams(
 /** Builds the query string (without "?") for the given filters. */
 export function buildLibraryQuery(f: LibraryFilters): string {
   const params = new URLSearchParams();
-  if (f.q.trim()) {
-    params.set('q', f.q.trim());
-    return params.toString();
-  }
+  if (f.q.trim()) params.set('q', f.q.trim());
   f.tags.forEach((t) => params.append('tag', t));
   if (f.status) params.set('status', f.status);
   if (f.contentType) params.set('type', f.contentType);
