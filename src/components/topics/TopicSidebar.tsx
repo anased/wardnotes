@@ -13,9 +13,9 @@ interface TopicSidebarProps {
 }
 
 /**
- * The notes-area topic tree: a sticky sidebar on large screens and a
- * collapsible panel above the content on small ones. Place it as the first
- * child of a `lg:grid-cols-[16rem_minmax(0,1fr)]` grid.
+ * The notes-area topic tree as a collapsible panel above the content, for
+ * small screens. On large screens the tree lives in the app sidebar
+ * (AppSidebar), so this renders nothing there.
  */
 export default function TopicSidebar({ selectedId = null, onSelect }: TopicSidebarProps) {
   const { graph } = useTopics();
@@ -24,14 +24,14 @@ export default function TopicSidebar({ selectedId = null, onSelect }: TopicSideb
   const selected = selectedId ? graph.byId.get(selectedId) : undefined;
 
   return (
-    <aside className="lg:sticky lg:top-20 lg:self-start">
-      <div className="p-4 bg-white rounded-lg shadow dark:bg-gray-800 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto">
+    <aside className="lg:hidden">
+      <div className="p-4 bg-white rounded-lg shadow dark:bg-gray-800">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
           aria-controls="notes-topic-tree"
-          className="flex items-center justify-between w-full text-sm font-semibold tracking-wide text-gray-500 uppercase lg:hidden dark:text-gray-400"
+          className="flex items-center justify-between w-full text-sm font-semibold tracking-wide text-gray-500 uppercase dark:text-gray-400"
         >
           <span>
             Topics
@@ -43,7 +43,7 @@ export default function TopicSidebar({ selectedId = null, onSelect }: TopicSideb
           </span>
           <ChevronDownIcon className={`w-4 h-4 transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
-        <div id="notes-topic-tree" className={`${open ? 'mt-3' : 'hidden'} lg:block lg:mt-0`}>
+        <div id="notes-topic-tree" className={open ? 'mt-3' : 'hidden'}>
           <TopicTree selectedId={selectedId} onSelect={onSelect} hideHeadingOnMobile />
           <div className="pt-3 mt-3 border-t border-gray-200 dark:border-gray-700">
             <Link

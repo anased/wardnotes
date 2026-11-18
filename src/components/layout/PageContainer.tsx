@@ -43,8 +43,8 @@ export default function PageContainer({
 
       {appLayout ? (
         <div className="flex flex-1 bg-gray-50 dark:bg-gray-900">
-          <aside className="hidden lg:block w-60 shrink-0">
-            <div className="sticky top-16">
+          <aside className="hidden lg:block w-[17rem] shrink-0 bg-white border-r border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+            <div className="sticky top-16 max-h-[calc(100vh-4rem)] overflow-y-auto">
               {/* AppSidebar reads search params; keep it from opting the page out of prerendering. */}
               <Suspense fallback={null}>{user && <AppSidebar />}</Suspense>
             </div>

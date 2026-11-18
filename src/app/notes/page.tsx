@@ -218,7 +218,7 @@ export default function NotesPage() {
 
   return (
     <PageContainer title="Notes Library">
-      <div className="grid gap-6 lg:grid-cols-[16rem_minmax(0,1fr)]">
+      <div className="grid gap-6">
         {/* Topic tree: a sidebar on large screens, a collapsible panel on small ones.
             Topics open their page (which links back here, filtered). */}
         <TopicSidebar selectedId={filters.topic || null} />

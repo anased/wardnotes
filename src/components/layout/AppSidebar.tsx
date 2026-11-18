@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 import { FlashcardService } from '@/services/flashcard';
+import TopicTree from '@/components/topics/TopicTree';
+import NoteTypeIcon from '@/components/notes/NoteTypeIcon';
 
 /** Flashcards due now, loaded once per mount; null until known or on error. */
 function useDueCount(): number | null {
@@ -44,7 +46,12 @@ const iconProps = {
 export default function AppSidebar() {
   const dueCount = useDueCount();
   const pathname = usePathname() ?? '';
-  const status = useSearchParams()?.get('status') ?? null;
+  const searchParams = useSearchParams();
+  const status = searchParams?.get('status') ?? null;
+  // The topic being viewed: its page, or the Library filtered to it.
+  const selectedTopic =
+    pathname.match(/^\/topics\/([^/]+)/)?.[1] ?? (pathname === '/notes' ? searchParams?.get('topic') || null : null);
+  const onTrials = pathname.startsWith('/trials');
 
   const items: NavItem[] = [
     {
@@ -62,8 +69,7 @@ export default function AppSidebar() {
       label: 'Library',
       isActive: (p, s) =>
         (p.startsWith('/notes') && !(p === '/notes' && s === 'unanswered') && p !== '/notes/new') ||
-        p.startsWith('/topics') ||
-        p.startsWith('/trials'),
+        p.startsWith('/topics'),
       icon: (
         <svg {...iconProps}>
           <path d="M4 19V5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z" />
@@ -118,33 +124,56 @@ export default function AppSidebar() {
   ];
 
   return (
-    <nav aria-label="Main" className="flex flex-col gap-1 px-4 py-6">
-      {items.map((item) => {
-        const active = item.isActive(pathname, status);
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-current={active ? 'page' : undefined}
-            className={`flex items-center gap-3 h-11 px-3.5 rounded-lg text-[15px] transition-colors
-              focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 dark:focus-visible:ring-primary-400
-              ${
-                active
-                  ? 'bg-primary-100 text-primary-800 font-semibold dark:bg-primary-900/50 dark:text-primary-100'
-                  : 'text-gray-700 font-medium hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800'
-              }`}
-          >
-            {item.icon}
-            <span>{item.label}</span>
-            {!!item.badge && item.badge > 0 && (
-              <span className="ml-auto inline-flex items-center justify-center min-w-[24px] h-[22px] px-1.5 rounded-full bg-primary-600 text-white text-xs font-bold">
-                {item.badge > 99 ? '99+' : item.badge}
-                <span className="sr-only"> due</span>
-              </span>
-            )}
-          </Link>
-        );
-      })}
-    </nav>
+    <div className="flex flex-col px-4 py-6">
+      <nav aria-label="Main" className="flex flex-col gap-1">
+        {items.map((item) => {
+          const active = item.isActive(pathname, status);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              aria-current={active ? 'page' : undefined}
+              className={`flex items-center gap-3 h-11 px-3.5 rounded-lg text-[15px] transition-colors
+                focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 dark:focus-visible:ring-primary-400
+                ${
+                  active
+                    ? 'bg-primary-100 text-primary-800 font-semibold dark:bg-primary-900/50 dark:text-primary-100'
+                    : 'text-gray-700 font-medium hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800'
+                }`}
+            >
+              {item.icon}
+              <span>{item.label}</span>
+              {!!item.badge && item.badge > 0 && (
+                <span className="ml-auto inline-flex items-center justify-center min-w-[24px] h-[22px] px-1.5 rounded-full bg-primary-600 text-white text-xs font-bold">
+                  {item.badge > 99 ? '99+' : item.badge}
+                  <span className="sr-only"> due</span>
+                </span>
+              )}
+            </Link>
+          );
+        })}
+      </nav>
+
+      <hr className="mx-1.5 my-3.5 border-gray-200 dark:border-gray-700" />
+
+      <TopicTree selectedId={selectedTopic} variant="sidebar" />
+
+      <hr className="mx-1.5 my-2.5 border-gray-200 dark:border-gray-700" />
+
+      <Link
+        href="/trials"
+        aria-current={pathname === '/trials' ? 'page' : undefined}
+        className={`flex items-center gap-2.5 h-10 px-3.5 rounded-lg text-sm font-medium transition-colors
+          focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 dark:focus-visible:ring-primary-400
+          ${
+            onTrials
+              ? 'bg-primary-100 text-primary-800 font-semibold dark:bg-primary-900/50 dark:text-primary-100'
+              : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800'
+          }`}
+      >
+        <NoteTypeIcon type="trial" className="w-4 h-4" decorative />
+        All trials
+      </Link>
+    </div>
   );
 }
