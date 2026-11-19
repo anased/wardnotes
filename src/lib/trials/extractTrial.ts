@@ -1,9 +1,10 @@
 // src/lib/trials/extractTrial.ts
 // Turn a trial abstract into the fields of the trial form. Server-side only.
-import type Anthropic from '@anthropic-ai/sdk';
-import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
+// Model routing (cheap model first, stronger model as fallback) comes from lib/ai/models.
 import { z } from 'zod/v4';
-import { CLAUDE_MODEL, FALLBACK_BETA, assertCompleted, getClaude } from '@/lib/ai/claude';
+import { getTaskModel, type ModelChoice, type TaskModelConfig } from '@/lib/ai/models';
+import { generateStructured, type StructuredResult } from '@/lib/ai/providers';
+import type { AiCallRecord } from '@/lib/ai/usage';
 
 const nullableText = (description: string) => z.string().nullable().describe(description);
 
@@ -54,9 +55,13 @@ export interface TrialExtractionSource {
   abstract: string;
 }
 
-export async function extractTrialFromAbstract(
-  source: TrialExtractionSource
-): Promise<{ trial: ExtractedTrial; response: Anthropic.Beta.BetaMessage }> {
+export interface TrialExtractionResult {
+  trial: ExtractedTrial;
+  /** The model whose output was used. */
+  servedBy: ModelChoice;
+}
+
+export function buildExtractionPrompt(source: TrialExtractionSource): string {
   const header = [
     source.title ? `Title: ${source.title}` : null,
     source.journal ? `Journal: ${source.journal}` : null,
@@ -64,29 +69,53 @@ export async function extractTrialFromAbstract(
   ]
     .filter(Boolean)
     .join('\n');
+  return `<source>\n${header ? `${header}\n\n` : ''}${source.abstract}\n</source>`;
+}
 
-  const response = await getClaude().beta.messages.parse({
-    model: CLAUDE_MODEL,
-    max_tokens: 16000,
-    betas: [FALLBACK_BETA],
-    fallbacks: 'default',
-    output_config: {
-      effort: 'low', // reading comprehension over a short abstract
-      format: betaZodOutputFormat(ExtractedTrialSchema),
-    },
-    system: SYSTEM_PROMPT,
-    messages: [
-      {
-        role: 'user',
-        content: `<source>\n${header ? `${header}\n\n` : ''}${source.abstract}\n</source>`,
-      },
-    ],
-  });
+/**
+ * Extract trial fields with the configured model chain:
+ *   1. primary (cheap) model
+ *   2. on invalid/truncated output: the same model once more
+ *   3. then the fallback (stronger) model
+ * A refusal skips the retry and goes straight to the fallback model.
+ *
+ * Every call made is appended to `calls` (also when this throws), so the caller can
+ * log each one. Throws the last failure if no model produced valid output, or any
+ * transport/API error as soon as it happens.
+ */
+export async function extractTrialFromAbstract(
+  source: TrialExtractionSource,
+  calls: AiCallRecord[] = [],
+  config: TaskModelConfig = getTaskModel('trialExtraction')
+): Promise<TrialExtractionResult> {
+  const { fallback, ...primary } = config;
+  const user = buildExtractionPrompt(source);
+  const run = (choice: ModelChoice) =>
+    generateStructured({
+      task: 'trialExtraction',
+      choice,
+      system: SYSTEM_PROMPT,
+      user,
+      schema: ExtractedTrialSchema,
+      schemaName: 'extracted_trial',
+    });
 
-  assertCompleted(response);
-  const trial = response.parsed_output;
-  if (!trial) {
-    throw new Error('The AI response could not be read.');
+  let result: StructuredResult<ExtractedTrial> = await run(primary);
+  calls.push(result.record);
+  if (result.ok) return { trial: result.data, servedBy: primary };
+
+  if (result.failure !== 'refusal') {
+    result = await run(primary);
+    calls.push(result.record);
+    if (result.ok) return { trial: result.data, servedBy: primary };
   }
-  return { trial, response };
+
+  if (fallback) {
+    result = await run(fallback);
+    calls.push(result.record);
+    if (result.ok) return { trial: result.data, servedBy: fallback };
+  }
+
+  console.error(`Trial extraction failed (${result.failure}):`, result.error.message);
+  throw result.error;
 }

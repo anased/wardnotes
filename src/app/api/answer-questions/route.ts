@@ -2,16 +2,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/client';
 import {
-  CLAUDE_MODEL,
   FALLBACK_BETA,
   assertCompleted,
+  claudeCallRecords,
   getClaude,
-  summarizeUsage,
   toHttpError,
 } from '@/lib/ai/claude';
+import { getTaskModel } from '@/lib/ai/models';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import { z } from 'zod/v4';
-import { checkAndIncrementQuota, logApiUsage, refundQuota } from '@/lib/services/quotaService';
+import { checkAndIncrementQuota, logAiCalls, refundQuota } from '@/lib/services/quotaService';
 
 export const maxDuration = 180;
 
@@ -246,13 +246,14 @@ export async function POST(request: NextRequest) {
 
     const formattedQuestions = validQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n');
 
+    const { model, effort } = getTaskModel('clinicalQuestion');
     const response = await getClaude().beta.messages.parse({
-      model: CLAUDE_MODEL,
+      model,
       max_tokens: 16000, // covers adaptive thinking + up to 5 answers of ~400 words
       betas: [FALLBACK_BETA],
       fallbacks: 'default',
       output_config: {
-        effort: 'high', // clinical reasoning benefits from deeper thinking
+        effort, // clinical reasoning benefits from deeper thinking (see lib/ai/models)
         format: betaZodOutputFormat(AnswersSchema),
       },
       system: SYSTEM_PROMPT,
@@ -272,9 +273,10 @@ Please answer each question based on the clinical context provided.`,
       ],
     });
 
+    await logAiCalls(user.id, 'answer_questions', claudeCallRecords('clinicalQuestion', response));
+
     assertCompleted(response);
     const generationTime = Date.now() - startTime;
-    const usage = summarizeUsage(response);
 
     // 5. Map structured answers back onto the original questions
     const byNumber = new Map(
@@ -287,9 +289,6 @@ Please answer each question based on the clinical context provided.`,
       question,
       answer: byNumber.get(i + 1) || MISSING_ANSWER,
     }));
-
-    // 6. Log actual API usage
-    await logApiUsage(user.id, 'answer_questions', usage.costUsd, usage.tokens, true);
 
     // 7. Return response
     return NextResponse.json({

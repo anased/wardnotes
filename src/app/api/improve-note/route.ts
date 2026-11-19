@@ -2,17 +2,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/client';
 import {
-  CLAUDE_MODEL,
   FALLBACK_BETA,
   assertCompleted,
+  claudeCallRecords,
   extractText,
   getClaude,
-  summarizeUsage,
   toHttpError,
 } from '@/lib/ai/claude';
+import { getTaskModel } from '@/lib/ai/models';
 import { TipTapNode } from '@/types/content';
 import { convertTipTapToPlainText } from '@/lib/utils/content-converter';
-import { checkAndIncrementQuota, logApiUsage, refundQuota } from '@/lib/services/quotaService';
+import { checkAndIncrementQuota, logAiCalls, refundQuota } from '@/lib/services/quotaService';
 
 export const maxDuration = 120;
 
@@ -121,12 +121,13 @@ export async function POST(request: NextRequest) {
     chargedUserId = user.id;
 
     // Send to Claude for improvement
+    const { model, effort } = getTaskModel('noteImprovement');
     const response = await getClaude().beta.messages.create({
-      model: CLAUDE_MODEL,
+      model,
       max_tokens: 16000,
       betas: [FALLBACK_BETA],
       fallbacks: 'default',
-      output_config: { effort: 'low' }, // rewriting/formatting, not deep reasoning
+      output_config: { effort }, // rewriting/formatting, not deep reasoning
       system: SYSTEM_PROMPT,
       messages: [
         {
@@ -136,15 +137,14 @@ export async function POST(request: NextRequest) {
       ],
     });
 
+    // Log the call (tokens are billed even if the output is unusable)
+    await logAiCalls(user.id, 'note_improvement', claudeCallRecords('noteImprovement', response));
+
     assertCompleted(response);
     const improvedNote = extractText(response);
     if (!improvedNote) {
       throw new Error('The AI returned an empty response.');
     }
-    const usage = summarizeUsage(response);
-
-    // Log actual API usage for analytics
-    await logApiUsage(user.id, 'note_improvement', usage.costUsd, usage.tokens, true);
 
     // Return the improved note with quota info
     return NextResponse.json({

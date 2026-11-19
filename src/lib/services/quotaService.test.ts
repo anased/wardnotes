@@ -137,3 +137,61 @@ describe('usage log labels', () => {
     expect(insert).toHaveBeenCalledWith(expect.objectContaining({ feature_type: 'flashcard_generation' }));
   });
 });
+
+describe('logAiCalls', () => {
+  const call = (model: string, success: boolean) => ({
+    task: 'trialExtraction' as const,
+    provider: 'anthropic' as const,
+    model,
+    inputTokens: 900,
+    outputTokens: 300,
+    totalInputTokens: 1000,
+    costUsd: 0.00025,
+    success,
+    error: success ? undefined : 'validation: year: expected number',
+  });
+
+  it('logs one row per call with provider, model, and input/output tokens', async () => {
+    const { logAiCalls } = loadService(ENV);
+
+    await logAiCalls('user-1', 'trial_extraction', [call('claude-haiku-5-5', false), call('claude-opus-5-5', true)]);
+
+    expect(insert).toHaveBeenCalledTimes(1);
+    expect(insert.mock.calls[0][0]).toEqual([
+      expect.objectContaining({
+        feature_type: 'trial_extraction',
+        ai_task: 'trialExtraction',
+        provider: 'anthropic',
+        model: 'claude-haiku-5-5',
+        input_tokens: 1000,
+        output_tokens: 300,
+        tokens_used: 1300,
+        api_cost: 0.00025,
+        success: false,
+        error_message: 'validation: year: expected number',
+      }),
+      expect.objectContaining({ model: 'claude-opus-5-5', success: true, error_message: null }),
+    ]);
+  });
+
+  it('falls back to the original columns before the details migration is applied', async () => {
+    insert
+      .mockResolvedValueOnce({ error: { code: 'PGRST204', message: "Could not find the 'model' column" } })
+      .mockResolvedValueOnce({ error: null });
+    const { logAiCalls } = loadService(ENV);
+
+    await logAiCalls('user-1', 'trial_extraction', [call('claude-haiku-5-5', true)]);
+
+    expect(insert).toHaveBeenCalledTimes(2);
+    const retried = insert.mock.calls[1][0];
+    expect(retried).toEqual(expect.objectContaining({ feature_type: 'trial_extraction', tokens_used: 1300 }));
+    expect(retried).not.toHaveProperty('model');
+    expect(retried).not.toHaveProperty('provider');
+  });
+
+  it('does nothing for an empty list', async () => {
+    const { logAiCalls } = loadService(ENV);
+    await logAiCalls('user-1', 'trial_extraction', []);
+    expect(insert).not.toHaveBeenCalled();
+  });
+});

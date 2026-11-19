@@ -1,19 +1,12 @@
 // src/lib/trials/pubmed.ts
 // Resolve a user-supplied identifier (PMID, DOI, PMCID, or a PubMed/journal URL)
 // to a PubMed record and its abstract, via NCBI E-utilities. Server-side only.
+import { ncbiFetch } from './ncbi';
+import { TrialSourceError } from './errors';
+import type { TrialSourceIdentifier } from './identify';
 
-const EUTILS = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils';
-const NCBI_TOOL = 'wardnotes';
-const FETCH_TIMEOUT_MS = 10_000;
-
-/** Pasted text at least this long is treated as the abstract itself. */
-export const MIN_PASTED_ABSTRACT_LENGTH = 200;
-
-export type TrialSourceIdentifier =
-  | { kind: 'pmid'; value: string }
-  | { kind: 'doi'; value: string }
-  | { kind: 'pmcid'; value: string }
-  | { kind: 'text'; value: string };
+export { MIN_PASTED_ABSTRACT_LENGTH, parseTrialIdentifier, type TrialSourceIdentifier } from './identify';
+export { TrialSourceError } from './errors';
 
 export interface PubmedArticle {
   pmid: string;
@@ -22,70 +15,6 @@ export interface PubmedArticle {
   year: number | null;
   doi: string | null;
   abstract: string;
-}
-
-export class TrialSourceError extends Error {
-  constructor(message: string, public status: number) {
-    super(message);
-    this.name = 'TrialSourceError';
-  }
-}
-
-/**
- * Work out what kind of identifier the user gave us. Order matters: PubMed URLs
- * carry a PMID, journal URLs usually embed the DOI, and PMC URLs carry a PMCID.
- */
-export function parseTrialIdentifier(raw: string): TrialSourceIdentifier | null {
-  const input = raw.trim();
-  if (!input) return null;
-
-  // Long free text: the user pasted the abstract itself.
-  if (input.length >= MIN_PASTED_ABSTRACT_LENGTH && /\s/.test(input)) {
-    return { kind: 'text', value: input };
-  }
-
-  let decoded = input;
-  try {
-    decoded = decodeURIComponent(input);
-  } catch {
-    // keep the raw string if it isn't valid URI encoding
-  }
-
-  const pubmedUrl = decoded.match(/(?:pubmed\.ncbi\.nlm\.nih\.gov|ncbi\.nlm\.nih\.gov\/pubmed)\/(\d{1,9})\b/i);
-  if (pubmedUrl) return { kind: 'pmid', value: pubmedUrl[1] };
-
-  const pmid = decoded.match(/^(?:pmid\s*:?\s*)?(\d{1,9})$/i);
-  if (pmid) return { kind: 'pmid', value: pmid[1] };
-
-  const doi = decoded.match(/\b(10\.\d{4,9}\/[^\s"<>]+)/);
-  if (doi) {
-    // Strip URL query/fragment and trailing punctuation picked up from prose or links.
-    const value = doi[1].replace(/[?#].*$/, '').replace(/[.,;:)\]}>'"]+$/, '');
-    return { kind: 'doi', value };
-  }
-
-  const pmcid = decoded.match(/\bPMC\s*(\d{4,10})\b/i);
-  if (pmcid) return { kind: 'pmcid', value: `PMC${pmcid[1]}` };
-
-  return null;
-}
-
-async function ncbiFetch(path: string, params: Record<string, string>): Promise<Response> {
-  const url = new URL(`${EUTILS}/${path}`);
-  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-  url.searchParams.set('tool', NCBI_TOOL);
-  if (process.env.NCBI_API_KEY) url.searchParams.set('api_key', process.env.NCBI_API_KEY);
-
-  let res: Response;
-  try {
-    res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS), cache: 'no-store' });
-  } catch {
-    throw new TrialSourceError('Could not reach PubMed. Please try again.', 502);
-  }
-  if (!res.ok) {
-    throw new TrialSourceError(`PubMed returned an error (${res.status}). Please try again.`, 502);
-  }
-  return res;
 }
 
 /** Search PubMed for a single PMID matching a field-tagged term. */

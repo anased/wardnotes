@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Search trials by name, per-task AI model routing (November 2026)
+
+- The trial form's source box now also takes a trial name/acronym (e.g. `CHANCE-2`)
+  or NCT number. `POST /api/trials/search` finds candidate publications with PubMed
+  and ClinicalTrials.gov only (no AI, no quota), ranks them, and caches results for
+  7 days (`add_trial_search_cache.sql`). The top 3 are shown; picking one fills the
+  form through the existing PMID extraction. PMID/DOI/link/abstract input works as before.
+- `src/lib/ai/models.ts` maps each AI task to a model, with env overrides. Trial
+  extraction now runs on Claude Haiku 5.5, retries once on invalid output, then falls
+  back to Claude Opus 5.5. It can also run on OpenAI (`AI_PROVIDER_TRIAL_EXTRACTION`).
+- Every AI call is logged with task, provider, model, input/output tokens and estimated
+  cost (`add_ai_usage_details.sql`); cost is now priced per model.
+- See `docs/ai-and-trial-search.md` for env vars and migrations.
+
 ### Removed - notes.category and the categories table (November 2026)
 
 - The `notes.category` column is dropped

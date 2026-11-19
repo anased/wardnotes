@@ -16,6 +16,7 @@
     "trials:export": "node scripts/trial-notes/trial-notes.mjs export",
     "trials:check": "node scripts/trial-notes/trial-notes.mjs check",
     "trials:apply": "node scripts/trial-notes/trial-notes.mjs apply",
+    "trials:eval": "tsx scripts/trial-search/eval.ts",
     "preflight": "node scripts/preflight.mjs",
     "postbuild": "next-sitemap --config next-sitemap.config.cjs",
     "prepare": "husky install",
@@ -89,6 +90,7 @@
     "postcss-import": "^16.1.0",
     "postcss-nesting": "^13.0.1",
     "tailwindcss": "^3.3.0",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   },
   "lint-staged": {

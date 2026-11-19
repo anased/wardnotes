@@ -426,6 +426,11 @@ export interface Database {
           tokens_used: number | null;
           success: boolean;
           error_message: string | null;
+          ai_task: string | null;
+          provider: string | null;
+          model: string | null;
+          input_tokens: number | null;
+          output_tokens: number | null;
           created_at: string;
         };
         Insert: {
@@ -436,6 +441,11 @@ export interface Database {
           tokens_used?: number | null;
           success?: boolean;
           error_message?: string | null;
+          ai_task?: string | null;
+          provider?: string | null;
+          model?: string | null;
+          input_tokens?: number | null;
+          output_tokens?: number | null;
           created_at?: string;
         };
         Update: {

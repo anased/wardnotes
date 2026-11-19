@@ -3,8 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import type { GenerateFlashcardsRequest } from '@/types/flashcard';
 import { generateSmartFlashcards, type ClaudeResponses } from '@/lib/utils/smartFlashcardGeneration';
-import { summarizeUsage, toHttpError } from '@/lib/ai/claude';
-import { checkAndIncrementQuota, logApiUsage, refundQuota } from '@/lib/services/quotaService';
+import { claudeCallRecords, toHttpError } from '@/lib/ai/claude';
+import { checkAndIncrementQuota, logAiCalls, refundQuota } from '@/lib/services/quotaService';
 
 export const maxDuration = 180;
 
@@ -176,8 +176,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Log actual API usage for analytics
-    const usage = summarizeUsage(...claudeResponses);
-    await logApiUsage(user.id, 'flashcard_generation', usage.costUsd, usage.tokens, true);
+    await logAiCalls(user.id, 'flashcard_generation', claudeCallRecords('flashcardGeneration', ...claudeResponses));
 
     // If this is just a preview, save to flashcard_generations table and return
     if (preview) {
