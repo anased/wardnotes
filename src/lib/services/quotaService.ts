@@ -5,11 +5,34 @@
  * Implements freemium pricing model with monthly usage limits for free users
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { QuotaCheckResult, QuotaFeatureType, UsageQuota } from '@/lib/supabase/types';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+/**
+ * SERVER-ONLY. Every quota operation runs with the service role:
+ * - the quota RPCs take an arbitrary user id, so they are not executable by
+ *   anon/authenticated clients (otherwise anyone could spend or read another
+ *   user's quota);
+ * - RLS only lets the service role write usage_quotas / api_usage_logs.
+ * Callers must pass a user id they have already authenticated.
+ */
+let adminClient: SupabaseClient | null = null;
+
+function getAdminClient(): SupabaseClient {
+  if (!adminClient) {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    if (!url || !serviceRoleKey) {
+      throw new Error(
+        'Quota service misconfigured: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required'
+      );
+    }
+    adminClient = createClient(url, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+  }
+  return adminClient;
+}
 
 /**
  * Check and increment quota for a specific feature
@@ -23,7 +46,7 @@ export async function checkAndIncrementQuota(
   userId: string,
   featureType: QuotaFeatureType
 ): Promise<QuotaCheckResult> {
-  const supabase = createClient(supabaseUrl, supabaseAnonKey);
+  const supabase = getAdminClient();
 
   try {
     const { data, error } = await supabase.rpc('check_and_increment_usage', {
@@ -58,24 +81,16 @@ export async function refundQuota(
   featureType: QuotaFeatureType,
   reason: string
 ): Promise<void> {
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-  if (!supabaseUrl || !serviceRoleKey) {
-    console.error('refundQuota: SUPABASE_SERVICE_ROLE_KEY is not set; quota not refunded');
-  } else {
-    try {
-      const supabase = createClient(supabaseUrl, serviceRoleKey, {
-        auth: { persistSession: false },
-      });
-      const { error } = await supabase.rpc('refund_usage', {
-        p_user_id: userId,
-        p_feature_type: featureType,
-      });
-      if (error) {
-        console.error('Quota refund error:', error);
-      }
-    } catch (error) {
-      console.error('Error in refundQuota:', error);
+  try {
+    const { error } = await getAdminClient().rpc('refund_usage', {
+      p_user_id: userId,
+      p_feature_type: featureType,
+    });
+    if (error) {
+      console.error('Quota refund error:', error);
     }
+  } catch (error) {
+    console.error('Error in refundQuota:', error);
   }
 
   // Record the failed attempt for analytics (cost is logged separately when known)
@@ -90,7 +105,7 @@ export async function refundQuota(
  * @returns Current quota information with usage and limits
  */
 export async function getUserQuota(userId: string) {
-  const supabase = createClient(supabaseUrl, supabaseAnonKey);
+  const supabase = getAdminClient();
 
   try {
     // Try to get existing quota for current period
@@ -223,10 +238,8 @@ export async function logApiUsage(
   success: boolean = true,
   errorMessage?: string
 ): Promise<void> {
-  const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
   try {
-    const { error } = await supabase.from('api_usage_logs').insert({
+    const { error } = await getAdminClient().from('api_usage_logs').insert({
       user_id: userId,
       feature_type: featureType,
       api_cost: apiCost,
@@ -252,7 +265,7 @@ export async function logApiUsage(
  * @param userId - The user's UUID
  */
 export async function initializeUserQuota(userId: string): Promise<UsageQuota> {
-  const supabase = createClient(supabaseUrl, supabaseAnonKey);
+  const supabase = getAdminClient();
 
   try {
     const { data, error } = await supabase.rpc('initialize_user_quota', {
@@ -278,7 +291,7 @@ export async function initializeUserQuota(userId: string): Promise<UsageQuota> {
  * @returns Aggregated usage statistics
  */
 export async function getUsageStatistics() {
-  const supabase = createClient(supabaseUrl, supabaseAnonKey);
+  const supabase = getAdminClient();
 
   try {
     const { data: quotas, error } = await supabase
