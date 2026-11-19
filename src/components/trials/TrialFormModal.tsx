@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import Modal from '../ui/Modal';
 import Input from '../ui/Input';
@@ -11,6 +11,8 @@ import { NoteTopicLink, withTopicIds } from '@/lib/utils/noteTopicLinks';
 import { findDuplicateTrial, parseTrialYear, supersedeCandidates, trialLabel } from '@/lib/utils/trials';
 import { normalizeTopicName } from '@/lib/utils/topicTree';
 import { supabase } from '@/lib/supabase/client';
+import { detectTrialQuery } from '@/lib/trials/identify';
+import type { TrialCandidate } from '@/lib/trials/rankCandidates';
 
 interface TrialFormModalProps {
   isOpen: boolean;
@@ -44,6 +46,17 @@ interface ExtractResponse {
   } & Record<TextKey, string | null>;
   source: { pmid: string; title: string; journal: string | null; year: number | null; url: string } | null;
 }
+
+/** Response of POST /api/trials/search (subset used here). */
+interface SearchResponse {
+  query: string;
+  candidates: TrialCandidate[];
+  ambiguous: boolean;
+  notice: string | null;
+}
+
+/** Candidates shown to the user. */
+const SHOWN_CANDIDATES = 3;
 
 interface ExtractSummary {
   filled: string[];
@@ -86,6 +99,13 @@ export default function TrialFormModal({
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState('');
   const [extractSummary, setExtractSummary] = useState<ExtractSummary | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [searchResult, setSearchResult] = useState<SearchResponse | null>(null);
+  const [manualEntry, setManualEntry] = useState(false);
+  const sourceRef = useRef<HTMLInputElement>(null);
+  const detected = useMemo(() => detectTrialQuery(sourceInput), [sourceInput]);
+  const isSearch = detected?.kind === 'name' || detected?.kind === 'nct';
+  const busy = extracting || searching;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -105,6 +125,8 @@ export default function TrialFormModal({
     setSourceInput('');
     setExtractError('');
     setExtractSummary(null);
+    setSearchResult(null);
+    setManualEntry(false);
     if (trial) {
       setTopicsLoaded(false);
       getTrialTopics(trial.id)
@@ -125,20 +147,67 @@ export default function TrialFormModal({
   );
   const candidates = useMemo(() => supersedeCandidates(trials, trial?.id), [trials, trial?.id]);
 
+  const authHeader = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('You must be logged in to use this');
+    return `Bearer ${session.access_token}`;
+  };
+
+  /** Look up a trial by name/acronym or NCT number (PubMed + ClinicalTrials.gov; no AI). */
+  const handleSearch = async () => {
+    if (!sourceInput.trim() || busy) return;
+    setSearching(true);
+    setExtractError('');
+    setExtractSummary(null);
+    setSearchResult(null);
+    try {
+      const response = await fetch('/api/trials/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: await authHeader() },
+        body: JSON.stringify({ query: sourceInput }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Trial search failed. Please try again.');
+      setSearchResult(data as SearchResponse);
+    } catch (err) {
+      setExtractError(
+        err instanceof TypeError
+          ? 'Network error: check your connection and try again.'
+          : err instanceof Error
+            ? err.message
+            : 'Trial search failed'
+      );
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const pickCandidate = (c: TrialCandidate) => {
+    setSearchResult(null);
+    setSourceInput(c.pmid);
+    handleExtract(c.pmid);
+  };
+
+  const enterManually = () => {
+    setSearchResult(null);
+    setSourceInput('');
+    setManualEntry(true);
+    sourceRef.current?.focus();
+  };
+
+  const handleSourceSubmit = () => (isSearch ? handleSearch() : handleExtract());
+
   /** Fill empty fields from an abstract (PMID / DOI / link / pasted text). Never overwrites user input. */
-  const handleExtract = async () => {
-    if (!sourceInput.trim() || extracting) return;
+  const handleExtract = async (sourceText: string = sourceInput) => {
+    if (!sourceText.trim() || busy) return;
     setExtracting(true);
     setExtractError('');
     setExtractSummary(null);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('You must be logged in to use AI extraction');
-
       const response = await fetch('/api/trials/extract', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ source: sourceInput }),
+        headers: { 'Content-Type': 'application/json', Authorization: await authHeader() },
+        body: JSON.stringify({ source: sourceText }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -279,37 +348,98 @@ export default function TrialFormModal({
 
         <div className="p-3 border border-gray-200 rounded-lg bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50">
           <label htmlFor="trial-source" className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
-            Fill from abstract <span className="font-normal text-gray-500 dark:text-gray-400">(AI)</span>
+            Fill from a trial <span className="font-normal text-gray-500 dark:text-gray-400">(AI)</span>
           </label>
           <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
-            Enter a PMID, DOI, or PubMed/journal link, or paste the abstract. Only empty fields are filled — check
-            the result against the paper.
+            {manualEntry
+              ? 'Enter the PMID, DOI, or PubMed/journal link, or paste the abstract.'
+              : 'Type a trial name (e.g. CHANCE-2) or NCT number, or enter a PMID, DOI, or link, or paste the abstract.'}{' '}
+            Only empty fields are filled — check the result against the paper.
           </p>
           <div className="flex gap-2">
             <input
               id="trial-source"
+              ref={sourceRef}
               value={sourceInput}
-              onChange={(e) => setSourceInput(e.target.value)}
+              onChange={(e) => {
+                setSourceInput(e.target.value);
+                if (searchResult) setSearchResult(null);
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault(); // don't submit the trial form
-                  handleExtract();
+                  handleSourceSubmit();
                 }
               }}
-              placeholder="e.g. 29766750 or 10.1056/NEJMoa1800410"
+              placeholder={manualEntry ? 'e.g. 29766750 or 10.1056/NEJMoa1800410' : 'e.g. POINT, NCT00991029, or 29766750'}
               className="input flex-1 min-w-0"
-              disabled={extracting}
+              disabled={busy}
+              enterKeyHint={isSearch ? 'search' : 'go'}
+              autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
             />
             <Button
               type="button"
               variant="outline"
-              onClick={handleExtract}
-              isLoading={extracting}
-              disabled={!sourceInput.trim() || extracting}
+              onClick={handleSourceSubmit}
+              isLoading={busy}
+              disabled={!sourceInput.trim() || busy}
             >
-              Extract
+              {isSearch ? 'Search' : 'Extract'}
             </Button>
           </div>
+          {searchResult && (
+            <div className="mt-3" role="region" aria-label="Matching trial publications">
+              {searchResult.notice && (
+                <p className="mb-2 text-xs text-amber-700 dark:text-amber-300" role="status">
+                  {searchResult.notice}
+                </p>
+              )}
+              {searchResult.candidates.length > 0 && (
+                <>
+                  <p className="mb-1 text-xs text-gray-600 dark:text-gray-300">
+                    Pick the paper to fill from:
+                  </p>
+                  <ul className="space-y-2">
+                    {searchResult.candidates.slice(0, SHOWN_CANDIDATES).map((c) => (
+                      <li key={c.pmid}>
+                        <button
+                          type="button"
+                          onClick={() => pickCandidate(c)}
+                          className="w-full min-h-[44px] p-2 text-left bg-white border border-gray-200 rounded-lg hover:border-primary-400 hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700"
+                        >
+                          <span className="block text-sm font-medium text-gray-900 dark:text-gray-100 line-clamp-2">
+                            {c.title}
+                          </span>
+                          <span className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            {c.isRct && (
+                              <span className="px-1.5 py-0.5 font-semibold text-green-800 bg-green-100 rounded dark:bg-green-900 dark:text-green-200">
+                                RCT
+                              </span>
+                            )}
+                            <span>
+                              {[c.journalAbbrev ?? c.journal, c.year, c.firstAuthor ? `${c.firstAuthor} et al.` : null]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </span>
+                            <span className="text-gray-400">PMID {c.pmid}</span>
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={enterManually}
+                className="mt-2 text-xs underline text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-300"
+              >
+                None of these: enter PMID/DOI
+              </button>
+            </div>
+          )}
           {extractError && (
             <p className="mt-2 text-xs text-red-700 dark:text-red-300" role="alert">
               {extractError}

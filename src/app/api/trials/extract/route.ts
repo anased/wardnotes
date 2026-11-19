@@ -1,10 +1,12 @@
 // src/app/api/trials/extract/route.ts
 // Fill the trial form from an abstract: resolve PMID / DOI / PMCID / URL (or pasted
-// abstract text) via PubMed, then extract the form fields with Claude.
+// abstract text) via PubMed, then extract the form fields with the model configured
+// for `trialExtraction` in lib/ai/models (cheap model first, stronger fallback).
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/client';
-import { summarizeUsage, toHttpError } from '@/lib/ai/claude';
-import { checkAndIncrementQuota, logApiUsage, refundQuota } from '@/lib/services/quotaService';
+import { toHttpError } from '@/lib/ai/claude';
+import type { AiCallRecord } from '@/lib/ai/usage';
+import { checkAndIncrementQuota, logAiCalls, refundQuota } from '@/lib/services/quotaService';
 import {
   TrialSourceError,
   fetchPubmedArticle,
@@ -20,6 +22,7 @@ const MAX_INPUT_LENGTH = 10_000;
 
 export async function POST(request: NextRequest) {
   let chargedUserId: string | null = null;
+  const aiCalls: AiCallRecord[] = [];
   try {
     // 1. Authentication
     const authHeader = request.headers.get('Authorization');
@@ -87,15 +90,14 @@ export async function POST(request: NextRequest) {
     // From here on the user has been charged; refund if anything fails
     chargedUserId = user.id;
 
-    // 4. Extract with Claude
-    const { trial, response } = await extractTrialFromAbstract(
+    // 4. Extract (every model call, including retries/fallbacks, lands in aiCalls)
+    const { trial } = await extractTrialFromAbstract(
       article
         ? { title: article.title, journal: article.journal, year: article.year, abstract: article.abstract }
-        : { abstract: identifier.value }
+        : { abstract: identifier.value },
+      aiCalls
     );
-
-    const usage = summarizeUsage(response);
-    await logApiUsage(user.id, 'trial_extraction', usage.costUsd, usage.tokens, true);
+    await logAiCalls(user.id, 'trial_extraction', aiCalls);
 
     return NextResponse.json({
       trial: {
@@ -119,6 +121,7 @@ export async function POST(request: NextRequest) {
     console.error('Error extracting trial:', error);
     const { status, message } = toHttpError(error);
     if (chargedUserId) {
+      await logAiCalls(chargedUserId, 'trial_extraction', aiCalls);
       await refundQuota(chargedUserId, 'note_improvement', message, 'trial_extraction');
     }
     return NextResponse.json({ error: `Failed to extract trial details: ${message}` }, { status });

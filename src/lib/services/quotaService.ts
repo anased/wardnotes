@@ -7,6 +7,7 @@
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { QuotaCheckResult, QuotaFeatureType, UsageLogFeature, UsageQuota } from '@/lib/supabase/types';
+import { totalTokens, type AiCallRecord } from '@/lib/ai/usage';
 
 /**
  * SERVER-ONLY. Every quota operation runs with the service role:
@@ -241,15 +242,62 @@ export async function logApiUsage(
   success: boolean = true,
   errorMessage?: string
 ): Promise<void> {
-  try {
-    const { error } = await getAdminClient().from('api_usage_logs').insert({
+  await insertUsageRows([
+    {
       user_id: userId,
       feature_type: featureType,
       api_cost: apiCost,
       tokens_used: tokensUsed || null,
       success,
       error_message: errorMessage || null,
-    });
+    },
+  ]);
+}
+
+/**
+ * Log AI calls, one api_usage_logs row per call, with provider, model, input/output
+ * tokens and estimated cost. Never throws.
+ */
+export async function logAiCalls(
+  userId: string,
+  featureType: UsageLogFeature,
+  calls: AiCallRecord[]
+): Promise<void> {
+  if (calls.length === 0) return;
+  await insertUsageRows(
+    calls.map((c) => ({
+      user_id: userId,
+      feature_type: featureType,
+      api_cost: c.costUsd,
+      tokens_used: totalTokens(c),
+      success: c.success,
+      error_message: c.error?.slice(0, 500) || null,
+      ai_task: c.task,
+      provider: c.provider,
+      model: c.model,
+      input_tokens: c.totalInputTokens,
+      output_tokens: c.outputTokens,
+    }))
+  );
+}
+
+const DETAIL_COLUMNS = ['ai_task', 'provider', 'model', 'input_tokens', 'output_tokens'] as const;
+
+async function insertUsageRows(rows: Record<string, unknown>[]): Promise<void> {
+  try {
+    const client = getAdminClient();
+    let { error } = await client.from('api_usage_logs').insert(rows.length === 1 ? rows[0] : rows);
+
+    // Before add_ai_usage_details.sql is applied the detail columns don't exist;
+    // keep logging cost/tokens rather than dropping the rows.
+    if (error && (error.code === 'PGRST204' || error.code === '42703')) {
+      const basic = rows.map((r) => {
+        const copy = { ...r };
+        for (const col of DETAIL_COLUMNS) delete copy[col];
+        return copy;
+      });
+      ({ error } = await client.from('api_usage_logs').insert(basic.length === 1 ? basic[0] : basic));
+    }
 
     if (error) {
       console.error('Log API usage error:', error);

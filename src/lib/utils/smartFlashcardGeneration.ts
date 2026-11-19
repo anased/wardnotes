@@ -2,7 +2,8 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import { z } from 'zod/v4';
 import type { ContentAnalysis, GeneratedCard, CardType } from './flashcardGeneration.types';
-import { CLAUDE_MODEL, FALLBACK_BETA, assertCompleted, getClaude } from '@/lib/ai/claude';
+import { FALLBACK_BETA, assertCompleted, getClaude } from '@/lib/ai/claude';
+import { getTaskModel } from '@/lib/ai/models';
 
 // ============ SCHEMAS (enforced via structured outputs) ============
 
@@ -70,12 +71,14 @@ const DuplicatesSchema = z.object({
 });
 
 /** Shared request settings for every flashcard-pipeline call. */
-const BASE_PARAMS = {
-  model: CLAUDE_MODEL,
-  max_tokens: 16000,
-  betas: [FALLBACK_BETA],
-  fallbacks: 'default',
-} satisfies Partial<Anthropic.Beta.MessageCreateParamsNonStreaming>;
+function baseParams() {
+  return {
+    model: getTaskModel('flashcardGeneration').model,
+    max_tokens: 16000,
+    betas: [FALLBACK_BETA],
+    fallbacks: 'default',
+  } satisfies Partial<Anthropic.Beta.MessageCreateParamsNonStreaming>;
+}
 
 /** Usage of every Claude call made during the last pipeline run, for cost logging. */
 export type ClaudeResponses = Anthropic.Beta.BetaMessage[];
@@ -237,7 +240,7 @@ export async function analyzeNoteContent(
   responses: ClaudeResponses = []
 ): Promise<ContentAnalysis> {
   const response = await getClaude().beta.messages.parse({
-    ...BASE_PARAMS,
+    ...baseParams(),
     output_config: {
       effort: 'medium',
       format: betaZodOutputFormat(ContentAnalysisSchema),
@@ -268,7 +271,7 @@ export async function generateTargetedCards(
   const schema = cardType === 'cloze' ? ClozeCardsSchema : FrontBackCardsSchema;
 
   const response = await getClaude().beta.messages.parse({
-    ...BASE_PARAMS,
+    ...baseParams(),
     output_config: {
       effort: 'medium',
       format: betaZodOutputFormat(schema),
@@ -304,7 +307,7 @@ export async function deduplicateCards(
     .join('\n');
 
   const response = await getClaude().beta.messages.parse({
-    ...BASE_PARAMS,
+    ...baseParams(),
     output_config: {
       effort: 'low',
       format: betaZodOutputFormat(DuplicatesSchema),

@@ -1,19 +1,18 @@
 // src/lib/ai/claude.ts
 // Shared Claude API client and helpers for all server-side AI features.
+// Model choice lives in ./models.ts.
 import Anthropic from '@anthropic-ai/sdk';
+import { estimateCostUsd, type AiTask } from './models';
+import { AiRefusalError, AiTruncatedError, AiValidationError, OpenAIApiError } from './errors';
+import type { AiCallRecord } from './usage';
 
-export const CLAUDE_MODEL = 'claude-opus-5-5';
+export { AiRefusalError as ClaudeRefusalError, AiTruncatedError as ClaudeTruncatedError } from './errors';
 
 // Server-side refusal fallback: if the safety classifiers decline a request
 // (medical content can occasionally trip the `bio` category), the API re-runs
-// it on a server-chosen fallback model inside the same call.
+// it on a server-chosen fallback model inside the same call. Supported on
+// Opus-class models, not on Claude Haiku 5.5.
 export const FALLBACK_BETA = 'server-side-fallback-2026-07-01' as const;
-
-// Claude Opus 5.5 list prices (USD per token).
-const PRICE_INPUT = 4 / 1_000_000;
-const PRICE_OUTPUT = 20 / 1_000_000;
-const PRICE_CACHE_WRITE = PRICE_INPUT * 1.25;
-const PRICE_CACHE_READ = 0.2 / 1_000_000;
 
 let client: Anthropic | null = null;
 
@@ -25,20 +24,9 @@ export function getClaude(): Anthropic {
   return client;
 }
 
-/** Thrown when Claude (and any fallback model) declines the request. */
-export class ClaudeRefusalError extends Error {
-  constructor(public category: string | null | undefined) {
-    super('The AI declined to process this request.');
-    this.name = 'ClaudeRefusalError';
-  }
-}
-
-/** Thrown when the response hit max_tokens and is incomplete. */
-export class ClaudeTruncatedError extends Error {
-  constructor() {
-    super('The AI response was cut off before it finished.');
-    this.name = 'ClaudeTruncatedError';
-  }
+/** Whether a model accepts the server-side refusal `fallbacks` parameter. */
+export function supportsServerFallback(model: string): boolean {
+  return !model.startsWith('claude-haiku');
 }
 
 type AnyMessage = Anthropic.Message | Anthropic.Beta.BetaMessage;
@@ -46,10 +34,10 @@ type AnyMessage = Anthropic.Message | Anthropic.Beta.BetaMessage;
 /** Throws on refusal / truncation; call before reading content. */
 export function assertCompleted(message: AnyMessage): void {
   if (message.stop_reason === 'refusal') {
-    throw new ClaudeRefusalError(message.stop_details?.category);
+    throw new AiRefusalError(message.stop_details?.category);
   }
   if (message.stop_reason === 'max_tokens') {
-    throw new ClaudeTruncatedError();
+    throw new AiTruncatedError();
   }
 }
 
@@ -61,35 +49,57 @@ export function extractText(message: AnyMessage): string {
     .trim();
 }
 
-export interface UsageSummary {
-  tokens: number;
-  costUsd: number;
+function completionOutcome(message: AnyMessage): { success: boolean; error?: string } {
+  if (message.stop_reason === 'refusal') return { success: false, error: 'refusal' };
+  if (message.stop_reason === 'max_tokens') return { success: false, error: 'truncated' };
+  return { success: true };
 }
 
-/** Token count and approximate cost of one or more responses (for api_usage_logs). */
-export function summarizeUsage(...messages: AnyMessage[]): UsageSummary {
-  let tokens = 0;
-  let costUsd = 0;
-  for (const { usage } of messages) {
-    const cacheWrite = usage.cache_creation_input_tokens ?? 0;
-    const cacheRead = usage.cache_read_input_tokens ?? 0;
-    tokens += usage.input_tokens + cacheWrite + cacheRead + usage.output_tokens;
-    costUsd +=
-      usage.input_tokens * PRICE_INPUT +
-      cacheWrite * PRICE_CACHE_WRITE +
-      cacheRead * PRICE_CACHE_READ +
-      usage.output_tokens * PRICE_OUTPUT;
-  }
-  return { tokens, costUsd: Number(costUsd.toFixed(6)) };
+/** Usage/cost record for one Claude response (for api_usage_logs). */
+export function claudeCallRecord(
+  task: AiTask,
+  message: AnyMessage,
+  outcome: { success: boolean; error?: string } = completionOutcome(message)
+): AiCallRecord {
+  const { usage } = message;
+  const cacheWriteTokens = usage.cache_creation_input_tokens ?? 0;
+  const cacheReadTokens = usage.cache_read_input_tokens ?? 0;
+  return {
+    task,
+    provider: 'anthropic',
+    model: message.model,
+    inputTokens: usage.input_tokens,
+    outputTokens: usage.output_tokens,
+    totalInputTokens: usage.input_tokens + cacheWriteTokens + cacheReadTokens,
+    costUsd: estimateCostUsd(message.model, {
+      inputTokens: usage.input_tokens,
+      outputTokens: usage.output_tokens,
+      cacheWriteTokens,
+      cacheReadTokens,
+    }),
+    ...outcome,
+  };
 }
 
-/** Map Claude errors to an HTTP status and a user-safe message for API routes. */
+export function claudeCallRecords(task: AiTask, ...messages: AnyMessage[]): AiCallRecord[] {
+  return messages.map((m) => claudeCallRecord(task, m));
+}
+
+/** Map AI errors to an HTTP status and a user-safe message for API routes. */
 export function toHttpError(error: unknown): { status: number; message: string } {
-  if (error instanceof ClaudeRefusalError) {
+  if (error instanceof AiRefusalError) {
     return { status: 422, message: error.message };
   }
-  if (error instanceof ClaudeTruncatedError) {
+  if (error instanceof AiTruncatedError || error instanceof AiValidationError) {
     return { status: 502, message: error.message };
+  }
+  if (error instanceof OpenAIApiError) {
+    if (error.status === 429) return { status: 503, message: 'The AI service is busy. Please try again in a moment.' };
+    if (error.status === 401) {
+      console.error('OpenAI authentication failed - check OPENAI_API_KEY');
+      return { status: 500, message: 'AI service is not configured correctly.' };
+    }
+    return { status: 502, message: `AI service error (${error.status ?? 'unknown'}).` };
   }
   if (error instanceof Anthropic.RateLimitError) {
     return { status: 503, message: 'The AI service is busy. Please try again in a moment.' };
