@@ -10,6 +10,7 @@ import { Trial, getTrialTopics, trialErrorMessage } from '@/lib/supabase/trials'
 import { NoteTopicLink, withTopicIds } from '@/lib/utils/noteTopicLinks';
 import { findDuplicateTrial, parseTrialYear, supersedeCandidates, trialLabel } from '@/lib/utils/trials';
 import { normalizeTopicName } from '@/lib/utils/topicTree';
+import { supabase } from '@/lib/supabase/client';
 
 interface TrialFormModalProps {
   isOpen: boolean;
@@ -32,6 +33,25 @@ const FIELDS = [
 ] as const;
 
 type TextKey = (typeof FIELDS)[number]['key'];
+
+/** Response of POST /api/trials/extract. */
+interface ExtractResponse {
+  trial: {
+    is_clinical_trial: boolean;
+    acronym: string | null;
+    full_name: string | null;
+    year: number | null;
+  } & Record<TextKey, string | null>;
+  source: { pmid: string; title: string; journal: string | null; year: number | null; url: string } | null;
+}
+
+interface ExtractSummary {
+  filled: string[];
+  skipped: string[];
+  source: ExtractResponse['source'];
+  notTrial: boolean;
+  missingAcronym: boolean;
+}
 
 /** Create or edit a trial record: details, what superseded it, and the topics that cite it. */
 export default function TrialFormModal({
@@ -62,6 +82,10 @@ export default function TrialFormModal({
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [sourceInput, setSourceInput] = useState('');
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState('');
+  const [extractSummary, setExtractSummary] = useState<ExtractSummary | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -78,6 +102,9 @@ export default function TrialFormModal({
     setSupersededBy(trial?.superseded_by ?? '');
     setError('');
     setConfirmDelete(false);
+    setSourceInput('');
+    setExtractError('');
+    setExtractSummary(null);
     if (trial) {
       setTopicsLoaded(false);
       getTrialTopics(trial.id)
@@ -97,6 +124,68 @@ export default function TrialFormModal({
     [trials, acronym, parsedYear, yearInvalid, trial?.id]
   );
   const candidates = useMemo(() => supersedeCandidates(trials, trial?.id), [trials, trial?.id]);
+
+  /** Fill empty fields from an abstract (PMID / DOI / link / pasted text). Never overwrites user input. */
+  const handleExtract = async () => {
+    if (!sourceInput.trim() || extracting) return;
+    setExtracting(true);
+    setExtractError('');
+    setExtractSummary(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('You must be logged in to use AI extraction');
+
+      const response = await fetch('/api/trials/extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ source: sourceInput }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (response.status === 429) {
+          setExtractError(data.message || 'Monthly AI limit reached. Upgrade to Premium for unlimited access.');
+          return;
+        }
+        throw new Error(data.error || 'Failed to extract trial details');
+      }
+
+      const { trial: extracted, source } = data as ExtractResponse;
+      const filled: string[] = [];
+      const skipped: string[] = [];
+      const fill = (label: string, current: string, value: string | null | undefined, set: (v: string) => void) => {
+        const v = value?.trim();
+        if (!v) return;
+        if (current.trim()) {
+          if (current.trim() !== v) skipped.push(label);
+          return;
+        }
+        set(v);
+        filled.push(label);
+      };
+
+      fill('Acronym', acronym, extracted.acronym, setAcronym);
+      fill('Full name', fullName, extracted.full_name, setFullName);
+      fill('Year', year, extracted.year ? String(extracted.year) : null, setYear);
+      const sourceLine = source ? `Source: PubMed ${source.pmid}` : null;
+      const notes = [extracted.notes?.trim(), sourceLine].filter(Boolean).join('\n\n') || null;
+      for (const f of FIELDS) {
+        const value = f.key === 'notes' ? notes : extracted[f.key];
+        fill(f.label, text[f.key], value, (v) => setText((t) => ({ ...t, [f.key]: v })));
+      }
+
+      setExtractSummary({
+        filled,
+        skipped,
+        source,
+        notTrial: !extracted.is_clinical_trial,
+        missingAcronym: !extracted.acronym && !acronym.trim(),
+      });
+    } catch (err) {
+      setExtractError(err instanceof Error ? err.message : 'Failed to extract trial details');
+    } finally {
+      setExtracting(false);
+    }
+  };
 
   const handleSave = async () => {
     const name = normalizeTopicName(acronym);
@@ -187,6 +276,80 @@ export default function TrialFormModal({
             {error}
           </div>
         )}
+
+        <div className="p-3 border border-gray-200 rounded-lg bg-gray-50 dark:border-gray-700 dark:bg-gray-800/50">
+          <label htmlFor="trial-source" className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
+            Fill from abstract <span className="font-normal text-gray-500 dark:text-gray-400">(AI)</span>
+          </label>
+          <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">
+            Enter a PMID, DOI, or PubMed/journal link, or paste the abstract. Only empty fields are filled — check
+            the result against the paper.
+          </p>
+          <div className="flex gap-2">
+            <input
+              id="trial-source"
+              value={sourceInput}
+              onChange={(e) => setSourceInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault(); // don't submit the trial form
+                  handleExtract();
+                }
+              }}
+              placeholder="e.g. 29766750 or 10.1056/NEJMoa1800410"
+              className="input flex-1 min-w-0"
+              disabled={extracting}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleExtract}
+              isLoading={extracting}
+              disabled={!sourceInput.trim() || extracting}
+            >
+              Extract
+            </Button>
+          </div>
+          {extractError && (
+            <p className="mt-2 text-xs text-red-700 dark:text-red-300" role="alert">
+              {extractError}
+            </p>
+          )}
+          {extractSummary && (
+            <div className="mt-2 space-y-1 text-xs text-gray-600 dark:text-gray-300" role="status">
+              {extractSummary.source && (
+                <p>
+                  From{' '}
+                  <a
+                    href={extractSummary.source.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-300"
+                  >
+                    {extractSummary.source.title}
+                  </a>
+                  {extractSummary.source.journal ? ` — ${extractSummary.source.journal}` : ''}
+                  {extractSummary.source.year ? ` (${extractSummary.source.year})` : ''}
+                </p>
+              )}
+              <p>
+                {extractSummary.filled.length > 0
+                  ? `Filled: ${extractSummary.filled.join(', ')}.`
+                  : 'No empty fields to fill.'}
+                {extractSummary.skipped.length > 0 &&
+                  ` Kept your entries for: ${extractSummary.skipped.join(', ')}.`}
+              </p>
+              {extractSummary.missingAcronym && (
+                <p className="text-amber-700 dark:text-amber-300">No acronym found in the abstract — please enter one.</p>
+              )}
+              {extractSummary.notTrial && (
+                <p className="text-amber-700 dark:text-amber-300">
+                  This doesn&apos;t look like a clinical trial report — double-check the source.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
 
         <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-[minmax(0,1fr)_8rem]">
           <Input
