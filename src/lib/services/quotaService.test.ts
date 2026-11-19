@@ -65,12 +65,12 @@ describe('refundQuota', () => {
     );
   });
 
-  it('does not throw and skips the RPC when the service role key is missing', async () => {
+  it('does not throw when the service role key is missing', async () => {
     const { refundQuota } = loadService({ ...ENV, SUPABASE_SERVICE_ROLE_KEY: undefined });
 
     await expect(refundQuota('user-1', 'flashcard_generation', 'boom')).resolves.toBeUndefined();
     expect(rpc).not.toHaveBeenCalled();
-    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+    expect(insert).not.toHaveBeenCalled();
   });
 
   it('does not throw when the refund RPC fails', async () => {
@@ -79,5 +79,37 @@ describe('refundQuota', () => {
 
     await expect(refundQuota('user-1', 'flashcard_generation', 'boom')).resolves.toBeUndefined();
     expect(insert).toHaveBeenCalled();
+  });
+});
+
+describe('service-role access', () => {
+  it('never uses the anon key for quota operations', async () => {
+    rpc.mockResolvedValue({ data: { allowed: true, used: 1, limit: 2, remaining: 1 }, error: null });
+    const { checkAndIncrementQuota, logApiUsage } = loadService(ENV);
+
+    await checkAndIncrementQuota('user-1', 'note_improvement');
+    await logApiUsage('user-1', 'note_improvement', 0.01, 100, true);
+
+    expect(rpc).toHaveBeenCalledWith('check_and_increment_usage', {
+      p_user_id: 'user-1',
+      p_feature_type: 'note_improvement',
+    });
+    expect(createClient).toHaveBeenCalled();
+    expect(createClient.mock.calls.every(([, key]) => key === 'service-key')).toBe(true);
+  });
+
+  it('checkAndIncrementQuota fails closed when the service role key is missing', async () => {
+    const { checkAndIncrementQuota } = loadService({ ...ENV, SUPABASE_SERVICE_ROLE_KEY: undefined });
+
+    await expect(checkAndIncrementQuota('user-1', 'note_improvement')).rejects.toThrow(
+      /SUPABASE_SERVICE_ROLE_KEY/
+    );
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('logApiUsage never throws, even when misconfigured', async () => {
+    const { logApiUsage } = loadService({ ...ENV, SUPABASE_SERVICE_ROLE_KEY: undefined });
+
+    await expect(logApiUsage('user-1', 'note_improvement', 0, undefined, false)).resolves.toBeUndefined();
   });
 });
