@@ -1,15 +1,90 @@
-import OpenAI from 'openai';
+import type Anthropic from '@anthropic-ai/sdk';
+import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
+import { z } from 'zod/v4';
 import type { ContentAnalysis, GeneratedCard, CardType } from './flashcardGeneration.types';
+import { CLAUDE_MODEL, FALLBACK_BETA, assertCompleted, getClaude } from '@/lib/ai/claude';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+// ============ SCHEMAS (enforced via structured outputs) ============
+
+const Importance = z.enum(['high', 'medium', 'low']);
+const CardKind = z.enum(['definition', 'mechanism', 'clinical_pearl', 'differential', 'treatment', 'diagnostic']);
+
+const ContentAnalysisSchema = z.object({
+  sections: z.array(z.object({
+    title: z.string(),
+    content: z.string(),
+    type: z.enum([
+      'definition', 'mechanism', 'clinical_pearl', 'differential', 'treatment',
+      'diagnostic', 'epidemiology', 'pathophysiology', 'other',
+    ]),
+    importance: Importance,
+  })),
+  keyTerms: z.array(z.object({
+    term: z.string(),
+    definition: z.string().optional(),
+    context: z.string(),
+  })),
+  relationships: z.array(z.object({
+    from: z.string(),
+    to: z.string(),
+    type: z.enum(['causes', 'treats', 'diagnoses', 'distinguishes', 'indicates', 'contraindicates']),
+  })),
+  clinicalPearls: z.array(z.object({
+    pearl: z.string(),
+    context: z.string(),
+    importance: Importance,
+  })),
+  suggestedCardCount: z.object({
+    definitions: z.number().int(),
+    mechanisms: z.number().int(),
+    clinicalPearls: z.number().int(),
+    differentials: z.number().int(),
+    treatments: z.number().int(),
+    diagnostics: z.number().int(),
+  }),
 });
+
+const ClozeCardsSchema = z.object({
+  cards: z.array(z.object({
+    cloze: z.string(),
+    type: CardKind,
+    importance: Importance,
+    sourceContext: z.string(),
+  })),
+});
+
+const FrontBackCardsSchema = z.object({
+  cards: z.array(z.object({
+    front: z.string(),
+    back: z.string(),
+    type: CardKind,
+    importance: Importance,
+    sourceContext: z.string(),
+  })),
+});
+
+const DuplicatesSchema = z.object({
+  duplicate_indices: z.array(z.number().int()).describe(
+    'Indices of cards to drop because they test the same fact as an earlier card'
+  ),
+});
+
+/** Shared request settings for every flashcard-pipeline call. */
+const BASE_PARAMS = {
+  model: CLAUDE_MODEL,
+  max_tokens: 16000,
+  betas: [FALLBACK_BETA],
+  fallbacks: 'default',
+} satisfies Partial<Anthropic.Beta.MessageCreateParamsNonStreaming>;
+
+/** Usage of every Claude call made during the last pipeline run, for cost logging. */
+export type ClaudeResponses = Anthropic.Beta.BetaMessage[];
 
 // ============ PROMPTS ============
 
 const ANALYSIS_SYSTEM_PROMPT = `You are a medical education expert analyzing clinical notes for flashcard generation. Your task is to deeply analyze the content and extract structured information that will be used to create high-quality flashcards.
 
-Analyze the note and return a JSON object with the following structure:
+Analyze the note and return a JSON object with this structure:
 
 {
   "sections": [
@@ -124,11 +199,11 @@ Answers should be complete but concise.`;
 You have already analyzed this note and identified the following key elements:
 ${analysisContext}
 
-Now generate flashcards based on this analysis.
+Now generate flashcards based on this analysis. Do not create two cards that test the same fact.
 
 ${formatInstructions}
 
-Return a JSON object:
+Return a JSON object with this structure:
 {
   "cards": [
     {
@@ -150,20 +225,6 @@ Guidelines:
 - Aim for approximately ${maxCards} cards, but quality over quantity`;
 }
 
-function cosineSimilarity(a: number[], b: number[]): number {
-  let dotProduct = 0;
-  let normA = 0;
-  let normB = 0;
-
-  for (let i = 0; i < a.length; i++) {
-    dotProduct += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-
-  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
-}
-
 function cleanNumberingArtifacts(text: string): string {
   return text.replace(/^(Flashcard|Card)\s*\d+[:\.]?\s*/i, '').trim();
 }
@@ -172,40 +233,26 @@ function cleanNumberingArtifacts(text: string): string {
 
 export async function analyzeNoteContent(
   content: string,
-  title: string
+  title: string,
+  responses: ClaudeResponses = []
 ): Promise<ContentAnalysis> {
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o",
+  const response = await getClaude().beta.messages.parse({
+    ...BASE_PARAMS,
+    output_config: {
+      effort: 'medium',
+      format: betaZodOutputFormat(ContentAnalysisSchema),
+    },
+    system: ANALYSIS_SYSTEM_PROMPT,
     messages: [
-      {
-        role: "system",
-        content: ANALYSIS_SYSTEM_PROMPT
-      },
-      {
-        role: "user",
-        content: `Title: ${title}\n\nContent:\n${content}`
-      }
+      { role: 'user', content: `<title>${title}</title>\n\n<note>\n${content}\n</note>` },
     ],
-    temperature: 0.2,
-    response_format: { type: "json_object" }
   });
+  responses.push(response);
+  assertCompleted(response);
 
-  const result = JSON.parse(response.choices[0].message.content || '{}');
-
-  return {
-    sections: result.sections || [],
-    keyTerms: result.keyTerms || [],
-    relationships: result.relationships || [],
-    clinicalPearls: result.clinicalPearls || [],
-    suggestedCardCount: result.suggestedCardCount || {
-      definitions: 0,
-      mechanisms: 0,
-      clinicalPearls: 0,
-      differentials: 0,
-      treatments: 0,
-      diagnostics: 0
-    }
-  };
+  const result = response.parsed_output;
+  if (!result) throw new Error('Content analysis returned no parsable output');
+  return result;
 }
 
 export async function generateTargetedCards(
@@ -213,65 +260,72 @@ export async function generateTargetedCards(
   title: string,
   analysis: ContentAnalysis,
   cardType: CardType,
-  maxCards: number
+  maxCards: number,
+  responses: ClaudeResponses = []
 ): Promise<GeneratedCard[]> {
   const analysisContext = buildAnalysisContext(analysis);
   const systemPrompt = buildCardGenerationSystemPrompt(analysisContext, cardType, maxCards);
+  const schema = cardType === 'cloze' ? ClozeCardsSchema : FrontBackCardsSchema;
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o",
+  const response = await getClaude().beta.messages.parse({
+    ...BASE_PARAMS,
+    output_config: {
+      effort: 'medium',
+      format: betaZodOutputFormat(schema),
+    },
+    system: systemPrompt,
     messages: [
       {
-        role: "system",
-        content: systemPrompt
+        role: 'user',
+        content: `<title>${title}</title>\n\n<original_content>\n${content}\n</original_content>`,
       },
-      {
-        role: "user",
-        content: `Title: ${title}\n\nOriginal Content:\n${content}`
-      }
     ],
-    temperature: 0.4,
-    response_format: { type: "json_object" }
   });
+  responses.push(response);
+  assertCompleted(response);
 
-  const result = JSON.parse(response.choices[0].message.content || '{"cards": []}');
-  return result.cards || [];
+  return response.parsed_output?.cards ?? [];
 }
 
+/**
+ * Remove cards that test the same fact. Claude compares the cards semantically
+ * (replaces the previous OpenAI-embeddings + cosine-similarity approach, since the
+ * Claude API has no embeddings endpoint). The earliest card in each duplicate group
+ * is kept, so callers should pass cards sorted by priority.
+ */
 export async function deduplicateCards(
   cards: GeneratedCard[],
-  similarityThreshold: number = 0.85
+  responses: ClaudeResponses = []
 ): Promise<GeneratedCard[]> {
   if (cards.length <= 1) return cards;
 
-  const cardTexts = cards.map(c => c.cloze || `${c.front} ${c.back}`);
+  const numbered = cards
+    .map((c, i) => `[${i}] ${c.cloze ?? `Q: ${c.front} | A: ${c.back}`}`)
+    .join('\n');
 
-  const embeddingResponse = await openai.embeddings.create({
-    model: "text-embedding-3-small",
-    input: cardTexts
+  const response = await getClaude().beta.messages.parse({
+    ...BASE_PARAMS,
+    output_config: {
+      effort: 'low',
+      format: betaZodOutputFormat(DuplicatesSchema),
+    },
+    system:
+      'You review medical flashcards for redundancy. Two cards are duplicates when a student who ' +
+      'knows the answer to one would automatically know the answer to the other. Cards on the same ' +
+      'topic that test different facts are NOT duplicates. For each group of duplicates, keep the ' +
+      'card with the lowest index and list the indices of the others.',
+    messages: [{ role: 'user', content: `<cards>\n${numbered}\n</cards>` }],
   });
+  responses.push(response);
 
-  const embeddings = embeddingResponse.data.map(d => d.embedding);
-
-  const kept: number[] = [];
-  const removed = new Set<number>();
-
-  for (let i = 0; i < cards.length; i++) {
-    if (removed.has(i)) continue;
-
-    kept.push(i);
-
-    for (let j = i + 1; j < cards.length; j++) {
-      if (removed.has(j)) continue;
-
-      const similarity = cosineSimilarity(embeddings[i], embeddings[j]);
-      if (similarity > similarityThreshold) {
-        removed.add(j);
-      }
-    }
+  // Dedup is an optional refinement: if it fails, keep every card rather than erroring.
+  if (response.stop_reason === 'refusal' || response.stop_reason === 'max_tokens') {
+    return cards;
   }
-
-  return kept.map(i => cards[i]);
+  const drop = new Set(
+    (response.parsed_output?.duplicate_indices ?? []).filter((i) => i > 0 && i < cards.length)
+  );
+  return cards.filter((_, i) => !drop.has(i));
 }
 
 export async function generateSmartFlashcards(
@@ -279,11 +333,12 @@ export async function generateSmartFlashcards(
   title: string,
   cardType: CardType,
   maxCards: number,
-  enableDeduplication: boolean = false
+  enableDeduplication: boolean = false,
+  responses: ClaudeResponses = []
 ): Promise<GeneratedCard[]> {
 
   // Stage 1: AI-powered content analysis
-  const analysis = await analyzeNoteContent(content, title);
+  const analysis = await analyzeNoteContent(content, title, responses);
 
   // Stage 2: Generate cards based on analysis
   const overfetchMultiplier = enableDeduplication ? 1.5 : 1.3;
@@ -292,7 +347,8 @@ export async function generateSmartFlashcards(
     title,
     analysis,
     cardType,
-    Math.ceil(maxCards * overfetchMultiplier)
+    Math.ceil(maxCards * overfetchMultiplier),
+    responses
   );
 
   // Stage 3: Sort by importance
@@ -303,7 +359,7 @@ export async function generateSmartFlashcards(
 
   // Stage 4: Optional deduplication
   const processedCards = enableDeduplication
-    ? await deduplicateCards(sortedCards)
+    ? await deduplicateCards(sortedCards, responses)
     : sortedCards;
 
   // Stage 5: Clean numbering artifacts (safety net)

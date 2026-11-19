@@ -2,8 +2,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import type { GenerateFlashcardsRequest } from '@/types/flashcard';
-import { generateSmartFlashcards } from '@/lib/utils/smartFlashcardGeneration';
+import { generateSmartFlashcards, type ClaudeResponses } from '@/lib/utils/smartFlashcardGeneration';
+import { summarizeUsage, toHttpError } from '@/lib/ai/claude';
 import { checkAndIncrementQuota, logApiUsage } from '@/lib/services/quotaService';
+
+export const maxDuration = 180;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -99,23 +102,20 @@ export async function POST(request: NextRequest) {
 
     // Generate flashcards using smart two-stage AI generation
     const startTime = Date.now();
+    const claudeResponses: ClaudeResponses = [];
     const generatedCards = await generateSmartFlashcards(
       plainText,
       note.title,
       card_type,
       max_cards,
-      enable_deduplication
+      enable_deduplication,
+      claudeResponses
     );
     const generationTime = Date.now() - startTime;
 
-    // Log API usage for analytics (approximate cost: $0.02 per generation)
-    await logApiUsage(
-      user.id,
-      'flashcard_generation',
-      enable_deduplication ? 0.025 : 0.02,
-      undefined, // tokens not tracked yet
-      true
-    );
+    // Log actual API usage for analytics
+    const usage = summarizeUsage(...claudeResponses);
+    await logApiUsage(user.id, 'flashcard_generation', usage.costUsd, usage.tokens, true);
 
     // If this is just a preview, save to flashcard_generations table and return
     if (preview) {
@@ -266,9 +266,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error in generate-from-note API:', error);
-    return NextResponse.json(
-      { error: `Failed to generate flashcards: ${error instanceof Error ? error.message : String(error)}` },
-      { status: 500 }
-    );
+    const { status, message } = toHttpError(error);
+    return NextResponse.json({ error: `Failed to generate flashcards: ${message}` }, { status });
   }
 }
