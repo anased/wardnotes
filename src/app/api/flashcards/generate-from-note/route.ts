@@ -2,8 +2,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import type { GenerateFlashcardsRequest } from '@/types/flashcard';
-import { generateSmartFlashcards } from '@/lib/utils/smartFlashcardGeneration';
-import { checkAndIncrementQuota, logApiUsage } from '@/lib/services/quotaService';
+import { generateSmartFlashcards, type ClaudeResponses } from '@/lib/utils/smartFlashcardGeneration';
+import { summarizeUsage, toHttpError } from '@/lib/ai/claude';
+import { checkAndIncrementQuota, logApiUsage, refundQuota } from '@/lib/services/quotaService';
+
+export const maxDuration = 180;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -38,6 +41,7 @@ function convertTipTapToPlainText(content: any): string {
 // No need for old generateFlashcards function - using smart generation now
 
 export async function POST(request: NextRequest) {
+  let chargedUserId: string | null = null;
   try {
     const authHeader = request.headers.get('authorization');
     
@@ -59,7 +63,75 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check and increment quota before generating
+    const body: GenerateFlashcardsRequest & { preview?: boolean; enable_deduplication?: boolean } = await request.json();
+    const { note_id, card_type, deck_id, max_cards = 10, preview = false, enable_deduplication = false } = body;
+
+    // Get the note
+    const { data: note, error: noteError } = await supabase
+      .from('notes')
+      .select('*')
+      .eq('id', note_id)
+      .single();
+
+    if (noteError || !note) {
+      return NextResponse.json({ error: 'Note not found' }, { status: 404 });
+    }
+
+    // For non-preview mode, resolve the target deck BEFORE charging quota,
+    // so deck problems don't cost the user a generation
+    let finalDeckId = deck_id;
+    if (!preview) {      
+      // Get default deck if none specified
+      if (!finalDeckId) {
+        let { data: defaultDeck } = await supabase
+          .from('flashcard_decks')
+          .select('id')
+          .eq('name', 'Default Deck')
+          .eq('user_id', user.id)
+          .single();
+        
+        if (!defaultDeck) {
+          // Create default deck if it doesn't exist
+          const { data: newDeck, error: createError } = await supabase
+            .from('flashcard_decks')
+            .insert({
+              user_id: user.id,
+              name: 'Default Deck',
+              description: 'Auto-generated default deck for flashcards',
+              color: '#3B82F6'
+            })
+            .select()
+            .single();
+          
+          if (createError || !newDeck) {
+            return NextResponse.json({ error: 'Failed to create default deck' }, { status: 500 });
+          }
+          
+          defaultDeck = newDeck;
+        }
+        
+        // Explicit null check to satisfy TypeScript
+        if (!defaultDeck) {
+          return NextResponse.json({ error: 'Failed to get or create default deck' }, { status: 500 });
+        }
+        
+        finalDeckId = defaultDeck.id;
+      }
+
+      // Verify deck ownership
+      const { data: deck, error: deckError } = await supabase
+        .from('flashcard_decks')
+        .select('id')
+        .eq('id', finalDeckId)
+        .eq('user_id', user.id)
+        .single();
+
+      if (deckError || !deck) {
+        return NextResponse.json({ error: 'Deck not found or unauthorized' }, { status: 404 });
+      }
+    }
+
+    // Check and increment quota only after the request is known to be valid
     const quotaCheck = await checkAndIncrementQuota(
       user.id,
       'flashcard_generation'
@@ -80,42 +152,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body: GenerateFlashcardsRequest & { preview?: boolean; enable_deduplication?: boolean } = await request.json();
-    const { note_id, card_type, deck_id, max_cards = 10, preview = false, enable_deduplication = false } = body;
-
-    // Get the note
-    const { data: note, error: noteError } = await supabase
-      .from('notes')
-      .select('*')
-      .eq('id', note_id)
-      .single();
-
-    if (noteError || !note) {
-      return NextResponse.json({ error: 'Note not found' }, { status: 404 });
-    }
+    // From here on the user has been charged; refund if anything fails
+    chargedUserId = user.id;
 
     // Convert note content to plain text
     const plainText = convertTipTapToPlainText(note.content);
 
     // Generate flashcards using smart two-stage AI generation
     const startTime = Date.now();
+    const claudeResponses: ClaudeResponses = [];
     const generatedCards = await generateSmartFlashcards(
       plainText,
       note.title,
       card_type,
       max_cards,
-      enable_deduplication
+      enable_deduplication,
+      claudeResponses
     );
     const generationTime = Date.now() - startTime;
 
-    // Log API usage for analytics (approximate cost: $0.02 per generation)
-    await logApiUsage(
-      user.id,
-      'flashcard_generation',
-      enable_deduplication ? 0.025 : 0.02,
-      undefined, // tokens not tracked yet
-      true
-    );
+    if (generatedCards.length === 0) {
+      throw new Error('No flashcards could be generated from this note.');
+    }
+
+    // Log actual API usage for analytics
+    const usage = summarizeUsage(...claudeResponses);
+    await logApiUsage(user.id, 'flashcard_generation', usage.costUsd, usage.tokens, true);
 
     // If this is just a preview, save to flashcard_generations table and return
     if (preview) {
@@ -160,58 +222,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // For non-preview mode, save the flashcards to the database
-    let finalDeckId = deck_id;
-    
-    // Get default deck if none specified
-    if (!finalDeckId) {
-      let { data: defaultDeck } = await supabase
-        .from('flashcard_decks')
-        .select('id')
-        .eq('name', 'Default Deck')
-        .eq('user_id', user.id)
-        .single();
-      
-      if (!defaultDeck) {
-        // Create default deck if it doesn't exist
-        const { data: newDeck, error: createError } = await supabase
-          .from('flashcard_decks')
-          .insert({
-            user_id: user.id,
-            name: 'Default Deck',
-            description: 'Auto-generated default deck for flashcards',
-            color: '#3B82F6'
-          })
-          .select()
-          .single();
-        
-        if (createError || !newDeck) {
-          return NextResponse.json({ error: 'Failed to create default deck' }, { status: 500 });
-        }
-        
-        defaultDeck = newDeck;
-      }
-      
-      // Explicit null check to satisfy TypeScript
-      if (!defaultDeck) {
-        return NextResponse.json({ error: 'Failed to get or create default deck' }, { status: 500 });
-      }
-      
-      finalDeckId = defaultDeck.id;
-    }
-
-    // Verify deck ownership
-    const { data: deck, error: deckError } = await supabase
-      .from('flashcard_decks')
-      .select('id')
-      .eq('id', finalDeckId)
-      .eq('user_id', user.id)
-      .single();
-
-    if (deckError || !deck) {
-      return NextResponse.json({ error: 'Deck not found or unauthorized' }, { status: 404 });
-    }
-
     // Create flashcards in the database
     const flashcardData = generatedCards.map(card => ({
       deck_id: finalDeckId!,
@@ -239,7 +249,7 @@ export async function POST(request: NextRequest) {
 
     if (insertError) {
       console.error('Error saving flashcards:', insertError);
-      return NextResponse.json({ error: 'Failed to save flashcards' }, { status: 500 });
+      throw new Error('Failed to save flashcards');
     }
 
     return NextResponse.json({
@@ -266,9 +276,10 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('Error in generate-from-note API:', error);
-    return NextResponse.json(
-      { error: `Failed to generate flashcards: ${error instanceof Error ? error.message : String(error)}` },
-      { status: 500 }
-    );
+    const { status, message } = toHttpError(error);
+    if (chargedUserId) {
+      await refundQuota(chargedUserId, 'flashcard_generation', message);
+    }
+    return NextResponse.json({ error: `Failed to generate flashcards: ${message}` }, { status });
   }
 }

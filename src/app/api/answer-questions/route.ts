@@ -1,12 +1,19 @@
 // src/app/api/answer-questions/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/client';
-import OpenAI from 'openai';
-import { checkAndIncrementQuota, logApiUsage } from '@/lib/services/quotaService';
+import {
+  CLAUDE_MODEL,
+  FALLBACK_BETA,
+  assertCompleted,
+  getClaude,
+  summarizeUsage,
+  toHttpError,
+} from '@/lib/ai/claude';
+import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
+import { z } from 'zod/v4';
+import { checkAndIncrementQuota, logApiUsage, refundQuota } from '@/lib/services/quotaService';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || '',
-});
+export const maxDuration = 180;
 
 // Validation constants
 const MAX_QUESTIONS = 5;
@@ -102,7 +109,8 @@ prefixed with "**Pearl:**" or "**Pitfall:**"
 
 ## Formatting
 
-Return numbered answers matching question numbers. Use Markdown:
+Return one answer per question, tagged with its question number.
+Write each answer in Markdown:
 - **Bold** for key terms, named criteria, and critical values
 - Bullet points for lists of 3+ items (criteria components,
   differentials, steps)
@@ -120,40 +128,19 @@ interface QuestionAnswer {
   answer: string;
 }
 
-/**
- * Parse the AI's combined response into individual Q&A pairs.
- * Handles numbered responses like "1. ..." or "**1.**" etc.
- */
-function parseAnswers(rawAnswer: string, originalQuestions: string[]): QuestionAnswer[] {
-  const answers: QuestionAnswer[] = [];
+const AnswersSchema = z.object({
+  answers: z.array(
+    z.object({
+      question_number: z.number().int().describe('1-based number of the question being answered'),
+      answer: z.string().describe('The Markdown-formatted answer'),
+    })
+  ),
+});
 
-  // Split by question number patterns (1., 2., **1.**, etc.)
-  // Match patterns at start of line like "1." or "1)" or "**1.**"
-  const sections = rawAnswer.split(/(?=(?:^|\n)\s*\**\d+[\.\)]\**\s)/m).filter(s => s.trim());
-
-  for (let i = 0; i < originalQuestions.length; i++) {
-    const section = sections[i];
-    if (section) {
-      // Remove the number prefix from the answer
-      const cleanedAnswer = section
-        .replace(/^\s*\**\d+[\.\)]\**\s*/, '')
-        .trim();
-      answers.push({
-        question: originalQuestions[i],
-        answer: cleanedAnswer || 'Unable to generate answer for this question.'
-      });
-    } else {
-      answers.push({
-        question: originalQuestions[i],
-        answer: 'Unable to generate answer for this question.'
-      });
-    }
-  }
-
-  return answers;
-}
+const MISSING_ANSWER = 'Unable to generate answer for this question.';
 
 export async function POST(request: NextRequest) {
+  let chargedUserId: string | null = null;
   try {
     // 1. Authentication (same pattern as improve-note)
     const authHeader = request.headers.get('Authorization');
@@ -191,28 +178,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Authentication error - invalid token' }, { status: 401 });
     }
 
-    // 2. Quota check (shares quota with note_improvement)
-    const quotaCheck = await checkAndIncrementQuota(
-      user.id,
-      'note_improvement'
-    );
-
-    if (!quotaCheck.allowed) {
-      return NextResponse.json(
-        {
-          error: 'Quota exceeded',
-          message: quotaCheck.message,
-          quota: {
-            used: quotaCheck.used,
-            limit: quotaCheck.limit,
-            remaining: 0
-          }
-        },
-        { status: 429 }
-      );
-    }
-
-    // 3. Parse and validate request
+    // 2. Parse and validate request
     const { clinicalContext, questions }: AnswerRequest = await request.json();
 
     if (!clinicalContext || typeof clinicalContext !== 'string') {
@@ -250,46 +216,80 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 4. Generate answers with OpenAI
+    // 3. Quota check, only after the request is known to be valid
+    //    (shares quota with note_improvement)
+    const quotaCheck = await checkAndIncrementQuota(
+      user.id,
+      'note_improvement'
+    );
+
+    if (!quotaCheck.allowed) {
+      return NextResponse.json(
+        {
+          error: 'Quota exceeded',
+          message: quotaCheck.message,
+          quota: {
+            used: quotaCheck.used,
+            limit: quotaCheck.limit,
+            remaining: 0
+          }
+        },
+        { status: 429 }
+      );
+    }
+
+    // From here on the user has been charged; refund if anything fails
+    chargedUserId = user.id;
+
+    // 4. Generate answers with Claude
     const startTime = Date.now();
 
     const formattedQuestions = validQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n');
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
+    const response = await getClaude().beta.messages.parse({
+      model: CLAUDE_MODEL,
+      max_tokens: 16000, // covers adaptive thinking + up to 5 answers of ~400 words
+      betas: [FALLBACK_BETA],
+      fallbacks: 'default',
+      output_config: {
+        effort: 'high', // clinical reasoning benefits from deeper thinking
+        format: betaZodOutputFormat(AnswersSchema),
+      },
+      system: SYSTEM_PROMPT,
       messages: [
         {
-          role: 'system',
-          content: SYSTEM_PROMPT
-        },
-        {
           role: 'user',
-          content: `Clinical Context: ${clinicalContext.trim()}
+          content: `<clinical_context>
+${clinicalContext.trim()}
+</clinical_context>
 
-Questions:
+<questions>
 ${formattedQuestions}
+</questions>
 
-Please answer each question based on the clinical context provided.`
-        }
+Please answer each question based on the clinical context provided.`,
+        },
       ],
-      temperature: 0.3,
-      max_tokens: 2000
     });
 
+    assertCompleted(response);
     const generationTime = Date.now() - startTime;
-    const rawContent = response.choices[0].message.content || '';
+    const usage = summarizeUsage(response);
 
-    // 5. Parse the response into individual Q&A pairs
-    const answers = parseAnswers(rawContent, validQuestions);
-
-    // 6. Log API usage (approximate cost: $0.015 per generation)
-    await logApiUsage(
-      user.id,
-      'note_improvement',
-      0.015,
-      undefined,
-      true
+    // 5. Map structured answers back onto the original questions
+    const byNumber = new Map(
+      (response.parsed_output?.answers ?? []).map((a) => [a.question_number, a.answer.trim()])
     );
+    if (byNumber.size === 0) {
+      throw new Error('The AI returned no answers.');
+    }
+    const answers: QuestionAnswer[] = validQuestions.map((question, i) => ({
+      question,
+      answer: byNumber.get(i + 1) || MISSING_ANSWER,
+    }));
+
+    // 6. Log actual API usage
+    await logApiUsage(user.id, 'note_improvement', usage.costUsd, usage.tokens, true);
 
     // 7. Return response
     return NextResponse.json({
@@ -307,8 +307,10 @@ Please answer each question based on the clinical context provided.`
 
   } catch (error) {
     console.error('Error answering questions:', error);
-    return NextResponse.json({
-      error: `Failed to answer questions: ${error instanceof Error ? error.message : String(error)}`
-    }, { status: 500 });
+    const { status, message } = toHttpError(error);
+    if (chargedUserId) {
+      await refundQuota(chargedUserId, 'note_improvement', message);
+    }
+    return NextResponse.json({ error: `Failed to answer questions: ${message}` }, { status });
   }
 }
