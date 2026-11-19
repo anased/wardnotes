@@ -12,7 +12,7 @@ import {
 } from '@/lib/ai/claude';
 import { TipTapNode } from '@/types/content';
 import { convertTipTapToPlainText } from '@/lib/utils/content-converter';
-import { checkAndIncrementQuota, logApiUsage } from '@/lib/services/quotaService';
+import { checkAndIncrementQuota, logApiUsage, refundQuota } from '@/lib/services/quotaService';
 
 export const maxDuration = 120;
 
@@ -35,6 +35,7 @@ Return only the improved note in Markdown, with no preamble or closing remarks.`
 const MAX_CHARACTERS = 4000;
 
 export async function POST(request: NextRequest) {
+  let chargedUserId: string | null = null;
   try {
     // Get the authorization header
     const authHeader = request.headers.get('Authorization');
@@ -73,27 +74,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Authentication error - invalid token' }, { status: 401 });
     }
 
-    // Check and increment quota before improving
-    const quotaCheck = await checkAndIncrementQuota(
-      user.id,
-      'note_improvement'
-    );
-
-    if (!quotaCheck.allowed) {
-      return NextResponse.json(
-        {
-          error: 'Quota exceeded',
-          message: quotaCheck.message,
-          quota: {
-            used: quotaCheck.used,
-            limit: quotaCheck.limit,
-            remaining: 0
-          }
-        },
-        { status: 429 } // Too Many Requests
-      );
-    }
-
     const requestData = await request.json();
     const { content } = requestData;
 
@@ -116,6 +96,30 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
+    // Check and increment quota only after the request is known to be valid
+    const quotaCheck = await checkAndIncrementQuota(
+      user.id,
+      'note_improvement'
+    );
+
+    if (!quotaCheck.allowed) {
+      return NextResponse.json(
+        {
+          error: 'Quota exceeded',
+          message: quotaCheck.message,
+          quota: {
+            used: quotaCheck.used,
+            limit: quotaCheck.limit,
+            remaining: 0
+          }
+        },
+        { status: 429 } // Too Many Requests
+      );
+    }
+
+    // From here on the user has been charged; refund if anything fails
+    chargedUserId = user.id;
+
     // Send to Claude for improvement
     const response = await getClaude().beta.messages.create({
       model: CLAUDE_MODEL,
@@ -134,6 +138,9 @@ export async function POST(request: NextRequest) {
 
     assertCompleted(response);
     const improvedNote = extractText(response);
+    if (!improvedNote) {
+      throw new Error('The AI returned an empty response.');
+    }
     const usage = summarizeUsage(response);
 
     // Log actual API usage for analytics
@@ -151,6 +158,9 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error improving note:', error);
     const { status, message } = toHttpError(error);
+    if (chargedUserId) {
+      await refundQuota(chargedUserId, 'note_improvement', message);
+    }
     return NextResponse.json({ error: `Failed to improve note: ${message}` }, { status });
   }
 }

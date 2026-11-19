@@ -11,7 +11,7 @@ import {
 } from '@/lib/ai/claude';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import { z } from 'zod/v4';
-import { checkAndIncrementQuota, logApiUsage } from '@/lib/services/quotaService';
+import { checkAndIncrementQuota, logApiUsage, refundQuota } from '@/lib/services/quotaService';
 
 export const maxDuration = 180;
 
@@ -140,6 +140,7 @@ const AnswersSchema = z.object({
 const MISSING_ANSWER = 'Unable to generate answer for this question.';
 
 export async function POST(request: NextRequest) {
+  let chargedUserId: string | null = null;
   try {
     // 1. Authentication (same pattern as improve-note)
     const authHeader = request.headers.get('Authorization');
@@ -177,28 +178,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Authentication error - invalid token' }, { status: 401 });
     }
 
-    // 2. Quota check (shares quota with note_improvement)
-    const quotaCheck = await checkAndIncrementQuota(
-      user.id,
-      'note_improvement'
-    );
-
-    if (!quotaCheck.allowed) {
-      return NextResponse.json(
-        {
-          error: 'Quota exceeded',
-          message: quotaCheck.message,
-          quota: {
-            used: quotaCheck.used,
-            limit: quotaCheck.limit,
-            remaining: 0
-          }
-        },
-        { status: 429 }
-      );
-    }
-
-    // 3. Parse and validate request
+    // 2. Parse and validate request
     const { clinicalContext, questions }: AnswerRequest = await request.json();
 
     if (!clinicalContext || typeof clinicalContext !== 'string') {
@@ -235,6 +215,31 @@ export async function POST(request: NextRequest) {
         }, { status: 400 });
       }
     }
+
+    // 3. Quota check, only after the request is known to be valid
+    //    (shares quota with note_improvement)
+    const quotaCheck = await checkAndIncrementQuota(
+      user.id,
+      'note_improvement'
+    );
+
+    if (!quotaCheck.allowed) {
+      return NextResponse.json(
+        {
+          error: 'Quota exceeded',
+          message: quotaCheck.message,
+          quota: {
+            used: quotaCheck.used,
+            limit: quotaCheck.limit,
+            remaining: 0
+          }
+        },
+        { status: 429 }
+      );
+    }
+
+    // From here on the user has been charged; refund if anything fails
+    chargedUserId = user.id;
 
     // 4. Generate answers with Claude
     const startTime = Date.now();
@@ -275,6 +280,9 @@ Please answer each question based on the clinical context provided.`,
     const byNumber = new Map(
       (response.parsed_output?.answers ?? []).map((a) => [a.question_number, a.answer.trim()])
     );
+    if (byNumber.size === 0) {
+      throw new Error('The AI returned no answers.');
+    }
     const answers: QuestionAnswer[] = validQuestions.map((question, i) => ({
       question,
       answer: byNumber.get(i + 1) || MISSING_ANSWER,
@@ -300,6 +308,9 @@ Please answer each question based on the clinical context provided.`,
   } catch (error) {
     console.error('Error answering questions:', error);
     const { status, message } = toHttpError(error);
+    if (chargedUserId) {
+      await refundQuota(chargedUserId, 'note_improvement', message);
+    }
     return NextResponse.json({ error: `Failed to answer questions: ${message}` }, { status });
   }
 }

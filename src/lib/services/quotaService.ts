@@ -44,6 +44,45 @@ export async function checkAndIncrementQuota(
 }
 
 /**
+ * Give back one unit of quota after a charged request failed (AI error, save
+ * error, etc.). Uses the service role because `refund_usage` is not executable
+ * by anon/authenticated clients. Never throws: a failed refund is logged, and
+ * the caller's original error response is still returned to the user.
+ *
+ * @param userId - The user's UUID
+ * @param featureType - The feature whose quota was consumed
+ * @param reason - Why the request failed (stored in api_usage_logs)
+ */
+export async function refundQuota(
+  userId: string,
+  featureType: QuotaFeatureType,
+  reason: string
+): Promise<void> {
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  if (!supabaseUrl || !serviceRoleKey) {
+    console.error('refundQuota: SUPABASE_SERVICE_ROLE_KEY is not set; quota not refunded');
+  } else {
+    try {
+      const supabase = createClient(supabaseUrl, serviceRoleKey, {
+        auth: { persistSession: false },
+      });
+      const { error } = await supabase.rpc('refund_usage', {
+        p_user_id: userId,
+        p_feature_type: featureType,
+      });
+      if (error) {
+        console.error('Quota refund error:', error);
+      }
+    } catch (error) {
+      console.error('Error in refundQuota:', error);
+    }
+  }
+
+  // Record the failed attempt for analytics (cost is logged separately when known)
+  await logApiUsage(userId, featureType, 0, undefined, false, reason.slice(0, 500));
+}
+
+/**
  * Get current quota information for a user
  * Does not increment usage - only retrieves current state
  *
