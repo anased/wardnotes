@@ -289,7 +289,7 @@ Please answer each question based on the clinical context provided.`,
     }));
 
     // 6. Log actual API usage
-    await logApiUsage(user.id, 'note_improvement', usage.costUsd, usage.tokens, true);
+    await logApiUsage(user.id, 'answer_questions', usage.costUsd, usage.tokens, true);
 
     // 7. Return response
     return NextResponse.json({
@@ -309,7 +309,7 @@ Please answer each question based on the clinical context provided.`,
     console.error('Error answering questions:', error);
     const { status, message } = toHttpError(error);
     if (chargedUserId) {
-      await refundQuota(chargedUserId, 'note_improvement', message);
+      await refundQuota(chargedUserId, 'note_improvement', message, 'answer_questions');
     }
     return NextResponse.json({ error: `Failed to answer questions: ${message}` }, { status });
   }

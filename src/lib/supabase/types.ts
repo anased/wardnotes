@@ -421,7 +421,7 @@ export interface Database {
         Row: {
           id: string;
           user_id: string;
-          feature_type: 'flashcard_generation' | 'note_improvement';
+          feature_type: UsageLogFeature;
           api_cost: number;
           tokens_used: number | null;
           success: boolean;
@@ -431,7 +431,7 @@ export interface Database {
         Insert: {
           id?: string;
           user_id: string;
-          feature_type: 'flashcard_generation' | 'note_improvement';
+          feature_type: UsageLogFeature;
           api_cost: number;
           tokens_used?: number | null;
           success?: boolean;
@@ -441,7 +441,7 @@ export interface Database {
         Update: {
           id?: string;
           user_id?: string;
-          feature_type?: 'flashcard_generation' | 'note_improvement';
+          feature_type?: UsageLogFeature;
           api_cost?: number;
           tokens_used?: number | null;
           success?: boolean;
@@ -564,3 +564,7 @@ export interface QuotaCheckResult {
 
 // Feature types for quota tracking
 export type QuotaFeatureType = 'flashcard_generation' | 'note_improvement';
+
+// Feature labels for api_usage_logs. Finer-grained than quota types:
+// answer_questions and trial_extraction spend the note_improvement quota.
+export type UsageLogFeature = QuotaFeatureType | 'answer_questions' | 'trial_extraction';

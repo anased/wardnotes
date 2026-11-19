@@ -6,7 +6,7 @@
  */
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import type { QuotaCheckResult, QuotaFeatureType, UsageQuota } from '@/lib/supabase/types';
+import type { QuotaCheckResult, QuotaFeatureType, UsageLogFeature, UsageQuota } from '@/lib/supabase/types';
 
 /**
  * SERVER-ONLY. Every quota operation runs with the service role:
@@ -75,11 +75,14 @@ export async function checkAndIncrementQuota(
  * @param userId - The user's UUID
  * @param featureType - The feature whose quota was consumed
  * @param reason - Why the request failed (stored in api_usage_logs)
+ * @param logFeature - Label for the failed attempt in api_usage_logs
+ *                     (defaults to the quota feature)
  */
 export async function refundQuota(
   userId: string,
   featureType: QuotaFeatureType,
-  reason: string
+  reason: string,
+  logFeature: UsageLogFeature = featureType
 ): Promise<void> {
   try {
     const { error } = await getAdminClient().rpc('refund_usage', {
@@ -94,7 +97,7 @@ export async function refundQuota(
   }
 
   // Record the failed attempt for analytics (cost is logged separately when known)
-  await logApiUsage(userId, featureType, 0, undefined, false, reason.slice(0, 500));
+  await logApiUsage(userId, logFeature, 0, undefined, false, reason.slice(0, 500));
 }
 
 /**
@@ -224,7 +227,7 @@ export async function canUseFeature(
  * Optional function for detailed tracking of AI API costs
  *
  * @param userId - The user's UUID
- * @param featureType - Type of feature used
+ * @param featureType - Feature label for the log (finer-grained than quota types)
  * @param apiCost - Cost in USD
  * @param tokensUsed - Number of tokens consumed (optional)
  * @param success - Whether the API call succeeded
@@ -232,7 +235,7 @@ export async function canUseFeature(
  */
 export async function logApiUsage(
   userId: string,
-  featureType: QuotaFeatureType,
+  featureType: UsageLogFeature,
   apiCost: number,
   tokensUsed?: number,
   success: boolean = true,
