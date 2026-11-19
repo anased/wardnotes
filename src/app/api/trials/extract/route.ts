@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
     );
 
     const usage = summarizeUsage(response);
-    await logApiUsage(user.id, 'note_improvement', usage.costUsd, usage.tokens, true);
+    await logApiUsage(user.id, 'trial_extraction', usage.costUsd, usage.tokens, true);
 
     return NextResponse.json({
       trial: {
@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
     console.error('Error extracting trial:', error);
     const { status, message } = toHttpError(error);
     if (chargedUserId) {
-      await refundQuota(chargedUserId, 'note_improvement', message);
+      await refundQuota(chargedUserId, 'note_improvement', message, 'trial_extraction');
     }
     return NextResponse.json({ error: `Failed to extract trial details: ${message}` }, { status });
   }

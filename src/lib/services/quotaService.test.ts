@@ -113,3 +113,27 @@ describe('service-role access', () => {
     await expect(logApiUsage('user-1', 'note_improvement', 0, undefined, false)).resolves.toBeUndefined();
   });
 });
+
+describe('usage log labels', () => {
+  it('refunds the shared quota but logs the failure under the specific feature', async () => {
+    const { refundQuota } = loadService(ENV);
+
+    await refundQuota('user-1', 'note_improvement', 'boom', 'trial_extraction');
+
+    expect(rpc).toHaveBeenCalledWith('refund_usage', {
+      p_user_id: 'user-1',
+      p_feature_type: 'note_improvement',
+    });
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({ feature_type: 'trial_extraction', success: false })
+    );
+  });
+
+  it('defaults the log label to the quota feature', async () => {
+    const { refundQuota } = loadService(ENV);
+
+    await refundQuota('user-1', 'flashcard_generation', 'boom');
+
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ feature_type: 'flashcard_generation' }));
+  });
+});
