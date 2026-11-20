@@ -62,6 +62,8 @@ interface NoteEditorProps {
   editable?: boolean;
   placeholder?: string;
   onSelectionChange?: (selection: SelectionInfo | null) => void;
+  /** Extra controls at the end of the toolbar (e.g. the AI menu). */
+  toolbarEnd?: React.ReactNode;
 }
 
 export default function NoteEditor({
@@ -70,6 +72,7 @@ export default function NoteEditor({
   editable = true,
   placeholder = 'Start writing your medical note...',
   onSelectionChange,
+  toolbarEnd,
 }: NoteEditorProps) {
   const [showLinkMenu, setShowLinkMenu] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
@@ -315,9 +318,9 @@ export default function NoteEditor({
   };
 
   return (
-    <div className="note-editor border border-gray-300 rounded-lg dark:border-gray-700 overflow-hidden">
+    <div className="note-editor border border-gray-300 rounded-lg dark:border-gray-700">
       {editable && (
-        <div className="flex flex-wrap items-center gap-1 p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+        <div className="flex flex-wrap items-center gap-1 p-2 border-b border-gray-200 rounded-t-lg dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
           <div className="flex flex-wrap items-center gap-1">
             {/* Text formatting */}
             <MenuButton
@@ -499,6 +502,8 @@ export default function NoteEditor({
                 <option value="labs">Lab Results Table</option>
               </select>
             </div>
+
+            {toolbarEnd && <div className="ml-1">{toolbarEnd}</div>}
           </div>
         </div>
       )}
@@ -528,7 +533,7 @@ export default function NoteEditor({
         </div>
       )}
       
-      <div className="p-4">
+      <div className="p-4 overflow-x-auto">
         <EditorContent editor={editor} className="min-h-[200px] prose dark:prose-invert max-w-none" />
       </div>
     </div>
