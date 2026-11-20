@@ -22,7 +22,7 @@ test.describe('Note Management', () => {
     await page.click('text=Create New Note');
     
     // Fill in the note details
-    await page.fill('input[placeholder="Enter a descriptive title"]', 'Test Note Title');
+    await page.fill('input[aria-label="Note title"]', 'Test Note Title');
     
     // Select a category
     await page.selectOption('select', { label: 'Cardiology' });
@@ -60,7 +60,7 @@ test.describe('Note Management', () => {
     await page.click('button:has-text("Edit")');
     
     // Update the title
-    await page.fill('input[placeholder="Enter a descriptive title"]', 'Updated Note Title');
+    await page.fill('input[aria-label="Note title"]', 'Updated Note Title');
     
     // Save the changes
     await page.click('button:has-text("Update Note")');

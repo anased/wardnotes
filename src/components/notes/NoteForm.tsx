@@ -6,19 +6,16 @@ import useNotes from '@/lib/hooks/useNotes';
 import useTags from '@/lib/hooks/useTags';
 import { useDraftPersistence } from '@/lib/hooks/useDraftPersistence';
 import Button from '../ui/Button';
-import Input from '../ui/Input';
-import Select from '../ui/Select';
-import TagInput from '../ui/TagInput';
 import NoteEditor from './NoteEditor';
 import NoteImprover from './NoteImprover'; // Add this import
 import LearningQuestionsInput from './LearningQuestionsInput';
-import NoteTopicPicker from '../topics/NoteTopicPicker';
+import NotePropertiesBar from './NotePropertiesBar';
 import useTopics from '@/lib/hooks/useTopics';
 import { noteSpecialty } from '@/lib/utils/specialty';
 import { getNoteTopicLinks, saveNoteTopics } from '@/lib/supabase/noteTopics';
 import { NoteTopicLink, parseDraftLinks, sameLinks } from '@/lib/utils/noteTopicLinks';
 import { useNotification } from '@/lib/context/NotificationContext';
-import NoteLinksField, { LinkDraftWithTitle } from '../links/NoteLinksField';
+import type { LinkDraftWithTitle } from '../links/NoteLinksField';
 import useTrials from '@/lib/hooks/useTrials';
 import { getNoteSummaries, getOutgoingLinks, saveOutgoingNoteLinks } from '@/lib/supabase/noteLinks';
 import { draftKey, isLinkRelation } from '@/lib/utils/noteLinks';
@@ -29,15 +26,7 @@ import { useSubscription } from '@/lib/hooks/useSubscription';
 import { useQuota } from '@/lib/hooks/useQuota';
 import { supabase } from '@/lib/supabase/client';
 import { canonicalTagName, dedupeTags, hasTag } from '@/lib/utils/tagUtils';
-import {
-  ContentType,
-  NoteStatus,
-  STATUS_LABELS,
-  NOTE_STATUSES,
-  contentTypeOptions,
-  isContentType,
-  isNoteStatus,
-} from '@/lib/utils/noteFields';
+import { ContentType, NoteStatus, isContentType, isNoteStatus } from '@/lib/utils/noteFields';
 
 interface NoteFormProps {
   initialData?: Partial<Note>;
@@ -664,59 +653,40 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-5">
       {error && (
         <div className="p-3 mb-4 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-900 dark:text-red-200">
           {error}
         </div>
       )}
       
-      <Input
-        label="Title (optional)"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="Auto-generated from content if left empty"
-      />
-      
-      <NoteTopicPicker value={topicLinks} onChange={setTopicLinks} />
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="md:col-span-2">
-          <TagInput
-            label="Labels"
-            value={selectedTags}
-            onChange={setSelectedTags}
-            suggestions={tagSuggestions}
-          />
-        </div>
-
-        <Select
-          label="Type"
-          value={contentType}
-          onChange={(e) => setContentType(isContentType(e.target.value) ? e.target.value : '')}
-          options={contentTypeOptions('No type', [initialData.content_type, contentType])}
+      <div className="space-y-3">
+        <input
+          type="text"
+          aria-label="Note title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Untitled — we'll name it from your content"
+          className="w-full px-0 py-1 text-2xl font-bold tracking-tight text-gray-900 bg-transparent border-0 outline-none sm:text-[1.75rem] placeholder:text-gray-400 placeholder:font-semibold focus:ring-0 dark:text-white dark:placeholder:text-gray-500"
         />
 
-        <Select
-          label="Status"
-          value={status}
-          onChange={(e) => {
-            if (isNoteStatus(e.target.value)) setStatus(e.target.value);
-          }}
-          options={NOTE_STATUSES.map((value) => ({ value, label: STATUS_LABELS[value] }))}
+        {/* Type and status are hidden for now; existing values are kept on save */}
+        <NotePropertiesBar
+          noteId={initialData.id}
+          topics={topicLinks}
+          onTopicsChange={setTopicLinks}
+          labels={selectedTags}
+          onLabelsChange={setSelectedTags}
+          labelSuggestions={tagSuggestions}
+          links={linkDrafts.map((l) =>
+            // Trial titles come from the trials list (always current)
+            l.target_type === 'trial' && trialsById.has(l.target_id)
+              ? { ...l, title: trialLabel(trialsById.get(l.target_id)!) }
+              : l
+          )}
+          onLinksChange={setLinkDrafts}
         />
       </div>
-
-      <NoteLinksField
-        noteId={initialData.id}
-        value={linkDrafts.map((l) =>
-          // Trial titles come from the trials list (always current)
-          l.target_type === 'trial' && trialsById.has(l.target_id)
-            ? { ...l, title: trialLabel(trialsById.get(l.target_id)!) }
-            : l
-        )}
-        onChange={setLinkDrafts}
-      />
 
       {/* Learning Questions Section - Collapsible */}
       <div className="border border-blue-200 dark:border-blue-800 rounded-lg overflow-hidden">
@@ -806,15 +776,10 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
         )}
       </div>
 
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-          Note Content
-        </label>
-        <NoteEditor
-          content={content}
-          onChange={setContent}
-        />
-      </div>
+      <NoteEditor
+        content={content}
+        onChange={setContent}
+      />
       
       {/* Note Improver Component */}
       <div className="mt-4">
