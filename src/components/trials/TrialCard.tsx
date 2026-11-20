@@ -1,22 +1,31 @@
 import Link from 'next/link';
 import { Trial } from '@/lib/supabase/trials';
 import { trialLabel } from '@/lib/utils/trials';
+import CardActionsMenu from '../ui/CardActionsMenu';
 
 interface TrialCardProps {
   trial: Trial;
   /** Names of the topics citing the trial. */
   topicNames: string[];
   supersededBy?: Trial | null;
+  /** With both handlers, a "⋯" menu edits or deletes the trial without opening it. */
+  onEdit?: (trial: Trial) => void;
+  onDelete?: (trial: Trial) => void;
 }
 
 /** Compact trial summary for grids; same card style as NoteCard. */
-export default function TrialCard({ trial, topicNames, supersededBy }: TrialCardProps) {
+export default function TrialCard({ trial, topicNames, supersededBy, onEdit, onDelete }: TrialCardProps) {
   const shown = topicNames.slice(0, 3);
   const hidden = topicNames.length - shown.length;
+  const showActions = !!(onEdit && onDelete);
 
   return (
     <article className="relative flex flex-col h-full p-4 bg-white border border-gray-200 rounded-lg shadow-sm transition hover:shadow-md hover:border-gray-300 focus-within:ring-2 focus-within:ring-primary-600 focus-within:ring-offset-2 dark:bg-gray-800 dark:border-gray-700 dark:hover:border-gray-600 dark:focus-within:ring-primary-400 dark:focus-within:ring-offset-gray-900">
-      <div className="flex flex-wrap items-center gap-1.5 mb-2 min-w-0">
+      {showActions && (
+        <CardActionsMenu itemLabel={trial.acronym} onEdit={() => onEdit!(trial)} onDelete={() => onDelete!(trial)} />
+      )}
+
+      <div className={`flex flex-wrap items-center gap-1.5 mb-2 min-w-0 ${showActions ? 'pr-8 min-h-[1.75rem]' : ''}`}>
         <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium text-gray-700 border border-gray-300 rounded dark:text-gray-300 dark:border-gray-600">
           Trial
         </span>

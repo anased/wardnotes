@@ -385,7 +385,7 @@ function NotesLibrary() {
             ) : (
               <div className="note-grid">
                 {notes.map((note) => (
-                  <NoteCard key={note.id} note={note} onTagClick={handleNoteTagClick} showPreview />
+                  <NoteCard key={note.id} note={note} onTagClick={handleNoteTagClick} showPreview showActions />
                 ))}
               </div>
             )}

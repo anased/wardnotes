@@ -175,7 +175,7 @@ export default function DashboardPage() {
           ) : (
             <div className="grid gap-3.5 grid-cols-[repeat(auto-fill,minmax(min(100%,240px),1fr))]">
               {notes.slice(0, RECENT_NOTES).map((note) => (
-                <NoteCard key={note.id} note={note} showPreview />
+                <NoteCard key={note.id} note={note} showPreview showActions />
               ))}
             </div>
           )}

@@ -8,6 +8,7 @@ import { noteSpecialty } from '@/lib/utils/specialty';
 import NoteFieldBadges from './NoteFieldBadges';
 import { convertTipTapToPlainText, TipTapNode } from '@/lib/utils/content-converter';
 import { previewText } from '@/lib/utils/dashboard';
+import NoteCardActions from './NoteCardActions';
 
 /** Labels (tags) shown on a card before collapsing the rest into "+N". */
 const MAX_VISIBLE_TAGS = 3;
@@ -20,6 +21,8 @@ interface NoteCardProps {
   highlightTags?: string[];
   /** Show a short plain-text snippet of the note body under the title. */
   showPreview?: boolean;
+  /** Show the "⋯" menu to edit or delete the note without opening it. */
+  showActions?: boolean;
 }
 
 /**
@@ -29,7 +32,7 @@ interface NoteCardProps {
  * clickable while tag buttons stay separately clickable and focusable
  * (interactive elements can't be nested inside a link).
  */
-export default function NoteCard({ note, onTagClick, highlightTags = [], showPreview = false }: NoteCardProps) {
+export default function NoteCard({ note, onTagClick, highlightTags = [], showPreview = false, showActions = false }: NoteCardProps) {
   const router = useRouter();
   const { graph } = useTopics();
   const specialty = noteSpecialty(graph, note);
@@ -63,8 +66,10 @@ export default function NoteCard({ note, onTagClick, highlightTags = [], showPre
             : 'border-gray-200 hover:border-gray-300 dark:border-gray-700 dark:hover:border-gray-600'
         }`}
     >
+      {showActions && <NoteCardActions note={note} />}
+
       {/* Header: specialty, type, status — kept out of the title's flow */}
-      <div className="flex flex-wrap items-center gap-1.5 mb-2 min-w-0">
+      <div className={`flex flex-wrap items-center gap-1.5 mb-2 min-w-0 ${showActions ? 'pr-8 min-h-[1.75rem]' : ''}`}>
         {specialty && <CategoryBadge category={specialty.name} size="sm" variant="subtle" />}
         <NoteFieldBadges note={note} inline />
       </div>

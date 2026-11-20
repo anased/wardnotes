@@ -147,17 +147,15 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Delete a note
+  // No list-wide loading state: deleting from a card must not swap the whole
+  // grid for a spinner. Callers show their own progress.
   const removeNote = useCallback(async (id: string) => {
     try {
-      setLoading(true);
       await deleteNote(id);
       setNotes((prevNotes) => prevNotes.filter((note) => note.id !== id));
     } catch (err) {
-      setError(err as Error);
       console.error(`Error deleting note with ID ${id}:`, err);
       throw err;
-    } finally {
-      setLoading(false);
     }
   }, []);
 

@@ -5,6 +5,8 @@ import NoteCard from './NoteCard';
 
 const push = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
+const removeNote = jest.fn().mockResolvedValue(undefined);
+jest.mock('@/lib/hooks/useNotes', () => ({ __esModule: true, default: () => ({ removeNote }) }));
 jest.mock('@/lib/hooks/useTopics', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { buildTopicGraph } = require('@/lib/utils/topicTree');
@@ -34,7 +36,32 @@ function makeNote(overrides: Partial<Note> = {}): Note {
 }
 
 describe('NoteCard', () => {
-  beforeEach(() => push.mockClear());
+  beforeEach(() => {
+    push.mockClear();
+    removeNote.mockClear();
+  });
+
+  it('has no actions menu unless asked for', () => {
+    render(<NoteCard note={makeNote()} />);
+    expect(screen.queryByRole('button', { name: /^Actions for/ })).not.toBeInTheDocument();
+  });
+
+  it('edits from the card menu without opening the note', async () => {
+    render(<NoteCard note={makeNote()} showActions />);
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for What is the definition of END?' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Edit' }));
+    expect(push).toHaveBeenCalledWith('/notes/n1/edit');
+  });
+
+  it('deletes from the card menu after confirming', async () => {
+    render(<NoteCard note={makeNote()} showActions />);
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for What is the definition of END?' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+    expect(removeNote).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(removeNote).toHaveBeenCalledWith('n1');
+    expect(push).not.toHaveBeenCalled();
+  });
 
   it('links the title to the note and keeps the full title available', () => {
     render(<NoteCard note={makeNote()} />);

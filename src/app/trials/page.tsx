@@ -12,18 +12,21 @@ import Spinner from '@/components/ui/Spinner';
 import TopicSidebar from '@/components/topics/TopicSidebar';
 import TrialCard from '@/components/trials/TrialCard';
 import TrialFormModal from '@/components/trials/TrialFormModal';
+import ConfirmDeleteModal from '@/components/ui/ConfirmDeleteModal';
 import { PlusIcon } from '@/components/topics/icons';
-import { getAllTrialTopicIds } from '@/lib/supabase/trials';
-import { matchTrials } from '@/lib/utils/trials';
+import { Trial, getAllTrialTopicIds } from '@/lib/supabase/trials';
+import { matchTrials, trialLabel } from '@/lib/utils/trials';
 
 export default function TrialsPage() {
   const { user, loading: authLoading } = useAuth();
   const { graph } = useTopics();
-  const { trials, byId, loading, error } = useTrials();
+  const { trials, byId, loading, error, deleteTrial } = useTrials();
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [topicIds, setTopicIds] = useState<Record<string, string[]>>({});
   const [showCreate, setShowCreate] = useState(false);
+  const [editing, setEditing] = useState<Trial | null>(null);
+  const [deleting, setDeleting] = useState<Trial | null>(null);
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/auth');
@@ -90,6 +93,8 @@ export default function TrialsPage() {
                   trial={t}
                   topicNames={(topicIds[t.id] ?? []).map((id) => graph.byId.get(id)?.name).filter((n): n is string => !!n)}
                   supersededBy={t.superseded_by ? byId.get(t.superseded_by) : null}
+                  onEdit={setEditing}
+                  onDelete={setDeleting}
                 />
               ))}
             </div>
@@ -102,6 +107,28 @@ export default function TrialsPage() {
         onClose={() => setShowCreate(false)}
         onSaved={(t) => router.push(`/trials/${t.id}`)}
       />
+
+      <TrialFormModal
+        key={editing?.id ?? 'none'}
+        isOpen={!!editing}
+        onClose={() => setEditing(null)}
+        trial={editing ?? undefined}
+      />
+
+      <ConfirmDeleteModal
+        isOpen={!!deleting}
+        onClose={() => setDeleting(null)}
+        title="Delete Trial"
+        onConfirm={() => deleteTrial(deleting!.id)}
+      >
+        {deleting && (
+          <>
+            Delete <span className="font-medium text-gray-900 dark:text-gray-100">{trialLabel(deleting)}</span>? It is
+            removed from every topic that cites it, and links from notes to it are removed. Your notes are kept. This
+            action cannot be undone.
+          </>
+        )}
+      </ConfirmDeleteModal>
     </PageContainer>
   );
 }
