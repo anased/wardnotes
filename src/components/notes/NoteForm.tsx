@@ -6,38 +6,23 @@ import useNotes from '@/lib/hooks/useNotes';
 import useTags from '@/lib/hooks/useTags';
 import { useDraftPersistence } from '@/lib/hooks/useDraftPersistence';
 import Button from '../ui/Button';
-import Input from '../ui/Input';
-import Select from '../ui/Select';
-import TagInput from '../ui/TagInput';
 import NoteEditor from './NoteEditor';
-import NoteImprover from './NoteImprover'; // Add this import
-import LearningQuestionsInput from './LearningQuestionsInput';
-import NoteTopicPicker from '../topics/NoteTopicPicker';
+import NoteAiMenu from './NoteAiMenu';
+import NotePropertiesBar from './NotePropertiesBar';
 import useTopics from '@/lib/hooks/useTopics';
 import { noteSpecialty } from '@/lib/utils/specialty';
 import { getNoteTopicLinks, saveNoteTopics } from '@/lib/supabase/noteTopics';
 import { NoteTopicLink, parseDraftLinks, sameLinks } from '@/lib/utils/noteTopicLinks';
 import { useNotification } from '@/lib/context/NotificationContext';
-import NoteLinksField, { LinkDraftWithTitle } from '../links/NoteLinksField';
+import type { LinkDraftWithTitle } from '../links/NoteLinksField';
 import useTrials from '@/lib/hooks/useTrials';
 import { getNoteSummaries, getOutgoingLinks, saveOutgoingNoteLinks } from '@/lib/supabase/noteLinks';
 import { draftKey, isLinkRelation } from '@/lib/utils/noteLinks';
 import { trialLabel } from '@/lib/utils/trials';
-import PremiumFeatureGate from '../premium/PremiumFeatureGate'; // Import the premium gate
 import { useAnalytics } from '@/lib/analytics/useAnalytics';
 import { useSubscription } from '@/lib/hooks/useSubscription';
-import { useQuota } from '@/lib/hooks/useQuota';
-import { supabase } from '@/lib/supabase/client';
 import { canonicalTagName, dedupeTags, hasTag } from '@/lib/utils/tagUtils';
-import {
-  ContentType,
-  NoteStatus,
-  STATUS_LABELS,
-  NOTE_STATUSES,
-  contentTypeOptions,
-  isContentType,
-  isNoteStatus,
-} from '@/lib/utils/noteFields';
+import { ContentType, NoteStatus, isContentType, isNoteStatus } from '@/lib/utils/noteFields';
 
 interface NoteFormProps {
   initialData?: Partial<Note>;
@@ -98,18 +83,11 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
   const { tags, addTag } = useTags();
   const { track } = useAnalytics();
   const { subscription } = useSubscription();
-  const { refreshQuota } = useQuota();
   const { graph: topicGraph, refreshCounts: refreshTopicCounts } = useTopics();
   const { showNotification } = useNotification();
 
   const [title, setTitle] = useState(initialData.title || '');
 
-  // Learning questions section state
-  const [showLearningSection, setShowLearningSection] = useState(false);
-  const [clinicalContext, setClinicalContext] = useState('');
-  const [learningQuestions, setLearningQuestions] = useState<string[]>(['']);
-  const [isAnsweringQuestions, setIsAnsweringQuestions] = useState(false);
-  const [learningError, setLearningError] = useState<string | null>(null);
   const [content, setContent] = useState<Record<string, unknown>>(initialData.content || EMPTY_CONTENT);
   const [selectedTags, setSelectedTags] = useState<string[]>(initialData.tags || []);
   const [status, setStatus] = useState<NoteStatus>(
@@ -420,108 +398,6 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
     setContent(newContent as unknown as Record<string, unknown>);
   };
 
-  // Helper to format Q&A as Markdown for TipTap
-  const formatAnswersAsMarkdown = (
-    context: string,
-    answers: Array<{ question: string; answer: string }>
-  ): string => {
-    let markdown = `## Clinical Context\n${context}\n\n## Learning Questions & Answers\n\n`;
-
-    answers.forEach((qa, index) => {
-      markdown += `### Q${index + 1}: ${qa.question}\n\n${qa.answer}\n\n`;
-    });
-
-    return markdown;
-  };
-
-  // Handler for answering learning questions
-  const handleAnswerQuestions = async () => {
-    // Validate inputs
-    const validQuestions = learningQuestions.filter(q => q.trim().length > 0);
-
-    if (!clinicalContext.trim()) {
-      setLearningError('Please enter clinical context');
-      return;
-    }
-
-    if (validQuestions.length === 0) {
-      setLearningError('Please enter at least one question');
-      return;
-    }
-
-    try {
-      setIsAnsweringQuestions(true);
-      setLearningError(null);
-
-      // Track event started
-      track('learning_questions_started', {
-        question_count: validQuestions.length,
-        subscription_status: subscription?.subscription_status === 'active' ? 'premium' : 'free'
-      });
-
-      // Get session token
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-      if (sessionError || !session) {
-        throw new Error('You must be logged in');
-      }
-
-      // Call API
-      const response = await fetch('/api/answer-questions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({
-          clinicalContext: clinicalContext.trim(),
-          questions: validQuestions
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-
-        if (response.status === 429) {
-          setLearningError(errorData.message || 'Monthly limit reached. Upgrade to Premium for unlimited access.');
-          return;
-        }
-
-        throw new Error(errorData.error || 'Failed to answer questions');
-      }
-
-      const data = await response.json();
-
-      // Convert answers to Markdown and inject into editor
-      const markdownContent = formatAnswersAsMarkdown(
-        clinicalContext.trim(),
-        data.answers
-      );
-
-      handleImprovedContent(markdownContent);
-
-      // Refresh quota
-      await refreshQuota();
-
-      // Track completion
-      track('learning_questions_answered', {
-        question_count: validQuestions.length,
-        generation_time: data.metadata.generationTime,
-        subscription_status: subscription?.subscription_status === 'active' ? 'premium' : 'free'
-      });
-
-      // Reset form and collapse section
-      setShowLearningSection(false);
-      setClinicalContext('');
-      setLearningQuestions(['']);
-
-    } catch (err) {
-      setLearningError(err instanceof Error ? err.message : 'An unexpected error occurred');
-    } finally {
-      setIsAnsweringQuestions(false);
-    }
-  };
-
   // Helper function to generate a title from content if none provided
   const generateTitleFromContent = (content: Record<string, unknown>): string => {
     try {
@@ -664,165 +540,46 @@ export default function NoteForm({ initialData = {}, isEditing = false, initialT
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-5">
       {error && (
         <div className="p-3 mb-4 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-900 dark:text-red-200">
           {error}
         </div>
       )}
       
-      <Input
-        label="Title (optional)"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="Auto-generated from content if left empty"
+      <div className="space-y-3">
+        <input
+          type="text"
+          aria-label="Note title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Untitled — we'll name it from your content"
+          className="w-full px-0 py-1 text-2xl font-bold tracking-tight text-gray-900 bg-transparent border-0 outline-none sm:text-[1.75rem] placeholder:text-gray-400 placeholder:font-semibold focus:ring-0 dark:text-white dark:placeholder:text-gray-500"
+        />
+
+        {/* Type and status are hidden for now; existing values are kept on save */}
+        <NotePropertiesBar
+          noteId={initialData.id}
+          topics={topicLinks}
+          onTopicsChange={setTopicLinks}
+          labels={selectedTags}
+          onLabelsChange={setSelectedTags}
+          labelSuggestions={tagSuggestions}
+          links={linkDrafts.map((l) =>
+            // Trial titles come from the trials list (always current)
+            l.target_type === 'trial' && trialsById.has(l.target_id)
+              ? { ...l, title: trialLabel(trialsById.get(l.target_id)!) }
+              : l
+          )}
+          onLinksChange={setLinkDrafts}
+        />
+      </div>
+
+      <NoteEditor
+        content={content}
+        onChange={setContent}
+        toolbarEnd={<NoteAiMenu content={content} onApplyMarkdown={handleImprovedContent} />}
       />
-      
-      <NoteTopicPicker value={topicLinks} onChange={setTopicLinks} />
-
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="md:col-span-2">
-          <TagInput
-            label="Labels"
-            value={selectedTags}
-            onChange={setSelectedTags}
-            suggestions={tagSuggestions}
-          />
-        </div>
-
-        <Select
-          label="Type"
-          value={contentType}
-          onChange={(e) => setContentType(isContentType(e.target.value) ? e.target.value : '')}
-          options={contentTypeOptions('No type', [initialData.content_type, contentType])}
-        />
-
-        <Select
-          label="Status"
-          value={status}
-          onChange={(e) => {
-            if (isNoteStatus(e.target.value)) setStatus(e.target.value);
-          }}
-          options={NOTE_STATUSES.map((value) => ({ value, label: STATUS_LABELS[value] }))}
-        />
-      </div>
-
-      <NoteLinksField
-        noteId={initialData.id}
-        value={linkDrafts.map((l) =>
-          // Trial titles come from the trials list (always current)
-          l.target_type === 'trial' && trialsById.has(l.target_id)
-            ? { ...l, title: trialLabel(trialsById.get(l.target_id)!) }
-            : l
-        )}
-        onChange={setLinkDrafts}
-      />
-
-      {/* Learning Questions Section - Collapsible */}
-      <div className="border border-blue-200 dark:border-blue-800 rounded-lg overflow-hidden">
-        <button
-          type="button"
-          onClick={() => setShowLearningSection(!showLearningSection)}
-          className="w-full flex items-center justify-between px-4 py-3 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
-        >
-          <span className="flex items-center text-sm font-medium text-blue-700 dark:text-blue-300">
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-            </svg>
-            Learn from this encounter
-          </span>
-          <svg
-            className={`w-5 h-5 text-blue-600 dark:text-blue-400 transition-transform ${showLearningSection ? 'rotate-180' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
-
-        {showLearningSection && (
-          <div className="p-4 space-y-4 bg-white dark:bg-gray-900">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Enter a brief clinical context and ask questions about what you want to learn. AI will generate educational answers that populate the note editor.
-            </p>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Clinical Context
-              </label>
-              <textarea
-                value={clinicalContext}
-                onChange={(e) => setClinicalContext(e.target.value)}
-                placeholder="e.g., 65-year-old patient with newly diagnosed glioma presenting with first-time generalized seizure after missing ASM doses..."
-                rows={3}
-                disabled={isAnsweringQuestions}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg
-                  dark:border-gray-600 dark:bg-gray-800 dark:text-white
-                  focus:ring-2 focus:ring-primary-500 focus:border-transparent
-                  disabled:opacity-50 disabled:cursor-not-allowed resize-none
-                  placeholder:text-gray-400 dark:placeholder:text-gray-500"
-              />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                {clinicalContext.length}/2000 characters
-              </p>
-            </div>
-
-            <LearningQuestionsInput
-              questions={learningQuestions}
-              onQuestionsChange={setLearningQuestions}
-              maxQuestions={5}
-              disabled={isAnsweringQuestions}
-            />
-
-            {learningError && (
-              <div className="p-3 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-900/50 dark:text-red-200">
-                {learningError}
-              </div>
-            )}
-
-            <div className="pt-2">
-              <PremiumFeatureGate
-                featureName="Learning Questions"
-                description="Get AI-powered answers to your clinical learning questions."
-                featureType="note_improvement"
-              >
-                <Button
-                  type="button"
-                  onClick={handleAnswerQuestions}
-                  isLoading={isAnsweringQuestions}
-                  disabled={!clinicalContext.trim() || learningQuestions.every(q => !q.trim())}
-                  variant="primary"
-                  className="flex items-center"
-                >
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                  Answer My Questions
-                </Button>
-              </PremiumFeatureGate>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-          Note Content
-        </label>
-        <NoteEditor
-          content={content}
-          onChange={setContent}
-        />
-      </div>
-      
-      {/* Note Improver Component */}
-      <div className="mt-4">
-        <NoteImprover 
-          content={content} 
-          onImproveSuccess={handleImprovedContent} 
-        />
-      </div>
       
       <div className="flex justify-end space-x-3">
         <Button

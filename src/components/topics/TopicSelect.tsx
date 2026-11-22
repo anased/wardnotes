@@ -22,6 +22,8 @@ interface TopicSelectProps {
   /** Accessible description id (e.g. a hint below the field). */
   describedBy?: string;
   error?: string;
+  /** Focus the search field when mounted (e.g. inside a popover). */
+  autoFocus?: boolean;
 }
 
 type Option =
@@ -44,6 +46,7 @@ export default function TopicSelect({
   hideChips = false,
   describedBy,
   error,
+  autoFocus = false,
 }: TopicSelectProps) {
   const { topics, graph } = useTopics();
   const [query, setQuery] = useState('');
@@ -214,6 +217,7 @@ export default function TopicSelect({
             aria-controls={listboxId}
             aria-activedescendant={isOpen && activeIndex >= 0 ? optionId(activeIndex) : undefined}
             aria-describedby={describedBy}
+            autoFocus={autoFocus}
             autoComplete="off"
             maxLength={120}
             value={query}

@@ -9,6 +9,10 @@ interface TagInputProps {
   suggestions?: string[];
   /** Shown while no tags are added. */
   placeholder?: string;
+  /** Don't show added tags as chips (the caller lists them itself). */
+  hideChips?: boolean;
+  /** Focus the input when mounted (e.g. inside a popover). */
+  autoFocus?: boolean;
 }
 
 export interface TagInputHandle {
@@ -16,7 +20,7 @@ export interface TagInputHandle {
 }
 
 const TagInput = forwardRef<TagInputHandle, TagInputProps>(
-  ({ label, value = [], onChange, error, suggestions = [], placeholder = 'Add labels (press Enter or comma to add)' }, ref) => {
+  ({ label, value = [], onChange, error, suggestions = [], placeholder = 'Add labels (press Enter or comma to add)', hideChips = false, autoFocus = false }, ref) => {
     const [inputValue, setInputValue] = useState('');
     const [showSuggestions, setShowSuggestions] = useState(false);
     // Index of the highlighted suggestion, or -1 when none is highlighted
@@ -155,7 +159,7 @@ const TagInput = forwardRef<TagInputHandle, TagInputProps>(
         }
         case 'Backspace': {
           // Remove last tag on Backspace if input is empty
-          if (!inputValue && value.length > 0) {
+          if (!inputValue && value.length > 0 && !hideChips) {
             removeTag(value[value.length - 1]);
           }
           return;
@@ -199,7 +203,7 @@ const TagInput = forwardRef<TagInputHandle, TagInputProps>(
               error ? 'border-red-500' : ''
             }`}
           >
-            {value.map((tag) => (
+            {!hideChips && value.map((tag) => (
               <div
                 key={tagKey(tag)}
                 className="flex items-center px-2 py-1 text-sm bg-gray-200 rounded-full dark:bg-gray-700"
@@ -225,6 +229,7 @@ const TagInput = forwardRef<TagInputHandle, TagInputProps>(
               aria-expanded={isOpen}
               aria-controls={listboxId}
               aria-activedescendant={isOpen && activeIndex >= 0 ? optionId(activeIndex) : undefined}
+              autoFocus={autoFocus}
               autoComplete="off"
               maxLength={MAX_TAG_LENGTH}
               value={inputValue}
@@ -232,7 +237,7 @@ const TagInput = forwardRef<TagInputHandle, TagInputProps>(
               onKeyDown={handleKeyDown}
               onBlur={handleBlur}
               onFocus={() => inputValue && setShowSuggestions(true)}
-              placeholder={value.length === 0 ? placeholder : ""}
+              placeholder={value.length === 0 || hideChips ? placeholder : ""}
               className="flex-1 min-w-[120px] outline-none bg-transparent"
             />
           </div>
