@@ -171,7 +171,17 @@ Migration to apply: `src/lib/supabase/migrations/add_article_reads.sql` (rollbac
 - The Reading tab (sidebar and mobile nav), the `/reading` inbox and the article page showing the primer and the *Abstract only* badge (Upload button stubbed)
 - **Done when:** pasting a PMID gives a primer in about 10 s or less. Every number in it appears in the abstract, the inbox lists the article, re-adding it reopens the same row, and a second user adding the same PMID gets the cached primer with no model call.
 
-### Phase 2: PDF upload, 20-minute guide and saving
+### Phase 2: PDF upload, 20-minute guide and saving — built
+
+Migration to apply: `src/lib/supabase/migrations/add_article_full_text.sql` (adds `article_reads.sections` and the private `article-pdfs` bucket; rollback next to it). Optional env var: `UNPAYWALL_EMAIL` (falls back to `NCBI_EMAIL`; without either, only PubMed Central is searched).
+
+As built:
+- Full text is looked for automatically when an article page opens (PMC, then Unpaywall; cached per PMID). Otherwise the user uploads a PDF (25 MB max) straight to storage, and `POST /api/articles/[id]/pdf` reads it. Per-user full text lives in `article_reads.sections`, not a separate table.
+- Wrong options in quiz questions may contain numbers that aren't in the article (they're meant to be wrong); the question, correct option and explanation are checked.
+- Flashcards are made from the guide's Q&A and quiz (no extra AI call) and saved with the existing `save-preview` route.
+- The trial record opens the existing trial form with the PMID prefilled (new `defaultSource` prop); extracting there uses the trial form's usual AI-assist charge.
+- The UI offers only the 20-minute guide; the API already accepts 10 and 45 for phase 3.
+
 
 - The `article-pdfs` bucket, PMC and Unpaywall full text (cached), PDF text extraction with the scanned-PDF error, `sections.ts`
 - `articleFacts` and `articleGuide`, the guide endpoint, excerpt grounding, quota charge and refund

@@ -33,7 +33,7 @@ describe('getTaskModel', () => {
   });
 
   it('keeps the current model for other tasks', () => {
-    for (const task of ['flashcardGeneration', 'clinicalQuestion', 'noteImprovement'] as const) {
+    for (const task of ['flashcardGeneration', 'clinicalQuestion', 'noteImprovement', 'articleFacts', 'articleGuide'] as const) {
       expect(getTaskModel(task).model).toBe('claude-opus-5-5');
     }
   });

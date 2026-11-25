@@ -18,7 +18,9 @@ export type AiTask =
   | 'flashcardGeneration'
   | 'clinicalQuestion'
   | 'noteImprovement'
-  | 'articlePrimer';
+  | 'articlePrimer'
+  | 'articleFacts'
+  | 'articleGuide';
 
 export interface ModelChoice {
   provider: AiProvider;
@@ -56,6 +58,10 @@ const DEFAULTS: Record<AiTask, TaskModelConfig> = {
     effort: 'low',
     fallback: { provider: 'anthropic', model: MODELS.opus, effort: 'low' },
   },
+  // Deep Read guide: facts with verbatim excerpts from the full text, then the guide
+  // (reading map, stats, appraisal, Q&A, quiz) written from those facts only.
+  articleFacts: { provider: 'anthropic', model: MODELS.opus, effort: 'low' },
+  articleGuide: { provider: 'anthropic', model: MODELS.opus, effort: 'medium' },
 };
 
 /**

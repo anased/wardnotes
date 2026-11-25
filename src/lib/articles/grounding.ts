@@ -66,3 +66,25 @@ export function dropUngroundedSentences(
   const kept = sentences.filter((s) => ungroundedNumbers(s, allowed).length === 0);
   return { text: kept.join(' '), dropped: sentences.length - kept.length };
 }
+
+/**
+ * Text normalised for verbatim matching: whitespace collapsed, curly quotes and
+ * dashes made plain, mid-dot decimals as dots, case ignored. Layout differences
+ * shouldn't fail an excerpt; changed words or numbers should.
+ */
+export function normalizeForMatch(text: string): string {
+  return normalize(text)
+    .replace(/[‘’‚′]/g, "'")
+    .replace(/[“”„″]/g, '"')
+    .replace(/[‐-―−]/g, '-')
+    .replace(/…/g, '...')
+    .replace(/[\s   ]+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+/** True when the excerpt appears word for word in the text (see normalizeForMatch). */
+export function isVerbatim(excerpt: string, text: string): boolean {
+  const e = normalizeForMatch(excerpt).replace(/^(\.\.\.|"|')+|(\.\.\.|"|')+$/g, '').trim();
+  return e.length >= 20 && normalizeForMatch(text).includes(e);
+}

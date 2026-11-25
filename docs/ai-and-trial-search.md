@@ -40,6 +40,8 @@ Every E-utilities request sends `tool` and (if set) `email` and `api_key`. Reque
 | `clinicalQuestion` | `claude-opus-5-5` (effort high) | `/api/answer-questions` |
 | `noteImprovement` | `claude-opus-5-5` (effort low) | `/api/improve-note` |
 | `articlePrimer` | `claude-haiku-5-5` (effort low) → fallback `claude-opus-5-5` | `/api/articles` (Deep Read primer; see `docs/deep-read-plan.md`) |
+| `articleFacts` | `claude-opus-5-5` (effort low) | `/api/articles/[id]/guide` (facts + verbatim excerpts) |
+| `articleGuide` | `claude-opus-5-5` (effort medium) | `/api/articles/[id]/guide` (map, stats, appraisal, Q&A, quiz) |
 
 Trial extraction goes through the provider abstraction (`src/lib/ai/providers.ts`: Anthropic SDK, or OpenAI Chat Completions via `fetch`). The output is validated with zod against `ExtractedTrialSchema`. If it fails validation or is truncated, the same model is tried once more and then the fallback model runs. A refusal goes straight to the fallback. Claude Haiku 5.5 has no server-side refusal fallback; Opus requests keep `fallbacks: "default"`.
 
@@ -57,13 +59,14 @@ Every AI call, including retries and fallbacks, is logged as one `api_usage_logs
 | `NCBI_TOOL` | no | Tool name sent to NCBI (default `wardnotes`) |
 | `AI_MODEL_<TASK>` | no | Override a task's model, e.g. `AI_MODEL_TRIAL_EXTRACTION=claude-sonnet-5-5` |
 | `AI_PROVIDER_<TASK>` | no | `anthropic` or `openai` (`TRIAL_EXTRACTION` and `ARTICLE_PRIMER` only). Needs `AI_MODEL_<TASK>` too. |
+| `UNPAYWALL_EMAIL` | no | Contact email Unpaywall requires, for finding open-access PDFs. Falls back to `NCBI_EMAIL`. |
 | `ARTICLE_PRIMER_DAILY_LIMIT` | no | Primers a user can trigger per 24 h that call the model (cache hits don't count). Default 50. |
 | `AI_FALLBACK_MODEL_<TASK>` / `AI_FALLBACK_PROVIDER_<TASK>` | no | Override the fallback model |
 | `OPENAI_API_KEY` | only if a task uses `openai` | OpenAI API |
 | `OPENAI_BASE_URL` | no | Default `https://api.openai.com/v1` |
 | `AI_MODEL_PRICES` | no | JSON prices (USD per million tokens) for models missing from the built-in table, e.g. `{"gpt-x":{"input":0.25,"output":2}}`. Unknown models are logged with cost 0. |
 
-`<TASK>` is the task name in upper snake case: `TRIAL_EXTRACTION`, `FLASHCARD_GENERATION`, `CLINICAL_QUESTION`, `NOTE_IMPROVEMENT`, `ARTICLE_PRIMER`.
+`<TASK>` is the task name in upper snake case: `TRIAL_EXTRACTION`, `FLASHCARD_GENERATION`, `CLINICAL_QUESTION`, `NOTE_IMPROVEMENT`, `ARTICLE_PRIMER`, `ARTICLE_FACTS`, `ARTICLE_GUIDE`.
 
 ## Migrations
 
@@ -73,6 +76,7 @@ Apply in the Supabase SQL editor. All are additive and safe to apply before or a
 - `src/lib/supabase/migrations/add_trial_search_cache.sql` creates the `trial_search_cache` table (service role only). Without it, search works but nothing is cached.
 
 - `src/lib/supabase/migrations/add_article_reads.sql` creates the Deep Read tables (`article_reads`, `article_guides`, and the server-only `article_cache`) and adds the `article_primer` / `article_guide` labels to `api_usage_logs`. Until it's applied, the Reading tab can't add articles.
+- `src/lib/supabase/migrations/add_article_full_text.sql` adds `article_reads.sections` and the private `article-pdfs` storage bucket (PDF uploads). Needed for Deep Read guides.
 
 Rollbacks: `*_rollback.sql` next to each.
 

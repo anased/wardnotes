@@ -20,6 +20,8 @@ interface TrialFormModalProps {
   /** Trial to edit; omit to create one. */
   trial?: Trial | null;
   defaultAcronym?: string;
+  /** Prefills the source box (e.g. the PMID of an article being read). */
+  defaultSource?: string;
   /** Topics to link a new trial to (e.g. the topic page it was created from). */
   defaultTopicIds?: string[];
   onSaved?: (trial: Trial) => void;
@@ -72,6 +74,7 @@ export default function TrialFormModal({
   onClose,
   trial,
   defaultAcronym = '',
+  defaultSource = '',
   defaultTopicIds = [],
   onSaved,
   onDeleted,
@@ -127,6 +130,7 @@ export default function TrialFormModal({
     setExtractSummary(null);
     setSearchResult(null);
     setManualEntry(false);
+    if (!trial && defaultSource) setSourceInput(defaultSource);
     if (trial) {
       setTopicsLoaded(false);
       getTrialTopics(trial.id)

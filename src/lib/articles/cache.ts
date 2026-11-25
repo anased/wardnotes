@@ -4,6 +4,7 @@
 // [trust] Only public data goes in here: never an upload, a guide or anything personal.
 // Failures are logged and ignored: the cache is an optimisation, never a dependency.
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { ArticleSection } from './sections';
 import type { ArticleMetadata, Primer } from './types';
 
 /** How long PubMed metadata is trusted before it's fetched again. */
@@ -28,9 +29,18 @@ export interface CachedArticle {
   primerVersion: string | null;
 }
 
+export interface CachedFullText {
+  source: 'pmc' | 'unpaywall';
+  sections: ArticleSection[];
+}
+
 export interface ArticleCache {
   get(pmid: string): Promise<CachedArticle | null>;
   put(metadata: ArticleMetadata, primer: Primer | null, primerVersion: string | null): Promise<void>;
+  /** Free full text found for this PMID within the last 30 days, if any. */
+  getFullText(pmid: string): Promise<CachedFullText | null>;
+  /** Only free (PMC / Unpaywall) full text: never a user's upload. Needs the row to exist. */
+  putFullText(pmid: string, fullText: CachedFullText): Promise<void>;
 }
 
 export function supabaseArticleCache(): ArticleCache {
@@ -76,6 +86,41 @@ export function supabaseArticleCache(): ArticleCache {
         if (error) console.error('Article cache write failed:', error.message);
       } catch (err) {
         console.error('Article cache write failed:', err);
+      }
+    },
+    async getFullText(pmid) {
+      const db = getAdmin();
+      if (!db) return null;
+      try {
+        const { data, error } = await db
+          .from('article_cache')
+          .select('full_text, full_text_source')
+          .eq('pmid', pmid)
+          .maybeSingle();
+        if (error || !data?.full_text || !data.full_text_source) return null;
+        const stored = data.full_text as { sections: ArticleSection[]; fetchedAt: string };
+        if (Date.now() - new Date(stored.fetchedAt).getTime() > METADATA_TTL_MS) return null;
+        return { source: data.full_text_source as CachedFullText['source'], sections: stored.sections };
+      } catch (err) {
+        console.error('Article cache full-text read failed:', err);
+        return null;
+      }
+    },
+    async putFullText(pmid, fullText) {
+      const db = getAdmin();
+      if (!db) return;
+      try {
+        const { error } = await db
+          .from('article_cache')
+          .update({
+            full_text: { sections: fullText.sections, fetchedAt: new Date().toISOString() },
+            full_text_source: fullText.source,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('pmid', pmid);
+        if (error) console.error('Article cache full-text write failed:', error.message);
+      } catch (err) {
+        console.error('Article cache full-text write failed:', err);
       }
     },
   };

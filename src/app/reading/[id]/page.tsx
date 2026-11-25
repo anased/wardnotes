@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import useAuth from '@/lib/hooks/useAuth';
@@ -9,9 +9,16 @@ import Button from '@/components/ui/Button';
 import Spinner from '@/components/ui/Spinner';
 import ConfirmDeleteModal from '@/components/ui/ConfirmDeleteModal';
 import PrimerCard from '@/components/articles/PrimerCard';
+import FullTextPanel from '@/components/articles/FullTextPanel';
+import GuideBuilder from '@/components/articles/GuideBuilder';
+import GuidedReader from '@/components/articles/GuidedReader';
+import GuideOverview from '@/components/articles/GuideOverview';
+import CheckYourself from '@/components/articles/CheckYourself';
+import SavePanel from '@/components/articles/SavePanel';
 import {
   deleteArticleRead,
   getArticleRead,
+  getLatestGuide,
   notifyReadingChanged,
   setArticleStatus,
 } from '@/lib/supabase/articleReads';
@@ -20,6 +27,7 @@ import {
   READ_STATUS_LABELS,
   STUDY_KIND_LABELS,
   pubmedUrl,
+  type ArticleGuide,
   type ArticleRead,
   type ReadStatus,
 } from '@/lib/articles/types';
@@ -40,6 +48,8 @@ function ArticlePageContent() {
   const [saving, setSaving] = useState<ReadStatus | null>(null);
   const [showAbstract, setShowAbstract] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [guide, setGuide] = useState<ArticleGuide | null>(null);
+  const quizRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/auth');
@@ -54,7 +64,15 @@ function ArticlePageContent() {
         setError(err?.message || "Couldn't load the article.");
       })
       .finally(() => setLoading(false));
+    getLatestGuide(articleId)
+      .then(setGuide)
+      .catch((err) => console.error('Error loading guide:', err));
   }, [user, articleId]);
+
+  const reload = useCallback(async () => {
+    const fresh = await getArticleRead(articleId);
+    if (fresh) setArticle(fresh);
+  }, [articleId]);
 
   const changeStatus = async (status: ReadStatus) => {
     if (!article || saving || status === article.status) return;
@@ -94,7 +112,6 @@ function ArticlePageContent() {
   }
 
   const source = [article.journal, article.year].filter(Boolean).join(' · ');
-  const abstractOnly = article.full_text_source === 'none';
 
   return (
     <PageContainer>
@@ -152,21 +169,7 @@ function ArticlePageContent() {
           </p>
         )}
 
-        {abstractOnly && (
-          <div className="flex flex-col gap-3 p-4 rounded-lg sm:flex-row sm:items-center sm:justify-between bg-amber-50 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:ring-amber-800">
-            <div className="flex items-start gap-2">
-              <span className="inline-flex items-center px-2 py-0.5 mt-0.5 text-xs font-semibold rounded-full text-amber-900 bg-amber-200 dark:bg-amber-800 dark:text-amber-100">
-                Abstract only
-              </span>
-              <p className="text-sm text-amber-900 dark:text-amber-100">
-                The primer is based on the abstract. Upload the PDF to get a reading guide.
-              </p>
-            </div>
-            <Button variant="outline" disabled title="Coming soon" className="flex-shrink-0">
-              Upload PDF (coming soon)
-            </Button>
-          </div>
-        )}
+        <FullTextPanel article={article} onChange={setArticle} reload={reload} />
 
         {article.primer ? (
           <PrimerCard primer={article.primer} />
@@ -175,6 +178,30 @@ function ArticlePageContent() {
             No primer for this article.
           </p>
         )}
+
+        {guide ? (
+          <>
+            <GuidedReader
+              guide={guide}
+              onFinish={() => quizRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            />
+            <GuideOverview guide={guide} />
+            <CheckYourself ref={quizRef} guide={guide} />
+          </>
+        ) : (
+          article.full_text_source !== 'none' && (
+            <GuideBuilder
+              articleId={article.id}
+              onBuilt={(g) => {
+                setGuide(g);
+                setArticle((a) => (a && a.status === 'to_read' ? { ...a, status: 'reading' } : a));
+                notifyReadingChanged();
+              }}
+            />
+          )
+        )}
+
+        <SavePanel article={article} guide={guide} onChange={(patch) => setArticle((a) => (a ? { ...a, ...patch } : a))} />
 
         <section aria-labelledby="status-heading" className="space-y-2">
           <h2 id="status-heading" className="text-lg font-medium">

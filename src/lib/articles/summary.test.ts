@@ -30,7 +30,12 @@ const PRIMER: Primer = {
 };
 
 function setup(cached: CachedArticle | null, overrides: Partial<ArticleSummaryDeps> = {}) {
-  const cache: ArticleCache = { get: jest.fn().mockResolvedValue(cached), put: jest.fn().mockResolvedValue(undefined) };
+  const cache: ArticleCache = {
+    get: jest.fn().mockResolvedValue(cached),
+    put: jest.fn().mockResolvedValue(undefined),
+    getFullText: jest.fn(),
+    putFullText: jest.fn(),
+  };
   const deps = {
     cache,
     fetchRecord: jest.fn().mockResolvedValue(RECORD),

@@ -1,5 +1,6 @@
 // src/lib/articles/types.ts
 // Deep Read records (see migrations/add_article_reads.sql). Client-safe.
+import type { ArticleSection } from './sections';
 
 export const STUDY_KINDS = ['rct', 'trial', 'meta_analysis', 'cohort', 'review', 'guideline', 'case', 'other'] as const;
 export type StudyKind = (typeof STUDY_KINDS)[number];
@@ -77,6 +78,8 @@ export interface ArticleRead {
   pdf_path: string | null;
   status: ReadStatus;
   primer: Primer | null;
+  /** Full text split into sections (phase 2); null until found or uploaded. Not loaded in lists. */
+  sections?: ArticleSection[] | null;
   progress: Record<string, unknown> | null;
   note_id: string | null;
   trial_id: string | null;
@@ -86,4 +89,90 @@ export interface ArticleRead {
 
 export function pubmedUrl(pmid: string): string {
   return `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`;
+}
+
+// ---------------------------------------------------------------------------
+// Guides (phase 2)
+
+export const GUIDE_BUDGETS = [10, 20, 45] as const;
+export type GuideBudget = (typeof GUIDE_BUDGETS)[number];
+
+export const FACT_KINDS = ['design', 'population', 'intervention', 'outcome', 'result', 'safety', 'limitation', 'other'] as const;
+export type FactKind = (typeof FACT_KINDS)[number];
+
+/** One fact from the article, with a verbatim excerpt from the section it came from. */
+export interface GuideFact {
+  id: string;
+  sectionId: string;
+  kind: FactKind;
+  claim: string;
+  excerpt: string;
+}
+
+/** One stop on the reading map. */
+export interface GuideStep {
+  sectionId: string;
+  title: string;
+  minutes: number;
+  lookFor: string;
+  factIds: string[];
+}
+
+export interface GuideStat {
+  label: string;
+  value: string;
+  meaning: string;
+  factId: string | null;
+}
+
+export interface GuidePoint {
+  text: string;
+  factIds: string[];
+}
+
+export const BIAS_RISKS = ['low', 'some_concerns', 'high'] as const;
+export type BiasRisk = (typeof BIAS_RISKS)[number];
+
+export interface GuideAppraisal {
+  strengths: GuidePoint[];
+  weaknesses: GuidePoint[];
+  biasRisk: BiasRisk;
+  biasReason: string;
+}
+
+export interface GuideQA {
+  question: string;
+  answer: string;
+  factIds: string[];
+}
+
+export interface QuizItem {
+  question: string;
+  options: string[];
+  answerIndex: number;
+  explanation: string;
+  factId: string | null;
+}
+
+export interface GuideContent {
+  steps: GuideStep[];
+  stats: GuideStat[];
+  appraisal: GuideAppraisal;
+  qa: GuideQA[];
+  quiz: QuizItem[];
+  /** Facts, sentences or items removed because a number or excerpt didn't match the article. */
+  removed: number;
+}
+
+/** A row of article_guides. */
+export interface ArticleGuide {
+  id: string;
+  article_read_id: string;
+  user_id: string;
+  budget_minutes: GuideBudget;
+  sections: ArticleSection[];
+  facts: GuideFact[];
+  guide: GuideContent;
+  model: string | null;
+  created_at: string;
 }
