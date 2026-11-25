@@ -74,8 +74,26 @@ Unique on `(user_id, pmid)` and on `(user_id, lower(doi))`, so adding the same a
 | Fetch the abstract | `src/lib/trials/pubmed.ts` **[reuse]** | Extend `PubmedArticle` and `parsePubmedXml` with `publicationTypes` and `pmcid`, and keep the trial tests green. |
 | Classify | new `src/lib/articles/classify.ts` | Pure mapping from PublicationType to `study_kind`. Unit tested. |
 | Full text | new `src/lib/articles/fullText.ts` | Try PMC OA XML (efetch `db=pmc`, through `ncbi.ts` **[reuse]** for rate limiting), then Unpaywall (needs `UNPAYWALL_EMAIL`; fall back to `NCBI_EMAIL`), then ask for a PDF upload. |
-| PDF text | same file | Extract text from the uploaded PDF server-side. A scanned PDF with no text layer returns a clear error. |
+| PDF text | same file | Extract text from the uploaded PDF server-side. A scanned PDF with no text layer (or too little text to split into sections) is rejected with a 422 and the message below; the upload is deleted and nothing is charged. |
 | Sections | new `src/lib/articles/sections.ts` | Split into sections using JATS `<sec>` tags (PMC) or heading heuristics (PDF and Unpaywall). The IDs are stable (`s1`, `s1.2`, …), so the guide, progress and excerpts can refer to them. |
+
+Scanned-PDF message, shown on the article page under the Upload PDF button:
+
+> This PDF looks like a scan, so its text can't be read. Try downloading the PDF from the publisher or PubMed Central instead. You can still use the primer, which is based on the abstract.
+
+### Shared cache
+
+New migration `add_article_cache.sql` creates `article_cache`, a table only the server can read or write. It has no client access, the same setup as `trial_search_cache` **[reuse]**. It is keyed by PMID and holds what is the same for everyone:
+
+| column | holds |
+|---|---|
+| `pmid` (pk) | |
+| `metadata` | title, journal, year, DOI, PMCID, publication types, abstract |
+| `primer` | the primer and the model that made it |
+| `full_text` | sections from PubMed Central or Unpaywall only, plus `full_text_source` |
+| `created_at`, `expires_at` | metadata and full text last 30 days; the primer lasts until the `articlePrimer` prompt or model version changes |
+
+Intake reads the cache before calling PubMed or the model, and copies the result into the user's `article_reads` row. **[trust]** Uploaded PDFs, their text, guides and progress are never written to the cache: they stay per user. If the migration isn't applied yet, intake still works with nothing cached.
 
 ### Endpoints
 
@@ -116,14 +134,15 @@ New file `src/lib/articles/grounding.ts`. It is deterministic, does no AI and is
 
 ### Quota
 
-- **Primer.** Free. It isn't charged to the user's quota but is logged as `article_primer`. Cache it per PMID so re-adds cost nothing. Add a light per-user daily rate limit to stop abuse.
+- **Primer.** Free. It isn't charged to the user's quota but is logged as `article_primer`. It is cached per PMID across users (see Shared cache), so most primers cost nothing. Add a light per-user daily rate limit to stop abuse.
 - **Guide.** Charged to the existing `note_improvement` (AI-assist) quota and logged as `article_guide`. This needs no change to `usage_quotas`. A separate quota can come later if usage shows it's needed.
 
 ## 4. Client
 
 | piece | where |
 |---|---|
-| **To read** inbox | `src/app/reading/page.tsx`, plus a nav entry. Filters by status; each row shows the verdict and minutes. "Add article" box at the top, with the same input style as the trial source box. |
+| **Reading tab** | A new top-level tab, alongside Notes, Topics, Trials and Flashcards, in both `src/components/layout/AppSidebar.tsx` and `src/components/layout/MobileNav.tsx`. It shows a badge with the number of articles still to read. |
+| **To read** inbox | `src/app/reading/page.tsx`, the Reading tab's home. Filters: To read, Reading, Done, Skipped. Each row shows the verdict and minutes. "Add article" box at the top, with the same input style as the trial source box. |
 | Article page | `src/app/reading/[id]/page.tsx`: primer card, *Abstract only* badge with **Upload PDF**, *Build guide* with a 10/20/45 picker, and quota shown through `useQuota` **[reuse]**. |
 | Guided reader | `src/components/articles/GuidedReader.tsx`: one step per map entry, showing the excerpt, what to look for, and a link to the section text. Saves `progress` on every step, so the user can pick up where they left off. |
 | Check yourself | `src/components/articles/CheckYourself.tsx`: five questions from `guide.quiz`, with answers revealed and each linked back to its fact. |
@@ -144,14 +163,14 @@ Each phase ships on its own.
 
 ### Phase 1: intake, primer and inbox (PMID / DOI / PMC)
 
-- Migration (both tables, bucket deferred), types, `classify.ts`, the `pubmed.ts` extensions
+- Migrations (both tables, `article_cache`; bucket deferred), types, `classify.ts`, the `pubmed.ts` extensions
 - `POST /api/articles` with the primer, the `articlePrimer` task, number grounding for the primer
-- The `/reading` inbox and the article page showing the primer and the *Abstract only* badge (Upload button stubbed)
-- **Done when:** pasting a PMID gives a primer in about 10 s or less. Every number in it appears in the abstract, the inbox lists the article, and re-adding it reopens the same row.
+- The Reading tab (sidebar and mobile nav), the `/reading` inbox and the article page showing the primer and the *Abstract only* badge (Upload button stubbed)
+- **Done when:** pasting a PMID gives a primer in about 10 s or less. Every number in it appears in the abstract, the inbox lists the article, re-adding it reopens the same row, and a second user adding the same PMID gets the cached primer with no model call.
 
 ### Phase 2: PDF upload, 20-minute guide and saving
 
-- The `article-pdfs` bucket, PMC and Unpaywall full text, PDF text extraction, `sections.ts`
+- The `article-pdfs` bucket, PMC and Unpaywall full text (cached), PDF text extraction with the scanned-PDF error, `sections.ts`
 - `articleFacts` and `articleGuide`, the guide endpoint, excerpt grounding, quota charge and refund
 - Guided reader (single sitting), Check yourself, the save panel (note, flashcards, trial)
 - **Done when:** a PMC article and an uploaded PDF each produce a 20-minute guide whose excerpts are all verbatim. All three save actions work, and a second save doesn't create duplicates.
@@ -174,9 +193,9 @@ Each phase ships on its own.
 - **Eval script:** `npm run articles:eval`, modelled on `trials:eval`. It runs on about 20 fixed PMIDs across study kinds and reports grounding failures, latency and cost per primer and guide.
 - **e2e:** add a PMID, see the primer, build a guide, save a note.
 
-## 7. Open questions
+## 7. Decisions
 
-1. **Guide quota.** Should it share the AI-assist quota, as proposed above, or get its own allowance? And should the guide be free-tier at all?
-2. **Scanned PDFs.** Phase 2 rejects PDFs with no text layer. Should we instead send the PDF to Claude as a document input?
-3. **Caching across users.** The primer and full text from *open-access* sources could be cached per PMID across users to cut cost, the same way as `trial_search_cache`. Guides and uploads would stay per user. Is that acceptable?
-4. **Navigation.** Should the inbox be its own top-level "Reading" tab, or sit under Notes?
+1. **Guide quota.** The guide is charged to the existing AI-assist (`note_improvement`) quota and logged as `article_guide`. The primer is free and rate-limited.
+2. **Scanned PDFs.** Rejected with a clear message (see Intake). No document-input fallback for now.
+3. **Shared cache.** Yes, for open-access metadata, primers and full text, keyed by PMID. Uploads and guides stay per user.
+4. **Navigation.** Deep Read gets its own top-level **Reading** tab.
