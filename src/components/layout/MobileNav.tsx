@@ -15,6 +15,13 @@ export default function MobileNav() {
         <span>Library</span>
       </Link>
       
+      <Link href="/reading" className={`mobile-nav-item ${pathname?.startsWith('/reading') ? 'active' : ''}`}>
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2 4h6a4 4 0 014 4v13a3 3 0 00-3-3H2zM22 4h-6a4 4 0 00-4 4v13a3 3 0 013-3h7z" />
+        </svg>
+        <span>Reading</span>
+      </Link>
+
       <Link href="/notes/new" className={`mobile-nav-item ${pathname === '/notes/new' ? 'active' : ''}`}>
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />

@@ -577,4 +577,9 @@ export type QuotaFeatureType = 'flashcard_generation' | 'note_improvement';
 
 // Feature labels for api_usage_logs. Finer-grained than quota types:
 // answer_questions and trial_extraction spend the note_improvement quota.
-export type UsageLogFeature = QuotaFeatureType | 'answer_questions' | 'trial_extraction';
+export type UsageLogFeature =
+  | QuotaFeatureType
+  | 'answer_questions'
+  | 'trial_extraction'
+  | 'article_primer'
+  | 'article_guide';

@@ -14,6 +14,10 @@ export interface PubmedArticle {
   journal: string | null;
   year: number | null;
   doi: string | null;
+  /** PubMed Central ID (e.g. "PMC6097526") when the article is in PMC. */
+  pmcid: string | null;
+  /** PubMed publication types, e.g. ["Randomized Controlled Trial", "Journal Article"]. */
+  publicationTypes: string[];
   abstract: string;
 }
 
@@ -84,6 +88,11 @@ export function parsePubmedXml(xml: string): PubmedArticle | null {
     first(article, /<ELocationID[^>]*EIdType="doi"[^>]*>([\s\S]*?)<\/ELocationID>/) ??
     first(article, /<ArticleId IdType="doi">([\s\S]*?)<\/ArticleId>/);
 
+  const pmcidXml = first(article, /<ArticleId IdType="pmc">([\s\S]*?)<\/ArticleId>/);
+  const publicationTypes = [
+    ...article.matchAll(/<PublicationType[^>]*>([\s\S]*?)<\/PublicationType>/g),
+  ].map((m) => text(m[1]));
+
   // Main abstract only (not <OtherAbstract>, e.g. translations or plain-language summaries).
   const abstractXml = first(article, /<Abstract>([\s\S]*?)<\/Abstract>/) ?? '';
   const sections: string[] = [];
@@ -99,16 +108,25 @@ export function parsePubmedXml(xml: string): PubmedArticle | null {
     journal: journalXml ? text(journalXml) : null,
     year: yearStr ? Number(yearStr) : null,
     doi: doiXml ? text(doiXml) : null,
+    pmcid: pmcidXml ? text(pmcidXml) : null,
+    publicationTypes: publicationTypes.filter(Boolean),
     abstract: sections.join('\n\n'),
   };
 }
 
-export async function fetchPubmedArticle(pmid: string): Promise<PubmedArticle> {
+/** The PubMed record for a PMID, whether or not it has an abstract. */
+export async function fetchPubmedRecord(pmid: string): Promise<PubmedArticle> {
   const res = await ncbiFetch('efetch.fcgi', { db: 'pubmed', id: pmid, retmode: 'xml' });
   const article = parsePubmedXml(await res.text());
   if (!article) {
     throw new TrialSourceError(`No PubMed record found for PMID ${pmid}.`, 404);
   }
+  return article;
+}
+
+/** The PubMed record for a PMID; throws if it has no abstract to extract a trial from. */
+export async function fetchPubmedArticle(pmid: string): Promise<PubmedArticle> {
+  const article = await fetchPubmedRecord(pmid);
   if (!article.abstract) {
     throw new TrialSourceError(
       `PubMed has no abstract for "${article.title}". Paste the abstract text instead.`,

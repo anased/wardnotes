@@ -39,7 +39,7 @@ New migration: `src/lib/supabase/migrations/add_article_reads.sql`, with a rollb
 | `pmid`, `doi`, `pmcid` | text | whichever are known |
 | `title`, `journal`, `year`, `abstract` | | from PubMed |
 | `publication_types` | text[] | from PubMed `PublicationType` |
-| `study_kind` | text | `rct` / `meta_analysis` / `cohort` / `review` / `guideline` / `case` / `other` |
+| `study_kind` | text | `rct` / `trial` (non-randomised) / `meta_analysis` / `cohort` / `review` / `guideline` / `case` / `other` |
 | `full_text_source` | text | `none` / `pmc` / `unpaywall` / `pdf` |
 | `pdf_path` | text | `storage://article-pdfs/<user>/<id>.pdf` |
 | `status` | text | `to_read` / `reading` / `done` / `skipped` |
@@ -48,7 +48,7 @@ New migration: `src/lib/supabase/migrations/add_article_reads.sql`, with a rollb
 | `note_id`, `trial_id` | uuid | set once saved, so saving can't create duplicates |
 | `created_at`, `updated_at` | timestamptz | |
 
-Unique on `(user_id, pmid)` and on `(user_id, lower(doi))`, so adding the same article twice reopens the existing row.
+Unique on `(user_id, pmid)`, so adding the same article twice reopens the existing row. Every DOI, PMC ID and link is resolved to its PMID first, so a separate DOI constraint isn't needed in phase 1; PDFs with no PMID (phase 2) never conflict.
 
 ### `article_guides`: one row per guide built
 
@@ -161,7 +161,10 @@ Saving reuses the existing flows:
 
 Each phase ships on its own.
 
-### Phase 1: intake, primer and inbox (PMID / DOI / PMC)
+### Phase 1: intake, primer and inbox (PMID / DOI / PMC) — built
+
+Migration to apply: `src/lib/supabase/migrations/add_article_reads.sql` (rollback next to it). Until it's applied, the Reading tab shows no badge and adding an article returns a "not set up yet" message.
+
 
 - Migrations (both tables, `article_cache`; bucket deferred), types, `classify.ts`, the `pubmed.ts` extensions
 - `POST /api/articles` with the primer, the `articlePrimer` task, number grounding for the primer

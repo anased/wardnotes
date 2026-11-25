@@ -23,6 +23,15 @@ describe('getTaskModel', () => {
     });
   });
 
+  it('routes the Deep Read primer to Haiku with Opus as fallback by default', () => {
+    expect(getTaskModel('articlePrimer')).toEqual({
+      provider: 'anthropic',
+      model: 'claude-haiku-5-5',
+      effort: 'low',
+      fallback: { provider: 'anthropic', model: 'claude-opus-5-5', effort: 'low' },
+    });
+  });
+
   it('keeps the current model for other tasks', () => {
     for (const task of ['flashcardGeneration', 'clinicalQuestion', 'noteImprovement'] as const) {
       expect(getTaskModel(task).model).toBe('claude-opus-5-5');

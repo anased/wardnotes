@@ -6,6 +6,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { FlashcardService } from '@/services/flashcard';
 import TopicTree from '@/components/topics/TopicTree';
 import NoteTypeIcon from '@/components/notes/NoteTypeIcon';
+import { READING_CHANGED_EVENT, countToRead } from '@/lib/supabase/articleReads';
 
 /** Flashcards due now, loaded once per mount; null until known or on error. */
 function useDueCount(): number | null {
@@ -22,12 +23,34 @@ function useDueCount(): number | null {
   return count;
 }
 
+/** Articles still marked "To read"; refreshes when the Reading list changes. Null until known or on error. */
+function useToReadCount(): number | null {
+  const [count, setCount] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const load = () =>
+      countToRead()
+        .then((n) => !cancelled && setCount(n))
+        // Before the Deep Read migration is applied the table doesn't exist: no badge.
+        .catch(() => !cancelled && setCount(null));
+    load();
+    window.addEventListener(READING_CHANGED_EVENT, load);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(READING_CHANGED_EVENT, load);
+    };
+  }, []);
+  return count;
+}
+
 interface NavItem {
   href: string;
   label: string;
   icon: ReactNode;
   isActive: (pathname: string, status: string | null) => boolean;
   badge?: number | null;
+  /** Screen-reader word after the badge number, e.g. "due". */
+  badgeLabel?: string;
 }
 
 const iconProps = {
@@ -45,6 +68,7 @@ const iconProps = {
 /** Desktop navigation shown beside the page (phones use the bottom MobileNav). */
 export default function AppSidebar() {
   const dueCount = useDueCount();
+  const toReadCount = useToReadCount();
   const pathname = usePathname() ?? '';
   const searchParams = useSearchParams();
   const status = searchParams?.get('status') ?? null;
@@ -78,10 +102,24 @@ export default function AppSidebar() {
       ),
     },
     {
+      href: '/reading',
+      label: 'Reading',
+      isActive: (p) => p.startsWith('/reading'),
+      badge: toReadCount,
+      badgeLabel: 'to read',
+      icon: (
+        <svg {...iconProps}>
+          <path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z" />
+          <path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z" />
+        </svg>
+      ),
+    },
+    {
       href: '/flashcards',
       label: 'Flashcards',
       isActive: (p) => p.startsWith('/flashcards'),
       badge: dueCount,
+      badgeLabel: 'due',
       icon: (
         <svg {...iconProps}>
           <rect x="3" y="6" width="14" height="14" rx="2" />
@@ -146,7 +184,7 @@ export default function AppSidebar() {
               {!!item.badge && item.badge > 0 && (
                 <span className="ml-auto inline-flex items-center justify-center min-w-[24px] h-[22px] px-1.5 rounded-full bg-primary-600 text-white text-xs font-bold">
                   {item.badge > 99 ? '99+' : item.badge}
-                  <span className="sr-only"> due</span>
+                  <span className="sr-only"> {item.badgeLabel}</span>
                 </span>
               )}
             </Link>

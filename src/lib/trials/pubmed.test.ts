@@ -54,6 +54,10 @@ const FIXTURE = `<?xml version="1.0" ?>
       </Journal>
       <ArticleTitle>Drug A and Drug B in Example Disease: the <i>EXAMPLE</i> Trial.</ArticleTitle>
       <ELocationID EIdType="doi" ValidYN="Y">10.1000/example.2018.001</ELocationID>
+      <PublicationTypeList>
+        <PublicationType UI="D016428">Journal Article</PublicationType>
+        <PublicationType UI="D016449">Randomized Controlled Trial</PublicationType>
+      </PublicationTypeList>
       <Abstract>
         <AbstractText Label="BACKGROUND" NlmCategory="BACKGROUND">Whether drug A &amp; drug B reduce events is unknown.</AbstractText>
         <AbstractText Label="METHODS" NlmCategory="METHODS">We randomly assigned 1,000 adults (age &#x2265;18 years) within 12&#160;h.</AbstractText>
@@ -72,10 +76,11 @@ const FIXTURE = `<?xml version="1.0" ?>
     <ArticleIdList>
       <ArticleId IdType="pubmed">12345678</ArticleId>
       <ArticleId IdType="doi">10.1000/example.2018.001</ArticleId>
+      <ArticleId IdType="pmc">PMC1234567</ArticleId>
     </ArticleIdList>
     <ReferenceList>
       <Reference><Citation>Other paper.</Citation>
-        <ArticleIdList><ArticleId IdType="doi">10.9999/wrong.reference</ArticleId></ArticleIdList>
+        <ArticleIdList><ArticleId IdType="doi">10.9999/wrong.reference</ArticleId><ArticleId IdType="pmc">PMC9999999</ArticleId></ArticleIdList>
       </Reference>
     </ReferenceList>
   </PubmedData>
@@ -90,6 +95,8 @@ describe('parsePubmedXml', () => {
       journal: 'The New England journal of medicine',
       year: 2018,
       doi: '10.1000/example.2018.001',
+      pmcid: 'PMC1234567',
+      publicationTypes: ['Journal Article', 'Randomized Controlled Trial'],
       abstract: [
         'BACKGROUND: Whether drug A & drug B reduce events is unknown.',
         'METHODS: We randomly assigned 1,000 adults (age ≥18 years) within 12 h.',
@@ -115,6 +122,16 @@ describe('parsePubmedXml', () => {
 
     const noPubYear = FIXTURE.replace(/<PubDate>[\s\S]*?<\/PubDate>/, '<PubDate><Season>Spring</Season></PubDate>');
     expect(parsePubmedXml(noPubYear)?.year).toBe(2018);
+  });
+
+  it('has no PMC ID or publication types when the record lists none, never a reference PMC ID', () => {
+    const xml = FIXTURE.replace('<ArticleId IdType="pmc">PMC1234567</ArticleId>', '').replace(
+      /<PublicationTypeList>[\s\S]*?<\/PublicationTypeList>/,
+      ''
+    );
+    const article = parsePubmedXml(xml);
+    expect(article?.pmcid).toBeNull();
+    expect(article?.publicationTypes).toEqual([]);
   });
 
   it('returns an empty abstract when PubMed has none', () => {

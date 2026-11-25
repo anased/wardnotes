@@ -17,7 +17,8 @@ export type AiTask =
   | 'trialExtraction'
   | 'flashcardGeneration'
   | 'clinicalQuestion'
-  | 'noteImprovement';
+  | 'noteImprovement'
+  | 'articlePrimer';
 
 export interface ModelChoice {
   provider: AiProvider;
@@ -48,6 +49,13 @@ const DEFAULTS: Record<AiTask, TaskModelConfig> = {
   flashcardGeneration: { provider: 'anthropic', model: MODELS.opus },
   clinicalQuestion: { provider: 'anthropic', model: MODELS.opus, effort: 'high' },
   noteImprovement: { provider: 'anthropic', model: MODELS.opus, effort: 'low' },
+  // Deep Read primer: a short read of one abstract, like trial extraction.
+  articlePrimer: {
+    provider: 'anthropic',
+    model: MODELS.haiku,
+    effort: 'low',
+    fallback: { provider: 'anthropic', model: MODELS.opus, effort: 'low' },
+  },
 };
 
 /**
@@ -55,7 +63,7 @@ const DEFAULTS: Record<AiTask, TaskModelConfig> = {
  * therefore run on any provider. The others use Anthropic-specific request features
  * (server-side refusal fallback, multi-step pipelines) and stay on Anthropic.
  */
-const PROVIDER_SWITCHABLE: ReadonlySet<AiTask> = new Set<AiTask>(['trialExtraction']);
+const PROVIDER_SWITCHABLE: ReadonlySet<AiTask> = new Set<AiTask>(['trialExtraction', 'articlePrimer']);
 
 const PROVIDERS: readonly AiProvider[] = ['anthropic', 'openai'];
 
